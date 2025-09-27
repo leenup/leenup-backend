@@ -1,0 +1,198 @@
+# Variables
+DOCKER_COMPOSE = docker compose
+PHP_CONTAINER = php
+DATABASE_CONTAINER = database
+PWA_CONTAINER = pwa
+
+# Couleurs pour les messages
+GREEN = \033[0;32m
+YELLOW = \033[1;33m
+RED = \033[0;31m
+NC = \033[0m # No Color
+
+.PHONY: help build start stop restart logs clean doctor
+
+## —— 🚀 LeenUp Backend Makefile 🚀 ——————————————————————————————————
+help: ## Affiche cette aide
+	@echo "$(GREEN)LeenUp Backend - Commandes disponibles:$(NC)"
+	@grep -E '(^[a-zA-Z0-9_-]+:.*?##.*$$)|(^##)' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}{printf "\033[32m%-30s\033[0m %s\n", $$1, $$2}' | sed -e 's/\[32m##/[33m/'
+
+## —— 🐳 Docker ——————————————————————————————————————————————————————
+build: ## Construit les images Docker
+	@echo "$(YELLOW)🔨 Construction des images Docker...$(NC)"
+	$(DOCKER_COMPOSE) build --no-cache
+
+start: ## Démarre les conteneurs
+	@echo "$(YELLOW)🚀 Démarrage des conteneurs...$(NC)"
+	$(DOCKER_COMPOSE) up --wait
+
+stop: ## Arrête les conteneurs
+	@echo "$(YELLOW)🛑 Arrêt des conteneurs...$(NC)"
+	$(DOCKER_COMPOSE) down
+
+restart: stop start ## Redémarre les conteneurs
+
+logs: ## Affiche les logs des conteneurs
+	$(DOCKER_COMPOSE) logs -f
+
+logs-php: ## Affiche les logs du conteneur PHP
+	$(DOCKER_COMPOSE) logs -f $(PHP_CONTAINER)
+
+status: ## Affiche le statut des conteneurs
+	$(DOCKER_COMPOSE) ps
+
+## —— 🗄️ Base de données ————————————————————————————————————————————
+db-create: ## Crée la base de données
+	@echo "$(YELLOW)📊 Création de la base de données...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:create --if-not-exists
+
+db-drop: ## Supprime la base de données
+	@echo "$(RED)🗑️ Suppression de la base de données...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists
+
+db-reset: db-drop db-create ## Recrée la base de données à zéro
+	@echo "$(GREEN)✅ Base de données recréée$(NC)"
+
+migration-diff: ## Génère une nouvelle migration
+	@echo "$(YELLOW)📝 Génération d'une migration...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:diff
+
+migration-migrate: ## Applique les migrations
+	@echo "$(YELLOW)🔄 Application des migrations...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:migrate --no-interaction
+
+migration-status: ## Affiche le statut des migrations
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:status
+
+schema-update: ## Met à jour le schéma de la base (DEV uniquement)
+	@echo "$(YELLOW)⚠️ Mise à jour du schéma (DEV)...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:schema:update --force
+
+schema-validate: ## Valide le mapping des entités
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:schema:validate
+
+## —— 🏗️ Entités et Code ————————————————————————————————————————————
+make-entity: ## Crée une nouvelle entité
+	@echo "$(YELLOW)🏗️ Création d'une entité...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console make:entity --api-resource
+
+make-user: ## Crée une entité User
+	@echo "$(YELLOW)👤 Création de l'entité User...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console make:user
+
+make-auth: ## Configure l'authentification
+	@echo "$(YELLOW)🔐 Configuration de l'authentification...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console make:auth
+
+make-fixtures: ## Crée des fixtures
+	@echo "$(YELLOW)🎭 Création des fixtures...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console make:fixtures
+
+fixtures-load: ## Charge les fixtures
+	@echo "$(YELLOW)📥 Chargement des fixtures...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:fixtures:load --no-interaction
+
+## —— 🧪 Tests et Qualité ———————————————————————————————————————————
+test: ## Lance les tests
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
+
+test-coverage: ## Lance les tests avec couverture
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit --coverage-html public/coverage
+
+cs-fixer: ## Corrige le style de code
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/php-cs-fixer fix src/
+
+phpstan: ## Analyse statique du code
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/phpstan analyse src/
+
+## —— 📦 Composer ———————————————————————————————————————————————————
+composer-install: ## Installe les dépendances Composer
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) composer install
+
+composer-update: ## Met à jour les dépendances
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) composer update
+
+composer-require: ## Installe une nouvelle dépendance
+	@read -p "Nom du package: " package; \
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) composer require $$package
+
+## —— 🔧 Utilitaires ————————————————————————————————————————————————
+shell: ## Ouvre un shell dans le conteneur PHP
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bash
+
+shell-db: ## Ouvre un shell dans la base de données
+	$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -d app
+
+cache-clear: ## Vide le cache Symfony
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console cache:clear
+
+cache-warmup: ## Préchauffe le cache
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console cache:warmup
+
+## —— 📋 Documentation et APIs ——————————————————————————————————————
+docs-generate: ## Génère la documentation OpenAPI
+	@echo "$(YELLOW)📚 Génération de la documentation...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console api:openapi:export > api/public/docs/openapi.json
+
+postman-collection: ## Génère une collection Postman
+	@echo "$(YELLOW)📮 Génération de la collection Postman...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console api:openapi:export --format=json > postman/leenup-api.json
+
+## —— 🏥 Diagnostic ————————————————————————————————————————————————
+doctor: ## Diagnostic complet du système
+	@echo "$(GREEN)🏥 Diagnostic du système LeenUp Backend$(NC)"
+	@echo "$(YELLOW)======================================$(NC)"
+	@echo ""
+	@echo "$(GREEN)📊 Statut des conteneurs:$(NC)"
+	$(DOCKER_COMPOSE) ps
+	@echo ""
+	@echo "$(GREEN)🗄️ Statut de la base de données:$(NC)"
+	@$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:status 2>/dev/null || echo "❌ Problème avec la base"
+	@echo ""
+	@echo "$(GREEN)🔧 Validation du schéma:$(NC)"
+	@$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:schema:validate 2>/dev/null || echo "❌ Schéma invalide"
+	@echo ""
+	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
+	@echo "  • API Documentation: https://localhost/docs/"
+	@echo "  • Admin Interface:   https://localhost/admin/"
+	@echo "  • GraphQL:           https://localhost/graphql/"
+	@echo ""
+	@echo "$(GREEN)💾 Espace disque Docker:$(NC)"
+	@docker system df
+
+## —— 🧹 Nettoyage ——————————————————————————————————————————————————
+clean: ## Nettoie le cache et les fichiers temporaires
+	@echo "$(YELLOW)🧹 Nettoyage...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console cache:clear
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) rm -rf var/log/*.log
+
+clean-docker: ## Nettoie les ressources Docker inutiles
+	@echo "$(YELLOW)🧹 Nettoyage Docker...$(NC)"
+	docker system prune -f
+	docker volume prune -f
+
+clean-all: clean clean-docker ## Nettoyage complet
+
+## —— 🚀 Installation complète ——————————————————————————————————————
+install: build start db-create migration-migrate ## Installation complète du projet
+	@echo "$(GREEN)✅ Installation terminée !$(NC)"
+	@echo "$(YELLOW)🌐 Accédez à votre API: https://localhost/docs/$(NC)"
+
+## —— 📱 Frontend PWA ———————————————————————————————————————————————
+pwa-install: ## Installe les dépendances PWA
+	$(DOCKER_COMPOSE) exec $(PWA_CONTAINER) pnpm install
+
+pwa-dev: ## Lance le serveur de développement PWA
+	$(DOCKER_COMPOSE) exec $(PWA_CONTAINER) pnpm dev
+
+pwa-build: ## Build la PWA pour production
+	$(DOCKER_COMPOSE) exec $(PWA_CONTAINER) pnpm build
+
+pwa-generate: ## Génère le client API
+	$(DOCKER_COMPOSE) exec $(PWA_CONTAINER) pnpm create @api-platform/client
+
+## —— 🎯 Commandes rapides ——————————————————————————————————————————
+dev: start ## Alias pour start (environnement de dev)
+
+full-reset: stop clean-docker build start db-reset migration-migrate fixtures-load ## Reset complet du projet
+	@echo "$(GREEN)🔄 Reset complet terminé !$(NC)"
