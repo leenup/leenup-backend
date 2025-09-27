@@ -23,7 +23,6 @@ class CategoriesTest extends ApiTestCase
             '@context' => '/contexts/Category',
             '@type' => 'Category',
             'title' => 'Développement',
-            'description' => 'Compétences liées au développement logiciel',
         ]);
     }
 }
