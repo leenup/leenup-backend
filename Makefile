@@ -105,6 +105,10 @@ cs-fixer: ## Corrige le style de code
 phpstan: ## Analyse statique du code
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/phpstan analyse src/
 
+pwa-test: ## Lance les tests e2e Playwright
+	@echo "$(YELLOW)🎭 Lancement des tests e2e Playwright...$(NC)"
+	docker run --network host -w /app -v ./e2e:/app --rm --ipc=host mcr.microsoft.com/playwright:v1.50.0-noble /bin/sh -c 'npm i; npx playwright test;'
+
 ## —— 📦 Composer ———————————————————————————————————————————————————
 composer-install: ## Installe les dépendances Composer
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) composer install
