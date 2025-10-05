@@ -3,15 +3,26 @@
 namespace App\Tests\Api;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
 
 class CategoriesTest extends ApiTestCase
 {
+    use AuthenticatedApiTestTrait;
+
+    private string $token;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->token = $this->createAuthenticatedUser('category-test@example.com');
+    }
+
     public function testCreateCategory(): void
     {
-        static::createClient()->request('POST', '/categories', [
+        $response = static::createClient()->request('POST', '/categories', [
+            'auth_bearer' => $this->token,
             'json' => [
                 'title' => 'Développement',
-                'description' => 'Compétences liées au développement logiciel',
             ],
             'headers' => [
                 'Content-Type' => 'application/ld+json',
