@@ -38,12 +38,12 @@ class Category
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Assert\NotBlank(message: 'Le titre ne peut pas être vide')]
+    #[Assert\NotBlank(message: 'The title cannot be blank')]
     #[Assert\Length(
         min: 2,
         max: 255,
-        minMessage: 'Le titre doit contenir au moins {{ limit }} caractères',
-        maxMessage: 'Le titre ne peut pas dépasser {{ limit }} caractères'
+        minMessage: 'The title must be at least {{ limit }} characters long',
+        maxMessage: 'The title cannot be longer than {{ limit }} characters'
     )]
     #[Groups(['category:read', 'category:write', 'skill:read'])]
     private ?string $title = null;
