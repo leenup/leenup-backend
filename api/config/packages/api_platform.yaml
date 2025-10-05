@@ -13,5 +13,6 @@ api_platform:
     # Good defaults for REST APIs
     defaults:
         stateless: true
+        
         cache_headers:
             vary: ['Content-Type', 'Authorization', 'Origin']
