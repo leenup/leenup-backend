@@ -94,6 +94,11 @@ fixtures-load: ## Charge les fixtures
 
 ## —— 🧪 Tests et Qualité ———————————————————————————————————————————
 test: ## Lance les tests
+	@echo "$(YELLOW)🧪 Réinitialisation de la base de test...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:database:drop --force --if-exists --quiet"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:database:create --quiet"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:migrations:migrate --no-interaction --quiet"
+	@echo "$(YELLOW)🧪 Lancement des tests...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
 
 test-coverage: ## Lance les tests avec couverture
