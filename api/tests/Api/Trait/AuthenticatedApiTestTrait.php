@@ -12,6 +12,14 @@ trait AuthenticatedApiTestTrait
     {
         $client = self::createClient();
         $container = self::getContainer();
+        $em = $container->get('doctrine')->getManager();
+
+        // Supprimer l'utilisateur s'il existe déjà
+        $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+        if ($existingUser) {
+            $em->remove($existingUser);
+            $em->flush();
+        }
 
         // Créer un utilisateur
         $user = new User();
@@ -20,9 +28,8 @@ trait AuthenticatedApiTestTrait
             $container->get('security.user_password_hasher')->hashPassword($user, $password)
         );
 
-        $manager = $container->get('doctrine')->getManager();
-        $manager->persist($user);
-        $manager->flush();
+        $em->persist($user);
+        $em->flush();
 
         // Obtenir le token JWT
         $response = $client->request('POST', '/auth', [
