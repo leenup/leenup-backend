@@ -8,5 +8,5 @@ test('homepage', async ({ page }) => {
 
 test('swagger', async ({ page }) => {
   await page.goto('https://localhost/docs');
-  await expect(page).toHaveTitle('Hello API Platform - API Platform');
+  await expect(page).toHaveTitle('LeenUp API - API Platform');
 });
