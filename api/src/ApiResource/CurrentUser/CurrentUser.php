@@ -4,10 +4,12 @@
 namespace App\ApiResource\CurrentUser;
 
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Patch;
 use App\Entity\User;
 use App\State\Processor\Profile\CurrentUserProcessor;
+use App\State\Processor\Profile\CurrentUserRemoveProcessor;
 use App\State\Provider\Profile\CurrentUserProvider;
 
 /**
@@ -27,6 +29,12 @@ use App\State\Provider\Profile\CurrentUserProvider;
             validate: false,
             provider: CurrentUserProvider::class,
             processor: CurrentUserProcessor::class,
+        ),
+        new Delete(
+            uriTemplate: '/me',
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            provider: CurrentUserProvider::class,
+            processor: CurrentUserRemoveProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['user:read']],
