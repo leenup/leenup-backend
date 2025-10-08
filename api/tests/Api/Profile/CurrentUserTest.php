@@ -125,4 +125,236 @@ class CurrentUserTest extends ApiTestCase
         // Vérifier que @type est correct
         $this->assertEquals('User', $data['@type']);
     }
+
+    // ==================== PATCH /me ====================
+
+    public function testUpdateCurrentUserEmail(): void
+    {
+        $response = static::createClient()->request('PATCH', '/me', [
+            'auth_bearer' => $this->token,
+            'json' => [
+                'email' => 'updated-email@example.com',
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains([
+            '@type' => 'User',
+            'email' => 'updated-email@example.com',
+        ]);
+
+        $client = static::createClient();
+        $tokenResponse = $client->request('POST', '/auth', [
+            'headers' => ['Content-Type' => 'application/json'],
+            'json' => [
+                'email' => 'updated-email@example.com',
+                'password' => 'password123',
+            ],
+        ]);
+        $newToken = $tokenResponse->toArray()['token'];
+
+        $verifyResponse = static::createClient()->request('GET', '/me', [
+            'auth_bearer' => $newToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains([
+            'email' => 'updated-email@example.com',
+        ]);
+    }
+
+    public function testUpdateCurrentUserEmailWithoutAuthentication(): void
+    {
+        static::createClient()->request('PATCH', '/me', [
+            'json' => [
+                'email' => 'hacker@example.com',
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testUpdateCurrentUserEmailWithInvalidEmail(): void
+    {
+        static::createClient()->request('PATCH', '/me', [
+            'auth_bearer' => $this->token,
+            'json' => [
+                'email' => 'invalid-email-format',
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            'violations' => [
+                [
+                    'propertyPath' => 'email',
+                ],
+            ],
+        ]);
+    }
+
+    public function testUpdateCurrentUserEmailWithDuplicateEmail(): void
+    {
+        $this->createAuthenticatedUser('existing-user@example.com', 'password');
+
+        static::createClient()->request('PATCH', '/me', [
+            'auth_bearer' => $this->token,
+            'json' => [
+                'email' => 'existing-user@example.com',
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            'violations' => [
+                [
+                    'propertyPath' => 'email',
+                    'message' => 'This email is already in use',
+                ],
+            ],
+        ]);
+    }
+
+    public function testUpdateCurrentUserEmailWithEmptyEmail(): void
+    {
+        static::createClient()->request('PATCH', '/me', [
+            'auth_bearer' => $this->token,
+            'json' => [
+                'email' => '',
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            'violations' => [
+                [
+                    'propertyPath' => 'email',
+                ],
+            ],
+        ]);
+    }
+
+    public function testUpdateCurrentUserEmailMultipleTimes(): void
+    {
+        $client = static::createClient();
+
+        // Première mise à jour
+        $response1 = $client->request('PATCH', '/me', [
+            'auth_bearer' => $this->token,
+            'json' => [
+                'email' => 'first-update@example.com',
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains([
+            'email' => 'first-update@example.com',
+        ]);
+
+        $tokenResponse1 = $client->request('POST', '/auth', [
+            'headers' => ['Content-Type' => 'application/json'],
+            'json' => [
+                'email' => 'first-update@example.com',
+                'password' => 'password123',
+            ],
+        ]);
+        $token1 = $tokenResponse1->toArray()['token'];
+
+        $response2 = $client->request('PATCH', '/me', [
+            'auth_bearer' => $token1,
+            'json' => [
+                'email' => 'second-update@example.com',
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains([
+            'email' => 'second-update@example.com',
+        ]);
+
+        $tokenResponse2 = $client->request('POST', '/auth', [
+            'headers' => ['Content-Type' => 'application/json'],
+            'json' => [
+                'email' => 'second-update@example.com',
+                'password' => 'password123',
+            ],
+        ]);
+        $token2 = $tokenResponse2->toArray()['token'];
+
+        $verifyResponse = $client->request('GET', '/me', [
+            'auth_bearer' => $token2,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains([
+            'email' => 'second-update@example.com',
+        ]);
+    }
+
+    public function testUpdateCurrentUserDoesNotAffectOtherUsers(): void
+    {
+        $token2 = $this->createAuthenticatedUser('other-user@example.com', 'password');
+
+        static::createClient()->request('PATCH', '/me', [
+            'auth_bearer' => $this->token,
+            'json' => [
+                'email' => 'updated-first-user@example.com',
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $response2 = static::createClient()->request('GET', '/me', [
+            'auth_bearer' => $token2,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains([
+            'email' => 'other-user@example.com',
+        ]);
+    }
+
+    public function testUpdateCurrentUserEmailDoesNotExposePassword(): void
+    {
+        $response = static::createClient()->request('PATCH', '/me', [
+            'auth_bearer' => $this->token,
+            'json' => [
+                'email' => 'secure-update@example.com',
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $data = $response->toArray();
+
+        $this->assertArrayNotHasKey('password', $data);
+        $this->assertArrayNotHasKey('plainPassword', $data);
+    }
 }

@@ -1,17 +1,17 @@
 <?php
+// api/src/ApiResource/CurrentUser/CurrentUser.php
 
 namespace App\ApiResource\CurrentUser;
 
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\Patch;
 use App\Entity\User;
+use App\State\Processor\Profile\CurrentUserProcessor;
 use App\State\Provider\Profile\CurrentUserProvider;
 
 /**
  * Ressource API pour le profil de l'utilisateur connecté (/me)
- *
- * Cette classe hérite de User mais expose des endpoints différents
- * dédiés à la gestion du profil personnel de l'utilisateur connecté.
  */
 #[ApiResource(
     shortName: 'User',
@@ -20,6 +20,13 @@ use App\State\Provider\Profile\CurrentUserProvider;
             uriTemplate: '/me',
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
             provider: CurrentUserProvider::class,
+        ),
+        new Patch(
+            uriTemplate: '/me',
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            validate: false,
+            provider: CurrentUserProvider::class,
+            processor: CurrentUserProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['user:read']],
