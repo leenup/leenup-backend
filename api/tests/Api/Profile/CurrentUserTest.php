@@ -450,7 +450,6 @@ class CurrentUserTest extends ApiTestCase
 
         $this->assertResponseStatusCodeSame(204);
 
-        // Vérifier que le deuxième utilisateur peut toujours accéder à son profil
         static::createClient()->request('GET', '/me', [
             'auth_bearer' => $token2,
         ]);
