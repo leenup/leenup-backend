@@ -3,145 +3,134 @@
 namespace App\Tests\Api\Entity;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
-use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use App\Factory\CategoryFactory;
+use App\Factory\SkillFactory;
+use App\Factory\UserFactory;
+use Zenstruck\Foundry\Test\Factories;
+use Zenstruck\Foundry\Test\ResetDatabase;
 
 class SkillsTest extends ApiTestCase
 {
-    use AuthenticatedApiTestTrait;
+    use ResetDatabase, Factories;
 
-    private static string $token;
-    private static ?int $categoryId = null;
-    private static bool $initialized = false;
-    private static int $counter = 0;
+    private string $token;
+    private $category;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!self::$initialized) {
-            self::$token = $this->createAuthenticatedUser('skill-test@example.com');
-            self::$categoryId = $this->createCategory('Test Category');
-            self::$initialized = true;
-        }
-
-        self::$counter++;
-    }
-
-    public static function tearDownAfterClass(): void
-    {
-        parent::tearDownAfterClass();
-        self::$initialized = false;
-        self::$categoryId = null;
-        self::$counter = 0;
-    }
-
-    private function createCategory(string $title): int
-    {
-        $uniqueTitle = self::$counter . '_' . $title;
-
-        $response = static::createClient()->request('POST', '/categories', [
-            'auth_bearer' => self::$token,
-            'json' => ['title' => $uniqueTitle],
-            'headers' => ['Content-Type' => 'application/ld+json'],
+        // Créer un utilisateur authentifié pour chaque test
+        UserFactory::createOne([
+            'email' => 'test@example.com',
+            'plainPassword' => 'password',
         ]);
 
-        return $response->toArray()['id'];
-    }
-
-    private function createSkill(string $title, int $categoryId): array
-    {
-        $uniqueTitle = self::$counter . '_' . $title;
-
-        $response = static::createClient()->request('POST', '/skills', [
-            'auth_bearer' => self::$token,
+        $response = static::createClient()->request('POST', '/auth', [
             'json' => [
-                'title' => $uniqueTitle,
-                'category' => '/categories/' . $categoryId,
+                'email' => 'test@example.com',
+                'password' => 'password',
             ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
+            'headers' => ['Content-Type' => 'application/json'],
         ]);
 
-        return $response->toArray();
+        $this->token = $response->toArray()['token'];
+
+        // Créer une catégorie de test
+        $this->category = CategoryFactory::createOne(['title' => 'Test Category']);
     }
 
     // ==================== CRUD Operations ====================
 
     public function testGetSkills(): void
     {
-        $skill1 = $this->createSkill('PHP', self::$categoryId);
-        $skill2 = $this->createSkill('JavaScript', self::$categoryId);
-        $skill3 = $this->createSkill('Python', self::$categoryId);
+        SkillFactory::createOne(['title' => 'PHP', 'category' => $this->category]);
+        SkillFactory::createOne(['title' => 'JavaScript', 'category' => $this->category]);
+        SkillFactory::createOne(['title' => 'Python', 'category' => $this->category]);
 
         $response = static::createClient()->request('GET', '/skills', [
-            'auth_bearer' => self::$token,
+            'auth_bearer' => $this->token,
         ]);
 
         $this->assertResponseIsSuccessful();
+        $this->assertJsonContains([
+            '@context' => '/contexts/Skill',
+            '@type' => 'Collection',
+            'totalItems' => 3,
+        ]);
 
         $data = $response->toArray();
         $titles = array_column($data['member'], 'title');
 
-        $this->assertContains($skill1['title'], $titles);
-        $this->assertContains($skill2['title'], $titles);
-        $this->assertContains($skill3['title'], $titles);
+        $this->assertContains('PHP', $titles);
+        $this->assertContains('JavaScript', $titles);
+        $this->assertContains('Python', $titles);
     }
 
     public function testCreateSkill(): void
     {
-        $uniqueTitle = self::$counter . '_React';
-
         $response = static::createClient()->request('POST', '/skills', [
-            'auth_bearer' => self::$token,
+            'auth_bearer' => $this->token,
             'json' => [
-                'title' => $uniqueTitle,
-                'category' => '/categories/' . self::$categoryId,
+                'title' => 'React',
+                'category' => '/categories/' . $this->category->getId(),
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(201);
+        $this->assertResponseHeaderSame('content-type', 'application/ld+json; charset=utf-8');
         $this->assertJsonContains([
+            '@context' => '/contexts/Skill',
             '@type' => 'Skill',
-            'title' => $uniqueTitle,
+            'title' => 'React',
         ]);
+        $this->assertMatchesRegularExpression('~^/skills/\d+$~', $response->toArray()['@id']);
     }
 
     public function testGetSkill(): void
     {
-        $skill = $this->createSkill('Vue.js', self::$categoryId);
+        $skill = SkillFactory::createOne(['title' => 'Vue.js', 'category' => $this->category]);
 
-        $response = static::createClient()->request('GET', "/skills/{$skill['id']}", [
-            'auth_bearer' => self::$token,
+        $response = static::createClient()->request('GET', '/skills/' . $skill->getId(), [
+            'auth_bearer' => $this->token,
         ]);
 
         $this->assertResponseIsSuccessful();
-        $this->assertJsonContains(['title' => $skill['title']]);
+        $this->assertJsonContains([
+            '@type' => 'Skill',
+            'title' => 'Vue.js',
+        ]);
     }
 
     public function testUpdateSkill(): void
     {
-        $skill = $this->createSkill('Angular', self::$categoryId);
-        $newTitle = self::$counter . '_AngularJS';
+        $skill = SkillFactory::createOne(['title' => 'Angular', 'category' => $this->category]);
 
-        static::createClient()->request('PATCH', "/skills/{$skill['id']}", [
-            'auth_bearer' => self::$token,
-            'json' => ['title' => $newTitle],
+        static::createClient()->request('PATCH', '/skills/' . $skill->getId(), [
+            'auth_bearer' => $this->token,
+            'json' => ['title' => 'AngularJS'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
         $this->assertResponseIsSuccessful();
-        $this->assertJsonContains(['title' => $newTitle]);
+        $this->assertJsonContains(['title' => 'AngularJS']);
     }
 
     public function testDeleteSkill(): void
     {
-        $skill = $this->createSkill('jQuery', self::$categoryId);
+        $skill = SkillFactory::createOne(['title' => 'jQuery', 'category' => $this->category]);
 
-        static::createClient()->request('DELETE', "/skills/{$skill['id']}", [
-            'auth_bearer' => self::$token,
+        static::createClient()->request('DELETE', '/skills/' . $skill->getId(), [
+            'auth_bearer' => $this->token,
         ]);
 
         $this->assertResponseStatusCodeSame(204);
+
+        // Vérifier que la skill n'existe plus
+        $this->assertNull(
+            static::getContainer()->get('doctrine')->getRepository(\App\Entity\Skill::class)->findOneBy(['title' => 'jQuery'])
+        );
     }
 
     // ==================== Validations ====================
@@ -149,16 +138,17 @@ class SkillsTest extends ApiTestCase
     public function testCreateSkillWithBlankTitle(): void
     {
         static::createClient()->request('POST', '/skills', [
-            'auth_bearer' => self::$token,
+            'auth_bearer' => $this->token,
             'json' => [
                 'title' => '',
-                'category' => '/categories/' . self::$categoryId,
+                'category' => '/categories/' . $this->category->getId(),
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(422);
         $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
             'violations' => [
                 ['propertyPath' => 'title', 'message' => 'The title cannot be blank'],
             ],
@@ -168,16 +158,17 @@ class SkillsTest extends ApiTestCase
     public function testCreateSkillWithTitleTooShort(): void
     {
         static::createClient()->request('POST', '/skills', [
-            'auth_bearer' => self::$token,
+            'auth_bearer' => $this->token,
             'json' => [
                 'title' => 'C',
-                'category' => '/categories/' . self::$categoryId,
+                'category' => '/categories/' . $this->category->getId(),
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(422);
         $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
             'violations' => [
                 ['propertyPath' => 'title'],
             ],
@@ -187,15 +178,16 @@ class SkillsTest extends ApiTestCase
     public function testCreateSkillWithoutCategory(): void
     {
         static::createClient()->request('POST', '/skills', [
-            'auth_bearer' => self::$token,
+            'auth_bearer' => $this->token,
             'json' => [
-                'title' => self::$counter . '_Rust',
+                'title' => 'Rust',
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(422);
         $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
             'violations' => [
                 ['propertyPath' => 'category', 'message' => 'The category cannot be null'],
             ],
@@ -204,30 +196,20 @@ class SkillsTest extends ApiTestCase
 
     public function testCreateSkillWithDuplicateTitleInSameCategory(): void
     {
-        $title = self::$counter . '_Node.js';
+        SkillFactory::createOne(['title' => 'Node.js', 'category' => $this->category]);
 
         static::createClient()->request('POST', '/skills', [
-            'auth_bearer' => self::$token,
+            'auth_bearer' => $this->token,
             'json' => [
-                'title' => $title,
-                'category' => '/categories/' . self::$categoryId,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
-
-        $this->assertResponseStatusCodeSame(201);
-
-        static::createClient()->request('POST', '/skills', [
-            'auth_bearer' => self::$token,
-            'json' => [
-                'title' => $title,
-                'category' => '/categories/' . self::$categoryId,
+                'title' => 'Node.js',
+                'category' => '/categories/' . $this->category->getId(),
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(422);
         $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
             'violations' => [
                 ['propertyPath' => 'title', 'message' => 'This skill already exists in this category'],
             ],
@@ -236,25 +218,15 @@ class SkillsTest extends ApiTestCase
 
     public function testCreateSkillWithSameTitleInDifferentCategory(): void
     {
-        $category2Id = $this->createCategory('Another Category');
-        $title = self::$counter . '_Docker';
+        $category2 = CategoryFactory::createOne(['title' => 'Another Category']);
 
-        static::createClient()->request('POST', '/skills', [
-            'auth_bearer' => self::$token,
+        SkillFactory::createOne(['title' => 'Docker', 'category' => $this->category]);
+
+        $response = static::createClient()->request('POST', '/skills', [
+            'auth_bearer' => $this->token,
             'json' => [
-                'title' => $title,
-                'category' => '/categories/' . self::$categoryId,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
-
-        $this->assertResponseStatusCodeSame(201);
-
-        static::createClient()->request('POST', '/skills', [
-            'auth_bearer' => self::$token,
-            'json' => [
-                'title' => $title,
-                'category' => '/categories/' . $category2Id,
+                'title' => 'Docker',
+                'category' => '/categories/' . $category2->getId(),
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
@@ -262,7 +234,7 @@ class SkillsTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(201);
         $this->assertJsonContains([
             '@type' => 'Skill',
-            'title' => $title,
+            'title' => 'Docker',
         ]);
     }
 
@@ -270,57 +242,55 @@ class SkillsTest extends ApiTestCase
 
     public function testFilterSkillsByCategory(): void
     {
-        $category2Id = $this->createCategory('Design');
+        $category2 = CategoryFactory::createOne(['title' => 'Design']);
 
-        $skill1 = $this->createSkill('TypeScript', self::$categoryId);
-        $skill2 = $this->createSkill('Go', self::$categoryId);
-        $skill3 = $this->createSkill('Photoshop', $category2Id);
+        SkillFactory::createOne(['title' => 'TypeScript', 'category' => $this->category]);
+        SkillFactory::createOne(['title' => 'Go', 'category' => $this->category]);
+        SkillFactory::createOne(['title' => 'Photoshop', 'category' => $category2]);
 
-        $response = static::createClient()->request('GET', '/skills?category=' . self::$categoryId, [
-            'auth_bearer' => self::$token,
+        $response = static::createClient()->request('GET', '/skills?category=' . $this->category->getId(), [
+            'auth_bearer' => $this->token,
         ]);
 
         $this->assertResponseIsSuccessful();
         $data = $response->toArray();
 
+        $this->assertEquals(2, $data['totalItems']);
+
         $titles = array_column($data['member'], 'title');
-        $this->assertContains($skill1['title'], $titles);
-        $this->assertContains($skill2['title'], $titles);
-        $this->assertNotContains($skill3['title'], $titles);
+        $this->assertContains('TypeScript', $titles);
+        $this->assertContains('Go', $titles);
+        $this->assertNotContains('Photoshop', $titles);
     }
 
     public function testFilterSkillsByTitlePartial(): void
     {
-        $skill1 = $this->createSkill('JavaScript', self::$categoryId);
-        $skill2 = $this->createSkill('TypeScript', self::$categoryId);
-        $this->createSkill('Python', self::$categoryId);
+        SkillFactory::createOne(['title' => 'JavaScript', 'category' => $this->category]);
+        SkillFactory::createOne(['title' => 'TypeScript', 'category' => $this->category]);
+        SkillFactory::createOne(['title' => 'Python', 'category' => $this->category]);
 
-        // ✅ Filtrer avec le préfixe unique du test
-        $searchTerm = self::$counter . '_';
-        $response = static::createClient()->request('GET', '/skills?title=' . $searchTerm, [
-            'auth_bearer' => self::$token,
+        $response = static::createClient()->request('GET', '/skills?title=Script', [
+            'auth_bearer' => $this->token,
         ]);
 
         $this->assertResponseIsSuccessful();
         $data = $response->toArray();
 
-        // ✅ On doit avoir au moins 3 skills de ce test
-        $this->assertGreaterThanOrEqual(3, $data['totalItems']);
+        $this->assertEquals(2, $data['totalItems']);
 
         $titles = array_column($data['member'], 'title');
-        $this->assertContains($skill1['title'], $titles);
-        $this->assertContains($skill2['title'], $titles);
+        $this->assertContains('JavaScript', $titles);
+        $this->assertContains('TypeScript', $titles);
     }
 
     public function testOrderSkillsByTitle(): void
     {
-        $skill1 = $this->createSkill('Zebra', self::$categoryId);
-        $skill2 = $this->createSkill('Apple', self::$categoryId);
-        $skill3 = $this->createSkill('Mango', self::$categoryId);
+        SkillFactory::createOne(['title' => 'Zebra', 'category' => $this->category]);
+        SkillFactory::createOne(['title' => 'Apple', 'category' => $this->category]);
+        SkillFactory::createOne(['title' => 'Mango', 'category' => $this->category]);
 
-        // ✅ Filtrer uniquement les skills de ce test
-        $response = static::createClient()->request('GET', '/skills?title=' . self::$counter . '_&order[title]=asc', [
-            'auth_bearer' => self::$token,
+        $response = static::createClient()->request('GET', '/skills?order[title]=asc', [
+            'auth_bearer' => $this->token,
         ]);
 
         $this->assertResponseIsSuccessful();
@@ -328,11 +298,7 @@ class SkillsTest extends ApiTestCase
 
         $titles = array_column($data['member'], 'title');
 
-        // ✅ Vérifier l'ordre alphabétique
-        $this->assertEquals([
-            $skill2['title'], // Apple
-            $skill3['title'], // Mango
-            $skill1['title'], // Zebra
-        ], $titles);
+        // Vérifier l'ordre alphabétique
+        $this->assertEquals(['Apple', 'Mango', 'Zebra'], $titles);
     }
 }

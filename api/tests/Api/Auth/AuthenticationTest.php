@@ -3,25 +3,25 @@
 namespace App\Tests\Api\Auth;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
-use App\Entity\User;
+use App\Factory\UserFactory;
+use Zenstruck\Foundry\Test\Factories;
+use Zenstruck\Foundry\Test\ResetDatabase;
 
 class AuthenticationTest extends ApiTestCase
 {
+    // Traits fournis par Foundry pour gérer la BD de test
+    use ResetDatabase, Factories;
+
     public function testLogin(): void
     {
+        // Créer un utilisateur avec Foundry
+        UserFactory::createOne([
+            'email' => 'test@example.com',
+            'plainPassword' => '$3CR3T',
+        ]);
+
+        // Tester l'authentification
         $client = self::createClient();
-        $container = self::getContainer();
-
-        $user = new User();
-        $user->setEmail('test@example.com');
-        $user->setPassword(
-            $container->get('security.user_password_hasher')->hashPassword($user, '$3CR3T')
-        );
-
-        $manager = $container->get('doctrine')->getManager();
-        $manager->persist($user);
-        $manager->flush();
-
         $response = $client->request('POST', '/auth', [
             'headers' => ['Content-Type' => 'application/json'],
             'json' => [
@@ -34,12 +34,47 @@ class AuthenticationTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $this->assertArrayHasKey('token', $json);
 
-        // test not authorized
+        // Test non autorisé sans token
         $client->request('GET', '/categories');
         $this->assertResponseStatusCodeSame(401);
 
-        // test authorized
+        // Test autorisé avec token
         $client->request('GET', '/categories', ['auth_bearer' => $json['token']]);
         $this->assertResponseIsSuccessful();
+    }
+
+    public function testLoginWithInvalidCredentials(): void
+    {
+        // Créer un utilisateur
+        UserFactory::createOne([
+            'email' => 'user@example.com',
+            'plainPassword' => 'correct-password',
+        ]);
+
+        // Essayer de se connecter avec un mauvais mot de passe
+        $client = self::createClient();
+        $client->request('POST', '/auth', [
+            'headers' => ['Content-Type' => 'application/json'],
+            'json' => [
+                'email' => 'user@example.com',
+                'password' => 'wrong-password',
+            ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testLoginWithNonExistentUser(): void
+    {
+        $client = self::createClient();
+        $client->request('POST', '/auth', [
+            'headers' => ['Content-Type' => 'application/json'],
+            'json' => [
+                'email' => 'nonexistent@example.com',
+                'password' => 'password',
+            ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(401);
     }
 }

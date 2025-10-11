@@ -121,13 +121,33 @@ else
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
 endif
 
-test-parallel: ## Lance les tests en parallèle (4 processus)
-	@echo "$(YELLOW)🧪 Lancement des tests en parallèle (4 processus)...$(NC)"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest --processes=4
+test-parallel: ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
+	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
+ifdef FILE
+ifdef PROCESSES
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES) $(FILE)
+else
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest $(FILE)
+endif
+else
+ifdef PROCESSES
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES)
+else
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
+endif
+endif
 
 test-coverage: ## Lance les tests avec couverture
 	@echo "$(YELLOW)🧪 Génération de la couverture de code...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit --coverage-html public/coverage
+
+test-coverage-parallel: ## Lance les tests avec couverture en parallèle
+	@echo "$(YELLOW)⚡ Génération de la couverture de code (parallèle)...$(NC)"
+ifdef PROCESSES
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES) --coverage-html public/coverage
+else
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest --coverage-html public/coverage
+endif
 
 cs-fixer: ## Corrige le style de code
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/php-cs-fixer fix src/
