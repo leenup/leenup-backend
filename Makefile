@@ -105,6 +105,14 @@ else
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
 endif
 
+test-parallel: ## Lance les tests en parallèle (4 processus)
+	@echo "$(YELLOW)🧪 Réinitialisation de la base de test...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:database:drop --force --if-exists --quiet"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:database:create --if-not-exists --quiet"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:migrations:migrate --no-interaction --quiet"
+	@echo "$(YELLOW)🧪 Lancement des tests en parallèle (4 processus)...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest --processes=4
+
 test-coverage: ## Lance les tests avec couverture
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit --coverage-html public/coverage
 

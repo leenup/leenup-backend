@@ -226,12 +226,29 @@ class CategoriesTest extends ApiTestCase
 
     public function testOrderCategoriesByTitle(): void
     {
-        $cat1 = $this->createCategory('Zebra');
-        $cat2 = $this->createCategory('Apple');
-        $cat3 = $this->createCategory('Mango');
+        // Utiliser un préfixe unique pour ce test
+        $uniquePrefix = 'sort-' . self::$counter . '-';
 
-        // ✅ Filtrer uniquement les catégories de ce test
-        $response = static::createClient()->request('GET', '/categories?title=' . self::$counter . '_&order[title]=asc', [
+        $cat1 = static::createClient()->request('POST', '/categories', [
+            'auth_bearer' => self::$token,
+            'json' => ['title' => $uniquePrefix . 'Zebra'],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ])->toArray();
+
+        $cat2 = static::createClient()->request('POST', '/categories', [
+            'auth_bearer' => self::$token,
+            'json' => ['title' => $uniquePrefix . 'Apple'],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ])->toArray();
+
+        $cat3 = static::createClient()->request('POST', '/categories', [
+            'auth_bearer' => self::$token,
+            'json' => ['title' => $uniquePrefix . 'Mango'],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ])->toArray();
+
+        // Filtrer uniquement les catégories de ce test avec le préfixe unique
+        $response = static::createClient()->request('GET', '/categories?title=' . $uniquePrefix . '&order[title]=asc', [
             'auth_bearer' => self::$token,
         ]);
 
@@ -240,7 +257,7 @@ class CategoriesTest extends ApiTestCase
 
         $titles = array_column($data['member'], 'title');
 
-        // ✅ Vérifier l'ordre alphabétique
+        // Vérifier l'ordre alphabétique
         $this->assertEquals([
             $cat2['title'], // Apple
             $cat3['title'], // Mango
