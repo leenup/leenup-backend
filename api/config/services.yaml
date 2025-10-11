@@ -23,6 +23,14 @@ services:
     App\State\UserPasswordHasher:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'
+            
+    App\State\Processor\Profile\CurrentUserProcessor:
+        bind:
+            $persistProcessor: '@api_platform.doctrine.orm.state.persist_processor'
+            
+    App\State\Processor\Profile\CurrentUserRemoveProcessor:
+        bind:
+            $removeProcessor: '@api_platform.doctrine.orm.state.remove_processor'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

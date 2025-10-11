@@ -31,7 +31,6 @@ use Symfony\Component\Validator\Constraints as Assert;
             processor: UserPasswordHasher::class,
         ),
         new Get(),
-        new Put(processor: UserPasswordHasher::class),
         new Patch(processor: UserPasswordHasher::class),
         new Delete(),
     ],

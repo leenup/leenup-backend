@@ -1,5 +1,4 @@
 <?php
-// api/src/State/UserPasswordHasher.php
 
 namespace App\State;
 
