@@ -34,11 +34,13 @@
         </include>
     </coverage>
 
+    <!-- Listener Symfony (optionnel mais recommandé) -->
     <listeners>
         <listener class="Symfony\Bridge\PhpUnit\SymfonyTestsListener" />
     </listeners>
 
+    <!-- Extension DAMA pour gérer les transactions automatiquement -->
     <extensions>
-        <extension class="DAMA\DoctrineTestBundle\PHPUnit\PHPUnitExtension" />
+        <extension class="DAMA\DoctrineTestBundle\PHPUnit\PHPUnitExtension"/>
     </extensions>
 </phpunit>

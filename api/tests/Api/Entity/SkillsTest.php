@@ -7,11 +7,10 @@ use App\Factory\CategoryFactory;
 use App\Factory\SkillFactory;
 use App\Factory\UserFactory;
 use Zenstruck\Foundry\Test\Factories;
-use Zenstruck\Foundry\Test\ResetDatabase;
 
 class SkillsTest extends ApiTestCase
 {
-    use ResetDatabase, Factories;
+    use Factories;
 
     private string $token;
     private $category;

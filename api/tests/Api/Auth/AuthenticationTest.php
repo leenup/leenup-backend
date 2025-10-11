@@ -5,12 +5,11 @@ namespace App\Tests\Api\Auth;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Factory\UserFactory;
 use Zenstruck\Foundry\Test\Factories;
-use Zenstruck\Foundry\Test\ResetDatabase;
 
 class AuthenticationTest extends ApiTestCase
 {
     // Traits fournis par Foundry pour gérer la BD de test
-    use ResetDatabase, Factories;
+    use Factories;
 
     public function testLogin(): void
     {

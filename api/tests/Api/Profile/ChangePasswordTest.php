@@ -5,11 +5,10 @@ namespace App\Tests\Api\Profile;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Factory\UserFactory;
 use Zenstruck\Foundry\Test\Factories;
-use Zenstruck\Foundry\Test\ResetDatabase;
 
 class ChangePasswordTest extends ApiTestCase
 {
-    use ResetDatabase, Factories;
+    use Factories;
 
     private function getToken(string $email, string $password): string
     {

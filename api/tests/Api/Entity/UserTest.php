@@ -5,11 +5,10 @@ namespace App\Tests\Api\Entity;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Factory\UserFactory;
 use Zenstruck\Foundry\Test\Factories;
-use Zenstruck\Foundry\Test\ResetDatabase;
 
 class UserTest extends ApiTestCase
 {
-    use ResetDatabase, Factories;
+    use Factories;
 
     private string $userToken;
     private string $adminToken;

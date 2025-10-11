@@ -5,11 +5,10 @@ namespace App\Tests\Api\Auth;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Factory\UserFactory;
 use Zenstruck\Foundry\Test\Factories;
-use Zenstruck\Foundry\Test\ResetDatabase;
 
 class RegisterTest extends ApiTestCase
 {
-    use ResetDatabase, Factories;
+    use Factories;
 
     public function testRegister(): void
     {

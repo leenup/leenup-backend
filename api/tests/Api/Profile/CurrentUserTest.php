@@ -6,11 +6,10 @@ use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Entity\User;
 use App\Factory\UserFactory;
 use Zenstruck\Foundry\Test\Factories;
-use Zenstruck\Foundry\Test\ResetDatabase;
 
 class CurrentUserTest extends ApiTestCase
 {
-    use ResetDatabase, Factories;
+    use Factories;
 
     // ==================== GET /me ====================
 
