@@ -51,7 +51,6 @@ use Symfony\Component\Validator\Constraints as Assert;
         ),
     ],
     normalizationContext: ['groups' => ['user:read']],
-    // ⬇️ On utilise ici un groupe d’écriture spécial pour les admins
     denormalizationContext: ['groups' => ['user:create', 'user:update:admin']],
     security: "is_granted('ROLE_ADMIN')",
 )]
@@ -136,10 +135,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    #[\Deprecated]
+    /**
+     * ✅ Garder la méthode mais vide (pas de logique)
+     * Le plainPassword est déjà nettoyé dans UserPasswordHasher
+     */
     public function eraseCredentials(): void
     {
-        $this->plainPassword = null;
     }
 
     public function hasRole(string $role): bool

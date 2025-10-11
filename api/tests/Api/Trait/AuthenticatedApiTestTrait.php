@@ -6,8 +6,6 @@ use App\Entity\User;
 
 trait AuthenticatedApiTestTrait
 {
-    private string $token;
-
     protected function createAuthenticatedUser(
         string $email = 'test@example.com',
         string $password = 'password'

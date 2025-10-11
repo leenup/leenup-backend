@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
-<!-- https://phpunit.readthedocs.io/en/latest/configuration.html -->
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
-         backupGlobals="false"
-         colors="true"
          bootstrap="tests/bootstrap.php"
-         convertDeprecationsToExceptions="false"
+         colors="true"
+         failOnRisky="true"
+         failOnWarning="true"
 >
     <php>
-        <ini name="display_errors" value="0" />
-        <ini name="error_reporting" value="0" />
+        <ini name="display_errors" value="1" />
+        <ini name="error_reporting" value="-1" />
         <server name="APP_ENV" value="test" force="true" />
-        <server name="KERNEL_CLASS" value="App\Kernel" />
+        <server name="KERNEL_CLASS" value="App\Kernel" force="true" />
         <server name="SHELL_VERBOSITY" value="-1" />
         <server name="SYMFONY_PHPUNIT_REMOVE" value="" />
         <server name="SYMFONY_PHPUNIT_VERSION" value="9.6" />
-        <server name="SYMFONY_DEPRECATIONS_HELPER" value="disabled" />
+
+        <!-- ✅ Masquer tous les deprecation warnings -->
+        <env name="SYMFONY_DEPRECATIONS_HELPER" value="disabled" />
     </php>
 
     <testsuites>
