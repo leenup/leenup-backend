@@ -30,7 +30,8 @@ stop: ## Arrête les conteneurs
 	@echo "$(YELLOW)🛑 Arrêt des conteneurs...$(NC)"
 	$(DOCKER_COMPOSE) down
 
-restart: stop start ## Redémarre les conteneurs
+restart: stop start db-test-reset ## Redémarre les conteneurs et reconfigure la BD de test
+	@echo "$(GREEN)✅ Redémarrage terminé avec BD de test configurée$(NC)"
 
 logs: ## Affiche les logs des conteneurs
 	$(DOCKER_COMPOSE) logs -f
@@ -41,7 +42,7 @@ logs-php: ## Affiche les logs du conteneur PHP
 status: ## Affiche le statut des conteneurs
 	$(DOCKER_COMPOSE) ps
 
-## —— 🗄️ Base de données ————————————————————————————————————————————
+## —— 🗄️ Base de données (Développement) ————————————————————————————
 db-create: ## Crée la base de données
 	@echo "$(YELLOW)📊 Création de la base de données...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:create --if-not-exists
@@ -71,6 +72,25 @@ schema-update: ## Met à jour le schéma de la base (DEV uniquement)
 schema-validate: ## Valide le mapping des entités
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:schema:validate
 
+## —— 🧪 Base de données de TEST ————————————————————————————————————
+db-test-create: ## Crée la base de données de test
+	@echo "$(YELLOW)📊 Création de la base de données de test...$(NC)"
+	-$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -c "CREATE DATABASE app_test;" 2>/dev/null || echo "$(YELLOW)Base app_test existe déjà$(NC)"
+	@echo "$(GREEN)✅ Base de données de test prête$(NC)"
+
+db-test-drop: ## Supprime la base de données de test
+	@echo "$(RED)🗑️ Suppression de la base de données de test...$(NC)"
+	-$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -c "DROP DATABASE IF EXISTS app_test;"
+	@echo "$(GREEN)✅ Base de données de test supprimée$(NC)"
+
+db-test-migrate: ## Applique les migrations sur la BD de test
+	@echo "$(YELLOW)🔄 Application des migrations sur la BD de test...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" bin/console doctrine:migrations:migrate --no-interaction'
+	@echo "$(GREEN)✅ Migrations appliquées sur la BD de test$(NC)"
+
+db-test-reset: db-test-drop db-test-create db-test-migrate ## Recrée la base de test à zéro
+	@echo "$(GREEN)✅ Base de données de test recréée avec les migrations$(NC)"
+
 ## —— 🏗️ Entités et Code ————————————————————————————————————————————
 make-entity: ## Crée une nouvelle entité
 	@echo "$(YELLOW)🏗️ Création d'une entité...$(NC)"
@@ -94,10 +114,6 @@ fixtures-load: ## Charge les fixtures
 
 ## —— 🧪 Tests et Qualité ———————————————————————————————————————————
 test: ## Lance les tests (usage: make test ou make test FILE=tests/Api/Profile/CurrentUserTest.php)
-	@echo "$(YELLOW)🧪 Réinitialisation de la base de test...$(NC)"
-	-$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:database:drop --force --if-exists --quiet"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:database:create --if-not-exists --quiet"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:migrations:migrate --no-interaction --quiet"
 	@echo "$(YELLOW)🧪 Lancement des tests...$(NC)"
 ifdef FILE
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit $(FILE)
@@ -106,14 +122,11 @@ else
 endif
 
 test-parallel: ## Lance les tests en parallèle (4 processus)
-	@echo "$(YELLOW)🧪 Réinitialisation de la base de test...$(NC)"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:database:drop --force --if-exists --quiet"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:database:create --if-not-exists --quiet"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "APP_ENV=test bin/console doctrine:migrations:migrate --no-interaction --quiet"
 	@echo "$(YELLOW)🧪 Lancement des tests en parallèle (4 processus)...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest --processes=4
 
 test-coverage: ## Lance les tests avec couverture
+	@echo "$(YELLOW)🧪 Génération de la couverture de code...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit --coverage-html public/coverage
 
 cs-fixer: ## Corrige le style de code
@@ -144,6 +157,9 @@ shell: ## Ouvre un shell dans le conteneur PHP
 shell-db: ## Ouvre un shell dans la base de données
 	$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -d app
 
+shell-db-test: ## Ouvre un shell dans la base de données de test
+	$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -d app_test
+
 cache-clear: ## Vide le cache Symfony
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console cache:clear
 
@@ -167,8 +183,11 @@ doctor: ## Diagnostic complet du système
 	@echo "$(GREEN)📊 Statut des conteneurs:$(NC)"
 	$(DOCKER_COMPOSE) ps
 	@echo ""
-	@echo "$(GREEN)🗄️ Statut de la base de données:$(NC)"
+	@echo "$(GREEN)🗄️ Statut de la base de données (dev):$(NC)"
 	@$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:status 2>/dev/null || echo "❌ Problème avec la base"
+	@echo ""
+	@echo "$(GREEN)🗄️ Statut de la base de données (test):$(NC)"
+	@$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -c "SELECT COUNT(*) as users_in_test FROM \"user\";" app_test 2>/dev/null || echo "❌ Base de test non configurée"
 	@echo ""
 	@echo "$(GREEN)🔧 Validation du schéma:$(NC)"
 	@$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:schema:validate 2>/dev/null || echo "❌ Schéma invalide"
@@ -195,9 +214,12 @@ clean-docker: ## Nettoie les ressources Docker inutiles
 clean-all: clean clean-docker ## Nettoyage complet
 
 ## —— 🚀 Installation complète ——————————————————————————————————————
-install: build start db-create migration-migrate ## Installation complète du projet
+install: build start db-create migration-migrate db-test-reset ## Installation complète du projet
 	@echo "$(GREEN)✅ Installation terminée !$(NC)"
 	@echo "$(YELLOW)🌐 Accédez à votre API: https://localhost/docs/$(NC)"
+
+setup-after-restart: db-test-reset ## Configure la BD de test après un restart
+	@echo "$(GREEN)✅ Configuration post-restart terminée !$(NC)"
 
 ## —— 📱 Frontend PWA ———————————————————————————————————————————————
 pwa-install: ## Installe les dépendances PWA
@@ -215,5 +237,5 @@ pwa-generate: ## Génère le client API
 ## —— 🎯 Commandes rapides ——————————————————————————————————————————
 dev: start ## Alias pour start (environnement de dev)
 
-full-reset: stop clean-docker build start db-reset migration-migrate fixtures-load ## Reset complet du projet
+full-reset: stop clean-docker build start db-reset db-test-reset fixtures-load ## Reset complet du projet
 	@echo "$(GREEN)🔄 Reset complet terminé !$(NC)"
