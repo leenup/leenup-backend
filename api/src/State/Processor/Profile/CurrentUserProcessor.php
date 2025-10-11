@@ -38,6 +38,12 @@ final class CurrentUserProcessor implements ProcessorInterface
             $currentUser->setEmail($data->getEmail());
         }
 
+        if ($data->getPlainPassword() !== null) {
+            throw new \InvalidArgumentException(
+                'Changing password via /me is not allowed. Use /me/change-password instead.'
+            );
+        }
+
         $violations = $this->validator->validate($currentUser);
         if (count($violations) > 0) {
             throw new ValidationException($violations);

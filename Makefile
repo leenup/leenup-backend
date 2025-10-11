@@ -50,8 +50,8 @@ db-drop: ## Supprime la base de données
 	@echo "$(RED)🗑️ Suppression de la base de données...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists
 
-db-reset: db-drop db-create ## Recrée la base de données à zéro
-	@echo "$(GREEN)✅ Base de données recréée$(NC)"
+db-reset: db-drop db-create migration-migrate ## Recrée la base de données à zéro
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
 
 migration-diff: ## Génère une nouvelle migration
 	@echo "$(YELLOW)📝 Génération d'une migration...$(NC)"

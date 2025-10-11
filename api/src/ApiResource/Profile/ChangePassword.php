@@ -18,6 +18,7 @@ use App\State\Provider\Profile\ChangePasswordProvider;
             uriTemplate: '/me/change-password',
             status: 204,
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityMessage: 'You must be authenticated to change your password.',
             output: false,
             provider: ChangePasswordProvider::class,
             processor: ChangePasswordProcessor::class
