@@ -10,20 +10,26 @@ class CurrentUserTest extends ApiTestCase
 {
     use AuthenticatedApiTestTrait;
 
-    private string $token;
+    private static string $token;
+    private static string $email = 'current-user-test@example.com';
+    private static string $password = 'password123';
+    private static bool $initialized = false;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->token = $this->createAuthenticatedUser('current-user-test@example.com', 'password123');
+
+        // Créer le token une seule fois pour toute la classe
+        if (!self::$initialized) {
+            self::$token = $this->createAuthenticatedUser(self::$email, self::$password);
+            self::$initialized = true;
+        }
     }
 
-    protected function tearDown(): void
+    public static function tearDownAfterClass(): void
     {
-        parent::tearDown();
-
-        $em = self::getContainer()->get('doctrine')->getManager();
-        $em->createQuery('DELETE FROM App\Entity\User')->execute();
+        parent::tearDownAfterClass();
+        self::$initialized = false;
     }
 
     // ==================== GET /me ====================
@@ -31,13 +37,13 @@ class CurrentUserTest extends ApiTestCase
     public function testGetCurrentUserProfile(): void
     {
         $response = static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => self::$token,
         ]);
 
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains([
             '@type' => 'User',
-            'email' => 'current-user-test@example.com',
+            'email' => self::$email,
             'roles' => ['ROLE_USER'],
         ]);
 
@@ -71,17 +77,17 @@ class CurrentUserTest extends ApiTestCase
 
     public function testDifferentUsersGetTheirOwnProfile(): void
     {
-        // Créer un deuxième utilisateur
+        // Créer un deuxième utilisateur pour ce test spécifique
         $token2 = $this->createAuthenticatedUser('second-user@example.com', 'password456');
 
         // Premier utilisateur récupère son profil
         $response1 = static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => self::$token,
         ]);
 
         $this->assertResponseIsSuccessful();
         $data1 = $response1->toArray();
-        $this->assertEquals('current-user-test@example.com', $data1['email']);
+        $this->assertEquals(self::$email, $data1['email']);
 
         // Deuxième utilisateur récupère son profil
         $response2 = static::createClient()->request('GET', '/me', [
@@ -101,7 +107,7 @@ class CurrentUserTest extends ApiTestCase
     public function testCurrentUserProfileResponseStructure(): void
     {
         $response = static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => self::$token,
         ]);
 
         $this->assertResponseIsSuccessful();
@@ -129,10 +135,14 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserEmail(): void
     {
+        // Créer un utilisateur spécifique pour ce test
+        $testToken = $this->createAuthenticatedUser('update-email-test@example.com', 'pass123');
+        $newEmail = 'updated-email-' . time() . '@example.com';
+
         static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'json' => [
-                'email' => 'updated-email@example.com',
+                'email' => $newEmail,
             ],
             'headers' => [
                 'Content-Type' => 'application/merge-patch+json',
@@ -142,7 +152,7 @@ class CurrentUserTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains([
             '@type' => 'User',
-            'email' => 'updated-email@example.com',
+            'email' => $newEmail,
         ]);
 
         // Générer un nouveau token avec le nouvel email
@@ -150,8 +160,8 @@ class CurrentUserTest extends ApiTestCase
         $tokenResponse = $client->request('POST', '/auth', [
             'headers' => ['Content-Type' => 'application/json'],
             'json' => [
-                'email' => 'updated-email@example.com',
-                'password' => 'password123',
+                'email' => $newEmail,
+                'password' => 'pass123',
             ],
         ]);
         $newToken = $tokenResponse->toArray()['token'];
@@ -163,7 +173,7 @@ class CurrentUserTest extends ApiTestCase
 
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains([
-            'email' => 'updated-email@example.com',
+            'email' => $newEmail,
         ]);
     }
 
@@ -183,8 +193,10 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserEmailWithInvalidEmail(): void
     {
+        $testToken = $this->createAuthenticatedUser('invalid-email-test@example.com', 'pass123');
+
         static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'json' => [
                 'email' => 'invalid-email-format',
             ],
@@ -205,14 +217,20 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserEmailWithDuplicateEmail(): void
     {
-        // Créer un deuxième utilisateur
-        $this->createAuthenticatedUser('existing-user@example.com', 'password');
+        $timestamp = time();
+
+        // Créer un utilisateur existant
+        $existingEmail = "existing-user-{$timestamp}@example.com";
+        $this->createAuthenticatedUser($existingEmail, 'password');
+
+        // Créer l'utilisateur qui va essayer de prendre l'email
+        $testToken = $this->createAuthenticatedUser("test-duplicate-{$timestamp}@example.com", 'pass123');
 
         // Essayer de mettre à jour avec un email déjà utilisé
         static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'json' => [
-                'email' => 'existing-user@example.com',
+                'email' => $existingEmail, // ✅ Utiliser la variable
             ],
             'headers' => [
                 'Content-Type' => 'application/merge-patch+json',
@@ -230,10 +248,92 @@ class CurrentUserTest extends ApiTestCase
         ]);
     }
 
+    public function testUpdateCurrentUserEmailMultipleTimes(): void
+    {
+        $client = static::createClient();
+        $timestamp = time();
+
+        $initialEmail = "multi-update-{$timestamp}@example.com";
+        $testToken = $this->createAuthenticatedUser($initialEmail, 'pass123');
+
+        // Première mise à jour
+        $firstEmail = "first-update-{$timestamp}@example.com";
+        $response1 = $client->request('PATCH', '/me', [
+            'auth_bearer' => $testToken,
+            'json' => [
+                'email' => $firstEmail,
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $data1 = $response1->toArray();
+        $this->assertEquals($firstEmail, $data1['email']);
+
+        // Obtenir un nouveau token avec le premier email modifié
+        $tokenResponse1 = $client->request('POST', '/auth', [
+            'headers' => ['Content-Type' => 'application/json'],
+            'json' => [
+                'email' => $firstEmail,
+                'password' => 'pass123',
+            ],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertArrayHasKey('token', $tokenResponse1->toArray());
+        $token1 = $tokenResponse1->toArray()['token'];
+
+        // Deuxième mise à jour avec le nouveau token
+        $secondEmail = "second-update-{$timestamp}@example.com";
+        $response2 = $client->request('PATCH', '/me', [
+            'auth_bearer' => $token1,
+            'json' => [
+                'email' => $secondEmail,
+            ],
+            'headers' => [
+                'Content-Type' => 'application/merge-patch+json',
+            ],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $data2 = $response2->toArray();
+        $this->assertEquals($secondEmail, $data2['email']);
+
+        // Obtenir un nouveau token avec le second email modifié
+        $tokenResponse2 = $client->request('POST', '/auth', [
+            'headers' => ['Content-Type' => 'application/json'],
+            'json' => [
+                'email' => $secondEmail,
+                'password' => 'pass123',
+            ],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertArrayHasKey('token', $tokenResponse2->toArray());
+        $token2 = $tokenResponse2->toArray()['token'];
+
+        // Vérifier que c'est bien la dernière valeur qui est persistée
+        $finalResponse = $client->request('GET', '/me', [
+            'auth_bearer' => $token2,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        // ✅ Vérifier l'email dans la réponse GET /me
+        $finalData = $finalResponse->toArray();
+        $this->assertEquals($secondEmail, $finalData['email']);
+    }
+
     public function testUpdateCurrentUserEmailWithEmptyEmail(): void
     {
+        $testToken = $this->createAuthenticatedUser('empty-email-test@example.com', 'pass123');
+
         static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'json' => [
                 'email' => '',
             ],
@@ -252,83 +352,18 @@ class CurrentUserTest extends ApiTestCase
         ]);
     }
 
-    public function testUpdateCurrentUserEmailMultipleTimes(): void
-    {
-        $client = static::createClient();
-
-        // Première mise à jour
-        $client->request('PATCH', '/me', [
-            'auth_bearer' => $this->token,
-            'json' => [
-                'email' => 'first-update@example.com',
-            ],
-            'headers' => [
-                'Content-Type' => 'application/merge-patch+json',
-            ],
-        ]);
-
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
-            'email' => 'first-update@example.com',
-        ]);
-
-        // Obtenir un nouveau token avec le premier email modifié
-        $tokenResponse1 = $client->request('POST', '/auth', [
-            'headers' => ['Content-Type' => 'application/json'],
-            'json' => [
-                'email' => 'first-update@example.com',
-                'password' => 'password123',
-            ],
-        ]);
-        $token1 = $tokenResponse1->toArray()['token'];
-
-        // Deuxième mise à jour avec le nouveau token
-        $client->request('PATCH', '/me', [
-            'auth_bearer' => $token1,
-            'json' => [
-                'email' => 'second-update@example.com',
-            ],
-            'headers' => [
-                'Content-Type' => 'application/merge-patch+json',
-            ],
-        ]);
-
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
-            'email' => 'second-update@example.com',
-        ]);
-
-        // Obtenir un nouveau token avec le second email modifié
-        $tokenResponse2 = $client->request('POST', '/auth', [
-            'headers' => ['Content-Type' => 'application/json'],
-            'json' => [
-                'email' => 'second-update@example.com',
-                'password' => 'password123',
-            ],
-        ]);
-        $token2 = $tokenResponse2->toArray()['token'];
-
-        // Vérifier que c'est bien la dernière valeur qui est persistée
-        $client->request('GET', '/me', [
-            'auth_bearer' => $token2,
-        ]);
-
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
-            'email' => 'second-update@example.com',
-        ]);
-    }
-
     public function testUpdateCurrentUserDoesNotAffectOtherUsers(): void
     {
-        // Créer un deuxième utilisateur
-        $token2 = $this->createAuthenticatedUser('other-user@example.com', 'password');
+        // Créer deux utilisateurs
+        $timestamp = time();
+        $token1 = $this->createAuthenticatedUser("user1-{$timestamp}@example.com", 'password');
+        $token2 = $this->createAuthenticatedUser("user2-{$timestamp}@example.com", 'password');
 
         // Le premier utilisateur modifie son email
         static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $token1,
             'json' => [
-                'email' => 'updated-first-user@example.com',
+                'email' => "updated-user1-{$timestamp}@example.com",
             ],
             'headers' => [
                 'Content-Type' => 'application/merge-patch+json',
@@ -344,16 +379,19 @@ class CurrentUserTest extends ApiTestCase
 
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains([
-            'email' => 'other-user@example.com',
+            'email' => "user2-{$timestamp}@example.com",
         ]);
     }
 
     public function testUpdateCurrentUserEmailDoesNotExposePassword(): void
     {
+        $testToken = $this->createAuthenticatedUser('secure-update@example.com', 'pass123');
+        $newEmail = 'secure-update-new-' . time() . '@example.com';
+
         $response = static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'json' => [
-                'email' => 'secure-update@example.com',
+                'email' => $newEmail,
             ],
             'headers' => [
                 'Content-Type' => 'application/merge-patch+json',
@@ -373,8 +411,10 @@ class CurrentUserTest extends ApiTestCase
 
     public function testDeleteCurrentUserAccount(): void
     {
+        $testToken = $this->createAuthenticatedUser('delete-account@example.com', 'pass123');
+
         static::createClient()->request('DELETE', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
         ]);
 
         $this->assertResponseStatusCodeSame(204);
@@ -382,16 +422,18 @@ class CurrentUserTest extends ApiTestCase
 
     public function testDeleteCurrentUserAccountMakesTokenInvalid(): void
     {
+        $testToken = $this->createAuthenticatedUser('delete-token-invalid@example.com', 'pass123');
+
         // Supprimer le compte
         static::createClient()->request('DELETE', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
         ]);
 
         $this->assertResponseStatusCodeSame(204);
 
         // Essayer d'utiliser le même token après suppression
         static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
         ]);
 
         $this->assertResponseStatusCodeSame(401);
@@ -399,12 +441,13 @@ class CurrentUserTest extends ApiTestCase
 
     public function testDeleteCurrentUserAccountPreventsLogin(): void
     {
-        $email = 'current-user-test@example.com';
-        $password = 'password123';
+        $email = 'delete-prevents-login-' . time() . '@example.com';
+        $password = 'pass123';
+        $testToken = $this->createAuthenticatedUser($email, $password);
 
         // Supprimer le compte
         static::createClient()->request('DELETE', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
         ]);
 
         $this->assertResponseStatusCodeSame(204);
@@ -439,38 +482,44 @@ class CurrentUserTest extends ApiTestCase
 
     public function testDeleteCurrentUserAccountDoesNotAffectOtherUsers(): void
     {
-        // Créer un deuxième utilisateur
-        $token2 = $this->createAuthenticatedUser('other-user-delete@example.com', 'password');
+        $timestamp = time();
+
+        // Créer deux utilisateurs
+        $token1 = $this->createAuthenticatedUser("delete-user1-{$timestamp}@example.com", 'password');
+        $token2 = $this->createAuthenticatedUser("delete-user2-{$timestamp}@example.com", 'password');
 
         // Le premier utilisateur supprime son compte
         static::createClient()->request('DELETE', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $token1,
         ]);
 
         $this->assertResponseStatusCodeSame(204);
 
+        // Le deuxième utilisateur peut toujours accéder à son profil
         static::createClient()->request('GET', '/me', [
             'auth_bearer' => $token2,
         ]);
 
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains([
-            'email' => 'other-user-delete@example.com',
+            'email' => "delete-user2-{$timestamp}@example.com",
         ]);
     }
 
     public function testDeleteCurrentUserAccountIsIdempotent(): void
     {
+        $testToken = $this->createAuthenticatedUser('delete-idempotent@example.com', 'pass123');
+
         // Première suppression
         static::createClient()->request('DELETE', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
         ]);
 
         $this->assertResponseStatusCodeSame(204);
 
         // Deuxième tentative de suppression avec le même token
         static::createClient()->request('DELETE', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
         ]);
 
         // Le token est invalide car l'utilisateur n'existe plus
@@ -479,12 +528,13 @@ class CurrentUserTest extends ApiTestCase
 
     public function testDeleteCurrentUserAccountCannotBeUndone(): void
     {
-        $email = 'current-user-test@example.com';
-        $password = 'password123';
+        $email = 'delete-cannot-undo-' . time() . '@example.com';
+        $password = 'pass123';
+        $testToken = $this->createAuthenticatedUser($email, $password);
 
         // Supprimer le compte
         static::createClient()->request('DELETE', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
         ]);
 
         $this->assertResponseStatusCodeSame(204);

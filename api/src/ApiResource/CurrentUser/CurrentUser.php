@@ -20,11 +20,13 @@ use App\State\Provider\Profile\CurrentUserProvider;
         new Get(
             uriTemplate: '/me',
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityMessage: 'You must be authenticated to access your profile.',
             provider: CurrentUserProvider::class,
         ),
         new Patch(
             uriTemplate: '/me',
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityMessage: 'You must be authenticated to update your profile.',
             validate: false,
             provider: CurrentUserProvider::class,
             processor: CurrentUserProcessor::class,
@@ -32,6 +34,7 @@ use App\State\Provider\Profile\CurrentUserProvider;
         new Delete(
             uriTemplate: '/me',
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityMessage: 'You must be authenticated to delete your account.',
             provider: CurrentUserProvider::class,
             processor: CurrentUserRemoveProcessor::class,
         ),

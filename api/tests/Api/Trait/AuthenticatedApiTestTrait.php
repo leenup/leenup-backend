@@ -6,24 +6,38 @@ use App\Entity\User;
 
 trait AuthenticatedApiTestTrait
 {
-    private string $token;
+    protected function createAuthenticatedUser(
+        string $email = 'test@example.com',
+        string $password = 'password'
+    ): string {
+        return $this->createAuthenticated($email, $password, ['ROLE_USER']);
+    }
 
-    protected function createAuthenticatedUser(string $email = 'test@example.com', string $password = 'password'): string
-    {
+    protected function createAuthenticatedAdmin(
+        string $email = 'admin@example.com',
+        string $password = 'admin123!'
+    ): string {
+        return $this->createAuthenticated($email, $password, ['ROLE_ADMIN']);
+    }
+
+    private function createAuthenticated(
+        string $email,
+        string $password,
+        array $roles
+    ): string {
         $client = self::createClient();
         $container = self::getContainer();
         $em = $container->get('doctrine')->getManager();
 
-        // Supprimer l'utilisateur s'il existe déjà
         $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if ($existingUser) {
             $em->remove($existingUser);
             $em->flush();
         }
 
-        // Créer un utilisateur
         $user = new User();
         $user->setEmail($email);
+        $user->setRoles($roles);
         $user->setPassword(
             $container->get('security.user_password_hasher')->hashPassword($user, $password)
         );
@@ -31,7 +45,6 @@ trait AuthenticatedApiTestTrait
         $em->persist($user);
         $em->flush();
 
-        // Obtenir le token JWT
         $response = $client->request('POST', '/auth', [
             'headers' => ['Content-Type' => 'application/json'],
             'json' => [

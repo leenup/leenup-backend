@@ -8,7 +8,6 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
-use ApiPlatform\Metadata\Put;
 use App\Repository\UserRepository;
 use App\State\UserPasswordHasher;
 use Doctrine\ORM\Mapping as ORM;
@@ -24,18 +23,36 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[UniqueEntity(fields: ['email'], message: 'This email is already in use')]
 #[ApiResource(
     operations: [
-        new GetCollection(),
+        new GetCollection(
+            security: "is_granted('ROLE_ADMIN')",
+            securityMessage: 'Only admins can list users.'
+        ),
+        new Get(
+            security: "is_granted('ROLE_ADMIN')",
+            securityMessage: 'Only admins can view user details.'
+        ),
+        new Patch(
+            security: "is_granted('ROLE_ADMIN') or object == user",
+            securityPostDenormalize: "is_granted('ROLE_ADMIN') or (object == user and previous_object.getRoles() == object.getRoles())",
+            securityPostDenormalizeMessage: "Only admins can modify user roles.",
+            processor: UserPasswordHasher::class
+        ),
+        new Delete(
+            security: "is_granted('ROLE_ADMIN')",
+            securityMessage: 'Only admins can delete users.'
+        ),
         new Post(
             uriTemplate: '/register',
+            security: "is_granted('PUBLIC_ACCESS')",
+            securityPostDenormalize: "is_granted('ROLE_ADMIN') or !object.hasRole('ROLE_ADMIN')",
+            securityPostDenormalizeMessage: "Only admins can assign admin roles.",
             validationContext: ['groups' => ['Default', 'user:create']],
             processor: UserPasswordHasher::class,
         ),
-        new Get(),
-        new Patch(processor: UserPasswordHasher::class),
-        new Delete(),
     ],
     normalizationContext: ['groups' => ['user:read']],
-    denormalizationContext: ['groups' => ['user:create', 'user:update']],
+    denormalizationContext: ['groups' => ['user:create', 'user:update:admin']],
+    security: "is_granted('ROLE_ADMIN')",
 )]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
@@ -48,18 +65,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 180)]
     #[Assert\NotBlank]
     #[Assert\Email]
-    #[Groups(['user:read', 'user:create', 'user:update'])]
+    #[Groups(['user:read', 'user:create', 'user:update', 'user:update:admin'])]
     private ?string $email = null;
 
     #[ORM\Column]
-    #[Groups(['user:read'])]
-    private array $roles = [];
+    #[Groups(['user:read', 'user:create', 'user:update:admin'])]
+    private array $roles = ['ROLE_USER'];
 
     #[ORM\Column]
     private ?string $password = null;
 
     #[Assert\NotBlank(groups: ['user:create'])]
-    #[Groups(['user:create', 'user:update'])]
+    #[Groups(['user:create', 'user:update:admin'])]
     private ?string $plainPassword = null;
 
     public function getId(): ?int
@@ -118,9 +135,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    #[\Deprecated]
+    /**
+     * ✅ Garder la méthode mais vide (pas de logique)
+     * Le plainPassword est déjà nettoyé dans UserPasswordHasher
+     */
     public function eraseCredentials(): void
     {
-        $this->plainPassword = null;
+    }
+
+    public function hasRole(string $role): bool
+    {
+        return in_array($role, $this->roles, true);
     }
 }

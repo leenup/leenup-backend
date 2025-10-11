@@ -9,33 +9,43 @@ class ChangePasswordTest extends ApiTestCase
 {
     use AuthenticatedApiTestTrait;
 
-    private string $token;
-    private string $email = 'change-password-test@example.com';
-    private string $password = 'initial_password123';
+    private static string $token;
+    private static string $email;
+    private static string $password = 'initial_password123';
+    private static bool $initialized = false;
+    private static int $counter = 0;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->token = $this->createAuthenticatedUser($this->email, $this->password);
+
+        self::$counter++;
+
+        if (!self::$initialized) {
+            self::$email = 'change-password-test@example.com';
+            self::$token = $this->createAuthenticatedUser(self::$email, self::$password);
+            self::$initialized = true;
+        }
     }
 
-    protected function tearDown(): void
+    public static function tearDownAfterClass(): void
     {
-        parent::tearDown();
-
-        $em = self::getContainer()->get('doctrine')->getManager();
-        $em->createQuery('DELETE FROM App\Entity\User')->execute();
+        parent::tearDownAfterClass();
+        self::$initialized = false;
+        self::$counter = 0;
     }
 
     // ==================== POST /me/change-password ====================
 
     public function testChangePasswordSuccessfully(): void
     {
+        $testToken = $this->createAuthenticatedUser("success-" . self::$counter . "@example.com", 'oldpass123');
+
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => 'oldpass123',
                 'newPassword' => 'new_secure_password456',
             ],
         ]);
@@ -45,24 +55,25 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordAndLoginWithNewPassword(): void
     {
-        // Changer le mot de passe
+        $email = "login-new-" . self::$counter . "@example.com";
+        $testToken = $this->createAuthenticatedUser($email, 'oldpass123');
+
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => 'oldpass123',
                 'newPassword' => 'new_secure_password456',
             ],
         ]);
 
         $this->assertResponseStatusCodeSame(204);
 
-        // Se connecter avec le nouveau mot de passe
         $client = static::createClient();
         $response = $client->request('POST', '/auth', [
             'headers' => ['Content-Type' => 'application/json'],
             'json' => [
-                'email' => $this->email,
+                'email' => $email,
                 'password' => 'new_secure_password456',
             ],
         ]);
@@ -73,24 +84,25 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordMakesOldPasswordInvalid(): void
     {
-        // Changer le mot de passe
+        $email = "invalid-old-" . self::$counter . "@example.com";
+        $testToken = $this->createAuthenticatedUser($email, 'oldpass123');
+
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => 'oldpass123',
                 'newPassword' => 'new_secure_password456',
             ],
         ]);
 
         $this->assertResponseStatusCodeSame(204);
 
-        // Essayer de se connecter avec l'ancien mot de passe
         static::createClient()->request('POST', '/auth', [
             'headers' => ['Content-Type' => 'application/json'],
             'json' => [
-                'email' => $this->email,
-                'password' => $this->password,
+                'email' => $email,
+                'password' => 'oldpass123',
             ],
         ]);
 
@@ -99,26 +111,27 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordKeepsTokenValid(): void
     {
-        // Changer le mot de passe
+        $email = "token-valid-" . self::$counter . "@example.com";
+        $testToken = $this->createAuthenticatedUser($email, 'oldpass123');
+
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => 'oldpass123',
                 'newPassword' => 'new_secure_password456',
             ],
         ]);
 
         $this->assertResponseStatusCodeSame(204);
 
-        // Vérifier que le token actuel fonctionne toujours
         static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
         ]);
 
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains([
-            'email' => $this->email,
+            'email' => $email,
         ]);
     }
 
@@ -126,8 +139,10 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordWithIncorrectCurrentPassword(): void
     {
+        $testToken = $this->createAuthenticatedUser("incorrect-" . self::$counter . "@example.com", 'oldpass123');
+
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
                 'currentPassword' => 'wrong_password',
@@ -148,12 +163,14 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordWithSamePassword(): void
     {
+        $testToken = $this->createAuthenticatedUser("same-pass-" . self::$counter . "@example.com", 'mypassword123');
+
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
-                'newPassword' => $this->password,
+                'currentPassword' => 'mypassword123',
+                'newPassword' => 'mypassword123',
             ],
         ]);
 
@@ -170,11 +187,13 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordWithTooShortPassword(): void
     {
+        $testToken = $this->createAuthenticatedUser("short-pass-" . self::$counter . "@example.com", 'oldpass123');
+
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $testToken,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => 'oldpass123',
                 'newPassword' => '123',
             ],
         ]);
@@ -192,7 +211,7 @@ class ChangePasswordTest extends ApiTestCase
     public function testChangePasswordWithEmptyCurrentPassword(): void
     {
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => self::$token,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
                 'currentPassword' => '',
@@ -214,10 +233,10 @@ class ChangePasswordTest extends ApiTestCase
     public function testChangePasswordWithEmptyNewPassword(): void
     {
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => self::$token,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => self::$password,
                 'newPassword' => '',
             ],
         ]);
@@ -236,7 +255,7 @@ class ChangePasswordTest extends ApiTestCase
     public function testChangePasswordWithMissingCurrentPassword(): void
     {
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => self::$token,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
                 'newPassword' => 'new_secure_password456',
@@ -249,10 +268,10 @@ class ChangePasswordTest extends ApiTestCase
     public function testChangePasswordWithMissingNewPassword(): void
     {
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => self::$token,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => self::$password,
             ],
         ]);
 
@@ -266,7 +285,7 @@ class ChangePasswordTest extends ApiTestCase
         static::createClient()->request('POST', '/me/change-password', [
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => 'somepassword',
                 'newPassword' => 'new_secure_password456',
             ],
         ]);
@@ -280,7 +299,7 @@ class ChangePasswordTest extends ApiTestCase
             'auth_bearer' => 'invalid_token_12345',
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => 'somepassword',
                 'newPassword' => 'new_secure_password456',
             ],
         ]);
@@ -290,28 +309,29 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordDoesNotAffectOtherUsers(): void
     {
-        // Créer un deuxième utilisateur
-        $token2 = $this->createAuthenticatedUser('other-user@example.com', 'other_password123');
+        $email1 = "user1-" . self::$counter . "@example.com";
+        $email2 = "user2-" . self::$counter . "@example.com";
 
-        // Le premier utilisateur change son mot de passe
+        $token1 = $this->createAuthenticatedUser($email1, 'password1');
+        $token2 = $this->createAuthenticatedUser($email2, 'password2');
+
         static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $token1,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => 'password1',
                 'newPassword' => 'new_password_user1',
             ],
         ]);
 
         $this->assertResponseStatusCodeSame(204);
 
-        // Vérifier que le deuxième utilisateur peut toujours se connecter avec son mot de passe
         $client = static::createClient();
         $response = $client->request('POST', '/auth', [
             'headers' => ['Content-Type' => 'application/json'],
             'json' => [
-                'email' => 'other-user@example.com',
-                'password' => 'other_password123',
+                'email' => $email2,
+                'password' => 'password2',
             ],
         ]);
 
@@ -323,14 +343,16 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordMultipleTimes(): void
     {
-        $client = static::createClient();
+        $email = "multi-change-" . self::$counter . "@example.com";
+        $token = $this->createAuthenticatedUser($email, 'password_v1');
 
         // Premier changement
+        $client = static::createClient();
         $client->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $token,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
-                'currentPassword' => $this->password,
+                'currentPassword' => 'password_v1',
                 'newPassword' => 'password_v2',
             ],
         ]);
@@ -339,7 +361,7 @@ class ChangePasswordTest extends ApiTestCase
 
         // Deuxième changement
         $client->request('POST', '/me/change-password', [
-            'auth_bearer' => $this->token,
+            'auth_bearer' => $token,
             'headers' => ['Content-Type' => 'application/ld+json'],
             'json' => [
                 'currentPassword' => 'password_v2',
@@ -353,7 +375,7 @@ class ChangePasswordTest extends ApiTestCase
         $response = $client->request('POST', '/auth', [
             'headers' => ['Content-Type' => 'application/json'],
             'json' => [
-                'email' => $this->email,
+                'email' => $email,
                 'password' => 'password_v3',
             ],
         ]);
@@ -361,20 +383,21 @@ class ChangePasswordTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $this->assertArrayHasKey('token', $response->toArray());
 
-        // Vérifier que les anciens mots de passe ne fonctionnent plus
+        // Vérifier que password_v1 ne fonctionne plus
         $client->request('POST', '/auth', [
             'headers' => ['Content-Type' => 'application/json'],
             'json' => [
-                'email' => $this->email,
-                'password' => $this->password,
+                'email' => $email,
+                'password' => 'password_v1',
             ],
         ]);
         $this->assertResponseStatusCodeSame(401);
 
+        // Vérifier que password_v2 ne fonctionne plus
         $client->request('POST', '/auth', [
             'headers' => ['Content-Type' => 'application/json'],
             'json' => [
-                'email' => $this->email,
+                'email' => $email,
                 'password' => 'password_v2',
             ],
         ]);
