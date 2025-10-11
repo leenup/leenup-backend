@@ -57,14 +57,14 @@ jobs:
         name: Generate JWT keys
         run: docker compose exec -T php sh -c "php bin/console lexik:jwt:generate-keypair --skip-if-exists"
       -
-        name: Create test database
-        run: docker compose exec -T php bin/console -e test doctrine:database:create
+        name: Setup test database
+        run: |
+          docker compose exec -T php sh -c "APP_ENV=test bin/console doctrine:database:drop --force --if-exists --quiet || true"
+          docker compose exec -T php sh -c "APP_ENV=test bin/console doctrine:database:create --quiet"
+          docker compose exec -T php sh -c "APP_ENV=test bin/console doctrine:migrations:migrate --no-interaction --quiet"
       -
-        name: Run migrations
-        run: docker compose exec -T php bin/console -e test doctrine:migrations:migrate --no-interaction
-      -
-        name: Run PHPUnit
-        run: docker compose exec -T php bin/phpunit
+        name: Run tests in parallel
+        run: docker compose exec -T php vendor/bin/paratest --processes=4
       -
         name: Doctrine Schema Validator
         run: docker compose exec -T php bin/console -e test doctrine:schema:validate
