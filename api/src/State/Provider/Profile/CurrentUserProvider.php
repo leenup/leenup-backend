@@ -1,5 +1,4 @@
 <?php
-// api/src/State/CurrentUserProvider.php
 
 namespace App\State\Provider\Profile;
 

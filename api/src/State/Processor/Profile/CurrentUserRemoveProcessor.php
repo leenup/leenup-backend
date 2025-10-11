@@ -22,14 +22,12 @@ final class CurrentUserRemoveProcessor implements ProcessorInterface
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): void
     {
-        // Récupérer l'utilisateur connecté
         $currentUser = $this->security->getUser();
 
         if (!$currentUser instanceof User) {
             throw new \LogicException('User not authenticated');
         }
 
-        // Supprimer l'utilisateur connecté
         $this->removeProcessor->process($currentUser, $operation, $uriVariables, $context);
     }
 }

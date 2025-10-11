@@ -1,5 +1,4 @@
 <?php
-// api/src/ApiResource/CurrentUser/CurrentUser.php
 
 namespace App\ApiResource\CurrentUser;
 

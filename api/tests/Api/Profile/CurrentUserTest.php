@@ -1,5 +1,4 @@
 <?php
-// api/tests/Api/Profile/CurrentUserTest.php
 
 namespace App\Tests\Api\Profile;
 

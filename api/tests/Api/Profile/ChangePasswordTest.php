@@ -1,5 +1,4 @@
 <?php
-// api/tests/Api/Profile/ChangePasswordTest.php
 
 namespace App\Tests\Api\Profile;
 
