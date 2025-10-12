@@ -1,10 +1,68 @@
-import { HydraAdmin } from "@api-platform/admin";
+import {
+  HydraAdmin,
+  fetchHydra as baseFetchHydra,
+  hydraDataProvider as baseHydraDataProvider,
+  useIntrospection, ResourceGuesser,
+} from "@api-platform/admin";
+import { parseHydraDocumentation } from "@api-platform/api-doc-parser";
+import authProvider from "./authProvider";
+
+const entrypoint = window.origin;
+
+const getHeaders = () =>
+  localStorage.getItem("token")
+    ? { Authorization: `Bearer ${localStorage.getItem("token")}` }
+    : {};
+
+const fetchHydra = (url, options = {}) =>
+  baseFetchHydra(url, {
+    ...options,
+    headers: getHeaders,
+  });
+
+const RedirectToLogin = () => {
+  const introspect = useIntrospection();
+
+  if (localStorage.getItem("token")) {
+    introspect();
+    return <></>;
+  }
+  return <>Redirecting to login...</>;
+};
+
+const apiDocumentationParser = async (entrypoint) => {
+  try {
+    const headers = getHeaders();
+    return await parseHydraDocumentation(entrypoint, { headers });
+  } catch (result) {
+    if (result.status === 401) {
+      return Promise.resolve({
+        api: { entrypoint },
+        response: result,
+        status: result.status,
+      });
+    }
+    throw result;
+  }
+};
+
+const dataProvider = baseHydraDataProvider({
+  entrypoint,
+  httpClient: fetchHydra,
+  apiDocumentationParser,
+});
 
 const App = () => (
   <HydraAdmin
-    entrypoint={window.origin}
-    title="API Platform admin"
-  ></HydraAdmin>
+    dataProvider={dataProvider}
+    authProvider={authProvider}
+    entrypoint={entrypoint}
+    title="LeenUp Admin"
+  >
+    <ResourceGuesser name="categories" />
+    <ResourceGuesser name="skills" />
+    <ResourceGuesser name="users" />
+  </HydraAdmin>
 );
 
 export default App;

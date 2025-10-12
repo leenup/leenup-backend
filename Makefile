@@ -59,6 +59,9 @@ db-reset: restart db-drop db-create migration-migrate ## Recrée la base de donn
 db-reset-fixture: restart db-drop db-create migration-migrate fixtures-load ## Recrée la base de données à zéro
 	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
 
+db-reset-fixtures: db-reset fixtures-load ## Recrée la base de données et charge les fixtures
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations et fixtures$(NC)"
+
 migration-diff: ## Génère une nouvelle migration
 	@echo "$(YELLOW)📝 Génération d'une migration...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:diff
@@ -139,6 +142,7 @@ else
 ifdef PROCESSES
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES)
 else
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
 endif
 endif
