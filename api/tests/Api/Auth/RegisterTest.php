@@ -3,39 +3,17 @@
 namespace App\Tests\Api\Auth;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
-use App\Entity\User;
-use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use App\Factory\UserFactory;
+use Zenstruck\Foundry\Test\Factories;
 
 class RegisterTest extends ApiTestCase
 {
-    use AuthenticatedApiTestTrait;
-
-    private static int $counter = 0;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        self::$counter++;
-    }
-
-    public static function tearDownAfterClass(): void
-    {
-        parent::tearDownAfterClass();
-        self::$counter = 0;
-    }
-
-    /**
-     * Génère un email unique pour éviter les conflits en parallèle
-     */
-    private function generateUniqueEmail(string $prefix = 'test'): string
-    {
-        return $prefix . '-' . time() . '-' . self::$counter . '-' . uniqid() . '@example.com';
-    }
+    use Factories;
 
     public function testRegister(): void
     {
         $client = self::createClient();
-        $email = $this->generateUniqueEmail('newuser');
+        $email = 'newuser@example.com';
 
         $response = $client->request('POST', '/register', [
             'json' => [
@@ -58,6 +36,7 @@ class RegisterTest extends ApiTestCase
         $this->assertArrayNotHasKey('password', $response->toArray());
         $this->assertArrayNotHasKey('plainPassword', $response->toArray());
 
+        // Vérifier qu'on peut se connecter avec ce nouvel utilisateur
         $loginResponse = $client->request('POST', '/auth', [
             'json' => [
                 'email' => $email,
@@ -74,21 +53,12 @@ class RegisterTest extends ApiTestCase
 
     public function testRegisterWithDuplicateEmail(): void
     {
+        // Créer un utilisateur existant avec Foundry
+        $email = 'existing@example.com';
+        UserFactory::createOne(['email' => $email]);
+
+        // Essayer de créer un utilisateur avec le même email
         $client = self::createClient();
-        $container = self::getContainer();
-
-        $email = $this->generateUniqueEmail('duplicate');
-
-        $user = new User();
-        $user->setEmail($email);
-        $user->setPassword(
-            $container->get('security.user_password_hasher')->hashPassword($user, 'password')
-        );
-
-        $em = $container->get('doctrine')->getManager();
-        $em->persist($user);
-        $em->flush();
-
         $client->request('POST', '/register', [
             'json' => [
                 'email' => $email,
@@ -115,7 +85,7 @@ class RegisterTest extends ApiTestCase
     {
         static::createClient()->request('POST', '/register', [
             'json' => [
-                'email' => $this->generateUniqueEmail('nopass'),
+                'email' => 'test@example.com',
             ],
             'headers' => [
                 'Content-Type' => 'application/ld+json',
@@ -161,7 +131,7 @@ class RegisterTest extends ApiTestCase
     {
         static::createClient()->request('POST', '/register', [
             'json' => [
-                'email' => $this->generateUniqueEmail('admin-attempt'),
+                'email' => 'admin-attempt@example.com',
                 'plainPassword' => 'password123',
                 'roles' => ['ROLE_ADMIN'],
             ],
@@ -178,12 +148,27 @@ class RegisterTest extends ApiTestCase
 
     public function testUserCannotCreateAnotherAdmin(): void
     {
-        $userToken = $this->createAuthenticatedUser($this->generateUniqueEmail('user'), 'password');
+        // Créer un utilisateur normal et obtenir son token
+        $user = UserFactory::createOne([
+            'email' => 'user@example.com',
+            'plainPassword' => 'password',
+        ]);
 
-        static::createClient()->request('POST', '/register', [
-            'auth_bearer' => $userToken,
+        $client = static::createClient();
+        $loginResponse = $client->request('POST', '/auth', [
             'json' => [
-                'email' => $this->generateUniqueEmail('newadmin'),
+                'email' => 'user@example.com',
+                'password' => 'password',
+            ],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $token = $loginResponse->toArray()['token'];
+
+        // Essayer de créer un admin
+        $client->request('POST', '/register', [
+            'auth_bearer' => $token,
+            'json' => [
+                'email' => 'newadmin@example.com',
                 'plainPassword' => 'adminpassword123',
                 'roles' => ['ROLE_ADMIN'],
             ],
@@ -200,12 +185,27 @@ class RegisterTest extends ApiTestCase
 
     public function testAdminCanRegisterAdmin(): void
     {
-        $adminToken = $this->createAuthenticatedAdmin($this->generateUniqueEmail('admin'), 'password');
+        // Créer un admin et obtenir son token
+        $admin = UserFactory::createOne([
+            'email' => 'admin@example.com',
+            'plainPassword' => 'password',
+            'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
+        ]);
 
-        $newAdminEmail = $this->generateUniqueEmail('newadmin');
+        $client = static::createClient();
+        $loginResponse = $client->request('POST', '/auth', [
+            'json' => [
+                'email' => 'admin@example.com',
+                'password' => 'password',
+            ],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $token = $loginResponse->toArray()['token'];
 
-        static::createClient()->request('POST', '/register', [
-            'auth_bearer' => $adminToken,
+        // Créer un nouvel admin
+        $newAdminEmail = 'newadmin@example.com';
+        $client->request('POST', '/register', [
+            'auth_bearer' => $token,
             'json' => [
                 'email' => $newAdminEmail,
                 'plainPassword' => 'adminpassword123',
@@ -217,7 +217,6 @@ class RegisterTest extends ApiTestCase
         ]);
 
         $this->assertResponseStatusCodeSame(201);
-
         $this->assertJsonContains([
             '@context' => '/contexts/User',
             '@type' => 'User',

@@ -15,6 +15,8 @@ jobs:
   tests:
     name: Tests
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8"
     steps:
       -
         name: Checkout
@@ -56,18 +58,20 @@ jobs:
       -
         name: Generate JWT keys
         run: docker compose exec -T php sh -c "php bin/console lexik:jwt:generate-keypair --skip-if-exists"
-      -
-        name: Setup test database
+      -  
+        name: Prepare test database
         run: |
-          docker compose exec -T php sh -c "APP_ENV=test bin/console doctrine:database:drop --force --if-exists --quiet || true"
-          docker compose exec -T php sh -c "APP_ENV=test bin/console doctrine:database:create --quiet"
-          docker compose exec -T php sh -c "APP_ENV=test bin/console doctrine:migrations:migrate --no-interaction --quiet"
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:database:drop --force --if-exists
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:database:create
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:migrations:migrate --no-interaction
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console dbal:run-sql "SELECT 1" || true
       -
-        name: Run tests in parallel
-        run: docker compose exec -T php vendor/bin/paratest --processes=4
+        name: Run PHPUnit
+        run: docker compose exec -T php bin/phpunit
       -
         name: Doctrine Schema Validator
-        run: docker compose exec -T php bin/console -e test doctrine:schema:validate
+        run: docker compose exec -T php bin/console doctrine:schema:validate
+
   lint:
     name: Docker Lint
     runs-on: ubuntu-latest

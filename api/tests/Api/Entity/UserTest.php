@@ -3,44 +3,58 @@
 namespace App\Tests\Api\Entity;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
-use App\Entity\User;
-use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use App\Factory\UserFactory;
+use Zenstruck\Foundry\Test\Factories;
 
 class UserTest extends ApiTestCase
 {
-    use AuthenticatedApiTestTrait;
+    use Factories;
 
-    private static string $userToken;
-    private static string $adminToken;
-    private static bool $initialized = false;
+    private string $userToken;
+    private string $adminToken;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        // Créer les users une seule fois pour toute la classe
-        if (!self::$initialized) {
-            self::$userToken = $this->createAuthenticatedUser('user@exemple.com', 'user123!');
-            self::$adminToken = $this->createAuthenticatedAdmin('admin@exemple.com', 'admin123!');
-            self::$initialized = true;
-        }
-    }
+        // Créer un utilisateur normal
+        UserFactory::createOne([
+            'email' => 'user@exemple.com',
+            'plainPassword' => 'user123',
+            'roles' => ['ROLE_USER'],
+        ]);
 
-    public static function tearDownAfterClass(): void
-    {
-        parent::tearDownAfterClass();
-        self::$initialized = false;
+        // Créer un admin
+        UserFactory::createOne([
+            'email' => 'admin@exemple.com',
+            'plainPassword' => 'admin123',
+            'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
+        ]);
+
+        // Obtenir les tokens
+        $client = static::createClient();
+
+        $response = $client->request('POST', '/auth', [
+            'json' => ['email' => 'user@exemple.com', 'password' => 'user123'],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $this->userToken = $response->toArray()['token'];
+
+        $response = $client->request('POST', '/auth', [
+            'json' => ['email' => 'admin@exemple.com', 'password' => 'admin123'],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $this->adminToken = $response->toArray()['token'];
     }
 
     // ==================== GET /users (Collection) ====================
 
     public function testGetUsersAsAdmin(): void
     {
-        $this->createAuthenticatedUser('user2@exemple.com', 'user123!');
-        $this->createAuthenticatedUser('user3@exemple.com', 'user123!');
+        UserFactory::createMany(2); // 2 utilisateurs aléatoires supplémentaires
 
         $response = static::createClient()->request('GET', '/users', [
-            'auth_bearer' => self::$adminToken,
+            'auth_bearer' => $this->adminToken,
         ]);
 
         $this->assertResponseIsSuccessful();
@@ -51,7 +65,7 @@ class UserTest extends ApiTestCase
         $this->assertSame('/contexts/User', $data['@context']);
         $this->assertSame('Collection', $data['@type']);
         $this->assertArrayHasKey('member', $data);
-        $this->assertGreaterThanOrEqual(4, $data['totalItems']);
+        $this->assertGreaterThanOrEqual(4, $data['totalItems']); // 2 setUp + 2 créés
 
         $emails = array_column($data['member'], 'email');
         $this->assertContains('user@exemple.com', $emails);
@@ -67,7 +81,7 @@ class UserTest extends ApiTestCase
     public function testGetUsersAsUserForbidden(): void
     {
         $response = static::createClient()->request('GET', '/users', [
-            'auth_bearer' => self::$userToken,
+            'auth_bearer' => $this->userToken,
         ]);
 
         $this->assertResponseStatusCodeSame(403);
@@ -91,16 +105,16 @@ class UserTest extends ApiTestCase
 
     public function testGetUserAsAdmin(): void
     {
-        $userData = $this->createUserAndGetId('target-user@exemple.com', 'pass123');
+        $user = UserFactory::createOne(['email' => 'target@exemple.com']);
 
-        $response = static::createClient()->request('GET', "/users/{$userData['id']}", [
-            'auth_bearer' => self::$adminToken,
+        $response = static::createClient()->request('GET', '/users/' . $user->getId(), [
+            'auth_bearer' => $this->adminToken,
         ]);
 
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains([
             '@type' => 'User',
-            'email' => 'target-user@exemple.com',
+            'email' => 'target@exemple.com',
         ]);
 
         $data = $response->toArray();
@@ -110,10 +124,10 @@ class UserTest extends ApiTestCase
 
     public function testGetUserAsUserForbidden(): void
     {
-        $userData = $this->createUserAndGetId('other-user@exemple.com', 'pass123');
+        $user = UserFactory::createOne(['email' => 'other@exemple.com']);
 
-        static::createClient()->request('GET', "/users/{$userData['id']}", [
-            'auth_bearer' => self::$userToken,
+        static::createClient()->request('GET', '/users/' . $user->getId(), [
+            'auth_bearer' => $this->userToken,
         ]);
 
         $this->assertResponseStatusCodeSame(403);
@@ -133,31 +147,25 @@ class UserTest extends ApiTestCase
 
     public function testAdminCanUpdateAnyUser(): void
     {
-        $userData = $this->createUserAndGetId('target@exemple.com', 'pass123');
+        $user = UserFactory::createOne(['email' => 'target@exemple.com']);
 
-        static::createClient()->request('PATCH', "/users/{$userData['id']}", [
-            'auth_bearer' => self::$adminToken,
-            'json' => [
-                'email' => 'updated-by-admin@exemple.com',
-            ],
+        static::createClient()->request('PATCH', '/users/' . $user->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['email' => 'updated@exemple.com'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
         $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
-            'email' => 'updated-by-admin@exemple.com',
-        ]);
+        $this->assertJsonContains(['email' => 'updated@exemple.com']);
     }
 
     public function testAdminCanChangeUserRoles(): void
     {
-        $userData = $this->createUserAndGetId('promote-me@exemple.com', 'pass123');
+        $user = UserFactory::createOne(['email' => 'promote@exemple.com']);
 
-        static::createClient()->request('PATCH', "/users/{$userData['id']}", [
-            'auth_bearer' => self::$adminToken,
-            'json' => [
-                'roles' => ['ROLE_ADMIN'],
-            ],
+        static::createClient()->request('PATCH', '/users/' . $user->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['roles' => ['ROLE_ADMIN']],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
@@ -169,13 +177,14 @@ class UserTest extends ApiTestCase
 
     public function testAdminCanChangeUserPassword(): void
     {
-        $userData = $this->createUserAndGetId('change-pass@exemple.com', 'oldpass123');
+        $user = UserFactory::createOne([
+            'email' => 'changepass@exemple.com',
+            'plainPassword' => 'oldpass',
+        ]);
 
-        static::createClient()->request('PATCH', "/users/{$userData['id']}", [
-            'auth_bearer' => self::$adminToken,
-            'json' => [
-                'plainPassword' => 'newpass456',
-            ],
+        static::createClient()->request('PATCH', '/users/' . $user->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['plainPassword' => 'newpass'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
@@ -183,11 +192,8 @@ class UserTest extends ApiTestCase
 
         // Vérifier que le nouveau mot de passe fonctionne
         $loginResponse = static::createClient()->request('POST', '/auth', [
+            'json' => ['email' => 'changepass@exemple.com', 'password' => 'newpass'],
             'headers' => ['Content-Type' => 'application/json'],
-            'json' => [
-                'email' => 'change-pass@exemple.com',
-                'password' => 'newpass456',
-            ],
         ]);
 
         $this->assertResponseIsSuccessful();
@@ -196,31 +202,35 @@ class UserTest extends ApiTestCase
 
     public function testUserCanUpdateOwnEmail(): void
     {
-        $userData = $this->createUserAndGetId('my-email@exemple.com', 'pass123');
+        $user = UserFactory::createOne([
+            'email' => 'myemail@exemple.com',
+            'plainPassword' => 'password',
+        ]);
 
-        static::createClient()->request('PATCH', "/users/{$userData['id']}", [
-            'auth_bearer' => $userData['token'],
-            'json' => [
-                'email' => 'my-new-email@exemple.com',
-            ],
+        // Obtenir le token de cet utilisateur
+        $response = static::createClient()->request('POST', '/auth', [
+            'json' => ['email' => 'myemail@exemple.com', 'password' => 'password'],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $token = $response->toArray()['token'];
+
+        static::createClient()->request('PATCH', '/users/' . $user->getId(), [
+            'auth_bearer' => $token,
+            'json' => ['email' => 'newemail@exemple.com'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
         $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
-            'email' => 'my-new-email@exemple.com',
-        ]);
+        $this->assertJsonContains(['email' => 'newemail@exemple.com']);
     }
 
     public function testUserCannotUpdateOtherUserEmail(): void
     {
-        $userData = $this->createUserAndGetId('other@exemple.com', 'pass123');
+        $user = UserFactory::createOne(['email' => 'other@exemple.com']);
 
-        static::createClient()->request('PATCH', "/users/{$userData['id']}", [
-            'auth_bearer' => self::$userToken,
-            'json' => [
-                'email' => 'hacked@exemple.com',
-            ],
+        static::createClient()->request('PATCH', '/users/' . $user->getId(), [
+            'auth_bearer' => $this->userToken,
+            'json' => ['email' => 'hacked@exemple.com'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
@@ -229,13 +239,21 @@ class UserTest extends ApiTestCase
 
     public function testUserCannotChangeOwnRoles(): void
     {
-        $userData = $this->createUserAndGetId('no-promo@exemple.com', 'pass123');
+        $user = UserFactory::createOne([
+            'email' => 'nopromo@exemple.com',
+            'plainPassword' => 'password',
+        ]);
 
-        static::createClient()->request('PATCH', "/users/{$userData['id']}", [
-            'auth_bearer' => $userData['token'],
-            'json' => [
-                'roles' => ['ROLE_ADMIN'],
-            ],
+        // Obtenir le token de cet utilisateur
+        $response = static::createClient()->request('POST', '/auth', [
+            'json' => ['email' => 'nopromo@exemple.com', 'password' => 'password'],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $token = $response->toArray()['token'];
+
+        static::createClient()->request('PATCH', '/users/' . $user->getId(), [
+            'auth_bearer' => $token,
+            'json' => ['roles' => ['ROLE_ADMIN']],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
@@ -247,18 +265,17 @@ class UserTest extends ApiTestCase
 
     public function testUpdateUserWithInvalidEmail(): void
     {
-        $userData = $this->createUserAndGetId('valid@exemple.com', 'pass123');
+        $user = UserFactory::createOne(['email' => 'valid@exemple.com']);
 
-        static::createClient()->request('PATCH', "/users/{$userData['id']}", [
-            'auth_bearer' => self::$adminToken,
-            'json' => [
-                'email' => 'invalid-email',
-            ],
+        static::createClient()->request('PATCH', '/users/' . $user->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['email' => 'invalid-email'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(422);
         $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
             'violations' => [
                 ['propertyPath' => 'email'],
             ],
@@ -267,19 +284,18 @@ class UserTest extends ApiTestCase
 
     public function testUpdateUserWithDuplicateEmail(): void
     {
-        $this->createUserAndGetId('existing@exemple.com', 'pass123');
-        $userData = $this->createUserAndGetId('target2@exemple.com', 'pass123');
+        UserFactory::createOne(['email' => 'existing@exemple.com']);
+        $user = UserFactory::createOne(['email' => 'target@exemple.com']);
 
-        static::createClient()->request('PATCH', "/users/{$userData['id']}", [
-            'auth_bearer' => self::$adminToken,
-            'json' => [
-                'email' => 'existing@exemple.com',
-            ],
+        static::createClient()->request('PATCH', '/users/' . $user->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['email' => 'existing@exemple.com'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(422);
         $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
             'violations' => [
                 [
                     'propertyPath' => 'email',
@@ -293,21 +309,21 @@ class UserTest extends ApiTestCase
 
     public function testAdminCanDeleteUser(): void
     {
-        $userData = $this->createUserAndGetId('delete-me@exemple.com', 'pass123');
+        $user = UserFactory::createOne([
+            'email' => 'deleteme@exemple.com',
+            'plainPassword' => 'password',
+        ]);
 
-        static::createClient()->request('DELETE', "/users/{$userData['id']}", [
-            'auth_bearer' => self::$adminToken,
+        static::createClient()->request('DELETE', '/users/' . $user->getId(), [
+            'auth_bearer' => $this->adminToken,
         ]);
 
         $this->assertResponseStatusCodeSame(204);
 
         // Vérifier que l'utilisateur ne peut plus se connecter
         static::createClient()->request('POST', '/auth', [
+            'json' => ['email' => 'deleteme@exemple.com', 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
-            'json' => [
-                'email' => 'delete-me@exemple.com',
-                'password' => 'pass123',
-            ],
         ]);
 
         $this->assertResponseStatusCodeSame(401);
@@ -315,10 +331,10 @@ class UserTest extends ApiTestCase
 
     public function testUserCannotDeleteOtherUser(): void
     {
-        $userData = $this->createUserAndGetId('dont-delete-me@exemple.com', 'pass123');
+        $user = UserFactory::createOne(['email' => 'dontdelete@exemple.com']);
 
-        static::createClient()->request('DELETE', "/users/{$userData['id']}", [
-            'auth_bearer' => self::$userToken,
+        static::createClient()->request('DELETE', '/users/' . $user->getId(), [
+            'auth_bearer' => $this->userToken,
         ]);
 
         $this->assertResponseStatusCodeSame(403);
@@ -329,10 +345,20 @@ class UserTest extends ApiTestCase
 
     public function testUserCannotDeleteThemselves(): void
     {
-        $userData = $this->createUserAndGetId('suicide@exemple.com', 'pass123');
+        $user = UserFactory::createOne([
+            'email' => 'suicide@exemple.com',
+            'plainPassword' => 'password',
+        ]);
 
-        static::createClient()->request('DELETE', "/users/{$userData['id']}", [
-            'auth_bearer' => $userData['token'],
+        // Obtenir le token de cet utilisateur
+        $response = static::createClient()->request('POST', '/auth', [
+            'json' => ['email' => 'suicide@exemple.com', 'password' => 'password'],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $token = $response->toArray()['token'];
+
+        static::createClient()->request('DELETE', '/users/' . $user->getId(), [
+            'auth_bearer' => $token,
         ]);
 
         $this->assertResponseStatusCodeSame(403);
@@ -346,48 +372,5 @@ class UserTest extends ApiTestCase
         static::createClient()->request('DELETE', '/users/1');
 
         $this->assertResponseStatusCodeSame(401);
-    }
-
-    // ==================== Helper Methods ====================
-
-    /**
-     * Crée un utilisateur et retourne son ID + token
-     */
-    private function createUserAndGetId(string $email, string $password): array
-    {
-        $container = self::getContainer();
-        $em = $container->get('doctrine')->getManager();
-
-        // Supprimer si existe déjà
-        $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
-        if ($existingUser) {
-            $em->remove($existingUser);
-            $em->flush();
-        }
-
-        $user = new User();
-        $user->setEmail($email);
-        $user->setRoles(['ROLE_USER']);
-        $user->setPassword(
-            $container->get('security.user_password_hasher')->hashPassword($user, $password)
-        );
-
-        $em->persist($user);
-        $em->flush();
-
-        // Obtenir le token
-        $client = self::createClient();
-        $response = $client->request('POST', '/auth', [
-            'headers' => ['Content-Type' => 'application/json'],
-            'json' => [
-                'email' => $email,
-                'password' => $password,
-            ],
-        ]);
-
-        return [
-            'id' => $user->getId(),
-            'token' => $response->toArray()['token'],
-        ];
     }
 }

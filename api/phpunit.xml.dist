@@ -15,6 +15,9 @@
         <server name="SYMFONY_PHPUNIT_REMOVE" value="" />
         <server name="SYMFONY_PHPUNIT_VERSION" value="9.6" />
 
+        <!-- ✅ Base de données de test séparée -->
+        <server name="DATABASE_URL" value="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&amp;charset=utf8" force="true" />
+
         <!-- ✅ Masquer tous les deprecation warnings -->
         <env name="SYMFONY_DEPRECATIONS_HELPER" value="disabled" />
     </php>
@@ -31,10 +34,13 @@
         </include>
     </coverage>
 
+    <!-- Listener Symfony (optionnel mais recommandé) -->
     <listeners>
         <listener class="Symfony\Bridge\PhpUnit\SymfonyTestsListener" />
     </listeners>
 
+    <!-- Extension DAMA pour gérer les transactions automatiquement -->
     <extensions>
+        <extension class="DAMA\DoctrineTestBundle\PHPUnit\PHPUnitExtension"/>
     </extensions>
 </phpunit>
