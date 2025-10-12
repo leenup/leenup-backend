@@ -34,10 +34,10 @@ use Symfony\Component\Validator\Constraints as Assert;
         new Patch(),
         new Delete(),
     ],
-    security: "is_granted('ROLE_ADMIN')",
-    securityMessage: 'Only admins can access this resource.',
     normalizationContext: ['groups' => ['category:read']],
     denormalizationContext: ['groups' => ['category:write']],
+    security: "is_granted('ROLE_ADMIN')",
+    securityMessage: 'Only admins can access this resource.',
 )]
 #[ApiFilter(SearchFilter::class, properties: ['title' => 'partial'])]
 #[ApiFilter(OrderFilter::class, properties: ['id', 'title', 'createdAt'])]

@@ -18,12 +18,13 @@ class CategoriesTest extends ApiTestCase
     {
         parent::setUp();
 
-        // Créer un utilisateur authentifié pour chaque test
+        // Pour les tests User
         $user = UserFactory::createOne([
             'email' => 'test@example.com',
             'plainPassword' => 'password',
         ]);
 
+        // Pour les tests Admin
         $adminUser = UserFactory::createOne([
             'email' => 'admin@exemple.com',
             'plainPassword' => 'adminpassword',

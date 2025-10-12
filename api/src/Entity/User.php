@@ -33,14 +33,17 @@ use Symfony\Component\Validator\Constraints as Assert;
             securityMessage: 'Only admins can view user details.'
         ),
         new Patch(
-            security: "is_granted('ROLE_ADMIN') or object == user",
-            securityPostDenormalize: "is_granted('ROLE_ADMIN') or (object == user and previous_object.getRoles() == object.getRoles())",
-            securityPostDenormalizeMessage: "Only admins can modify user roles.",
+            security: "is_granted('ROLE_ADMIN')",
+            securityMessage: "Only admins can update users.",
+            securityPostDenormalize: "!('ROLE_ADMIN' in previous_object.getRoles())",
+            securityPostDenormalizeMessage: "Admins cannot modify admin users (including themselves).",
             processor: UserPasswordHasher::class
         ),
         new Delete(
             security: "is_granted('ROLE_ADMIN')",
-            securityMessage: 'Only admins can delete users.'
+            securityMessage: "Only admins can delete users.",
+            securityPostDenormalize: "!('ROLE_ADMIN' in previous_object.getRoles())",
+            securityPostDenormalizeMessage: "Admins cannot delete admin users (including themselves).",
         ),
         new Post(
             uriTemplate: '/register',

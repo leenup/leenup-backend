@@ -25,14 +25,20 @@ use Symfony\Component\Validator\Constraints as Assert;
 )]
 #[ApiResource(
     operations: [
-        new GetCollection(),
+        new GetCollection(
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+        ),
         new Post(),
-        new Get(),
+        new Get(
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+        ),
         new Patch(),
         new Delete(),
     ],
     normalizationContext: ['groups' => ['skill:read']],
     denormalizationContext: ['groups' => ['skill:write']],
+    security: "is_granted('ROLE_ADMIN')",
+    securityMessage: 'Only admins can access this resource.',
 )]
 #[ApiFilter(SearchFilter::class, properties: [
     'category' => 'exact',

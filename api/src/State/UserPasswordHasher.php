@@ -34,7 +34,6 @@ final readonly class UserPasswordHasher implements ProcessorInterface
         );
         $data->setPassword($hashedPassword);
 
-        // To avoid leaving sensitive data like the plain password in memory or logs, we manually clear it after hashing.
         $data->setPlainPassword(null);
 
         return $this->processor->process($data, $operation, $uriVariables, $context);
