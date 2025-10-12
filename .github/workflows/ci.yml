@@ -58,13 +58,13 @@ jobs:
       -
         name: Generate JWT keys
         run: docker compose exec -T php sh -c "php bin/console lexik:jwt:generate-keypair --skip-if-exists"
-      -
+      -  
         name: Prepare test database
         run: |
-          docker compose exec -T php bin/console doctrine:database:drop --force --if-exists
-          docker compose exec -T php bin/console doctrine:database:create
-          docker compose exec -T php bin/console doctrine:migrations:migrate --no-interaction
-          docker compose exec -T php bin/console dbal:run-sql "SELECT 1" || true
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:database:drop --force --if-exists
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:database:create
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:migrations:migrate --no-interaction
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console dbal:run-sql "SELECT 1" || true
       -
         name: Run PHPUnit
         run: docker compose exec -T php bin/phpunit
