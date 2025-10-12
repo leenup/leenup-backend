@@ -13,6 +13,7 @@ class SkillsTest extends ApiTestCase
     use Factories;
 
     private string $token;
+    private string $adminToken;
     private $category;
 
     protected function setUp(): void
