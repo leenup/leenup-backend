@@ -149,7 +149,6 @@ ifdef PROCESSES
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES)
 else
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
 endif
 endif
 
