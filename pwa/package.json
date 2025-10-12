@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@api-platform/admin": "^4.0.7",
+    "@api-platform/api-doc-parser": "^0.16.8",
     "@fontsource/poppins": "^5.2.6",
     "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/postcss": "^4.1.7",
@@ -19,6 +20,7 @@
     "next": "^15.3.2",
     "postcss": "^8.5.3",
     "react": "^19.1.0",
+    "react-admin": "^5.12.0",
     "react-dom": "^19.1.0",
     "tailwindcss": "^4.1.7"
   },

@@ -27,6 +27,9 @@ build: ## Construit les images Docker
 start: ## Démarre les conteneurs
 	@echo "$(YELLOW)🚀 Démarrage des conteneurs...$(NC)"
 	$(DOCKER_COMPOSE) up --wait
+	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
+	@echo "  • API Documentation: https://localhost/docs/"
+	@echo "  • Admin Interface:   https://localhost/admin/"
 
 stop: ## Arrête les conteneurs
 	@echo "$(YELLOW)🛑 Arrêt des conteneurs...$(NC)"
@@ -34,6 +37,9 @@ stop: ## Arrête les conteneurs
 
 restart: stop start ## Redémarre les conteneurs et reconfigure la BD de test
 	@echo "$(GREEN)✅ Redémarrage terminé$(NC)"
+	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
+	@echo "  • API Documentation: https://localhost/docs/"
+	@echo "  • Admin Interface:   https://localhost/admin/"
 
 logs: ## Affiche les logs des conteneurs
 	$(DOCKER_COMPOSE) logs -f
@@ -58,6 +64,9 @@ db-reset: restart db-drop db-create migration-migrate ## Recrée la base de donn
 
 db-reset-fixture: restart db-drop db-create migration-migrate fixtures-load ## Recrée la base de données à zéro
 	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
+
+db-reset-fixtures: db-reset fixtures-load ## Recrée la base de données et charge les fixtures
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations et fixtures$(NC)"
 
 migration-diff: ## Génère une nouvelle migration
 	@echo "$(YELLOW)📝 Génération d'une migration...$(NC)"
@@ -139,6 +148,7 @@ else
 ifdef PROCESSES
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES)
 else
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
 endif
 endif
@@ -222,7 +232,6 @@ doctor: ## Diagnostic complet du système
 	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
 	@echo "  • API Documentation: https://localhost/docs/"
 	@echo "  • Admin Interface:   https://localhost/admin/"
-	@echo "  • GraphQL:           https://localhost/graphql/"
 	@echo ""
 	@echo "$(GREEN)💾 Espace disque Docker:$(NC)"
 	@docker system df
