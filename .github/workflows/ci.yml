@@ -62,9 +62,9 @@ jobs:
       -
         name: Run migrations
         run: docker compose exec -T -e APP_ENV=test php bin/console doctrine:migrations:migrate --no-interaction
-      -
+      -  
         name: Run PHPUnit
-        run: docker compose exec -T -e APP_ENV=test php bin/phpunit
+        run: docker compose exec -T -e APP_ENV=test php bin/phpunit --configuration phpunit.ci.xml
       -
         name: Doctrine Schema Validator
         run: docker compose exec -T -e APP_ENV=test php bin/console doctrine:schema:validate
