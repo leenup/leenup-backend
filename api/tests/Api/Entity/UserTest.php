@@ -114,6 +114,129 @@ class UserTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(401);
     }
 
+    // ==================== Tests des Filtres et Order ====================
+
+    public function testFilterUsersByEmail(): void
+    {
+        UserFactory::createOne(['email' => 'john.doe@exemple.com']);
+        UserFactory::createOne(['email' => 'jane.smith@exemple.com']);
+
+        $response = static::createClient()->request('GET', '/users?email=john', [
+            'auth_bearer' => $this->adminToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        $emails = array_column($data['member'], 'email');
+        $this->assertContains('john.doe@exemple.com', $emails);
+        $this->assertNotContains('jane.smith@exemple.com', $emails);
+    }
+
+    public function testOrderUsersByEmailAsc(): void
+    {
+        $response = static::createClient()->request('GET', '/users?order[email]=asc', [
+            'auth_bearer' => $this->adminToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        $emails = array_column($data['member'], 'email');
+        $sortedEmails = $emails;
+        sort($sortedEmails);
+
+        $this->assertSame($sortedEmails, $emails);
+    }
+
+    public function testOrderUsersByEmailDesc(): void
+    {
+        $response = static::createClient()->request('GET', '/users?order[email]=desc', [
+            'auth_bearer' => $this->adminToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        $emails = array_column($data['member'], 'email');
+        $sortedEmails = $emails;
+        rsort($sortedEmails);
+
+        $this->assertSame($sortedEmails, $emails);
+    }
+
+    public function testOrderUsersByCreatedAtDesc(): void
+    {
+        $response = static::createClient()->request('GET', '/users?order[createdAt]=desc', [
+            'auth_bearer' => $this->adminToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        $dates = array_column($data['member'], 'createdAt');
+
+        for ($i = 0; $i < count($dates) - 1; $i++) {
+            $this->assertGreaterThanOrEqual(
+                strtotime($dates[$i + 1]),
+                strtotime($dates[$i])
+            );
+        }
+    }
+
+    public function testOrderUsersByCreatedAtAsc(): void
+    {
+        $response = static::createClient()->request('GET', '/users?order[createdAt]=asc', [
+            'auth_bearer' => $this->adminToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        $dates = array_column($data['member'], 'createdAt');
+
+        for ($i = 0; $i < count($dates) - 1; $i++) {
+            $this->assertLessThanOrEqual(
+                strtotime($dates[$i + 1]),
+                strtotime($dates[$i])
+            );
+        }
+    }
+
+    public function testFilterUsersByCreatedAtAfter(): void
+    {
+        $today = new \DateTimeImmutable();
+
+        $response = static::createClient()->request('GET', '/users?createdAt[after]=' . $today->format('Y-m-d'), [
+            'auth_bearer' => $this->adminToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        foreach ($data['member'] as $user) {
+            $createdAt = new \DateTimeImmutable($user['createdAt']);
+            $this->assertGreaterThanOrEqual($today->setTime(0, 0, 0), $createdAt);
+        }
+    }
+
+    public function testFilterUsersByCreatedAtBefore(): void
+    {
+        $tomorrow = (new \DateTimeImmutable())->modify('+1 day');
+
+        $response = static::createClient()->request('GET', '/users?createdAt[before]=' . $tomorrow->format('Y-m-d'), [
+            'auth_bearer' => $this->adminToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        foreach ($data['member'] as $user) {
+            $createdAt = new \DateTimeImmutable($user['createdAt']);
+            $this->assertLessThan($tomorrow->setTime(0, 0, 0), $createdAt);
+        }
+    }
+
     // ==================== GET /users/{id} (Item) ====================
 
     public function testGetUserAsAdmin(): void
