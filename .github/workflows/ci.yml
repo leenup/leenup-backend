@@ -15,6 +15,8 @@ jobs:
   tests:
     name: Tests
     runs-on: ubuntu-latest
+    env:
+      TEST_DATABASE_URL: "postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8"
     steps:
       -
         name: Checkout
@@ -57,17 +59,17 @@ jobs:
         name: Generate JWT keys
         run: docker compose exec -T php sh -c "php bin/console lexik:jwt:generate-keypair --skip-if-exists"
       -
-        name: Create test database
-        run: docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:database:create --if-not-exists
+        name: Prepare test database
+        run: |
+          docker compose exec -T -e DATABASE_URL="${{ env.TEST_DATABASE_URL }}" php bin/console doctrine:database:drop --force --if-exists
+          docker compose exec -T -e DATABASE_URL="${{ env.TEST_DATABASE_URL }}" php bin/console doctrine:database:create
+          docker compose exec -T -e DATABASE_URL="${{ env.TEST_DATABASE_URL }}" php bin/console doctrine:migrations:migrate --no-interaction
       -
-        name: Run migrations
-        run: docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:migrations:migrate --no-interaction
-      -
-        name: Run PHPUnit
+        name: Run PHPUnit (without DAMA for CI)
         run: docker compose exec -T php bin/phpunit --configuration phpunit.ci.xml
       -
         name: Doctrine Schema Validator
-        run: docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:schema:validate
+        run: docker compose exec -T -e DATABASE_URL="${{ env.TEST_DATABASE_URL }}" php bin/console doctrine:schema:validate
 
   lint:
     name: Docker Lint
