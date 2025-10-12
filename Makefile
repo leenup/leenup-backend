@@ -27,6 +27,9 @@ build: ## Construit les images Docker
 start: ## Démarre les conteneurs
 	@echo "$(YELLOW)🚀 Démarrage des conteneurs...$(NC)"
 	$(DOCKER_COMPOSE) up --wait
+	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
+	@echo "  • API Documentation: https://localhost/docs/"
+	@echo "  • Admin Interface:   https://localhost/admin/"
 
 stop: ## Arrête les conteneurs
 	@echo "$(YELLOW)🛑 Arrêt des conteneurs...$(NC)"
@@ -34,6 +37,9 @@ stop: ## Arrête les conteneurs
 
 restart: stop start ## Redémarre les conteneurs et reconfigure la BD de test
 	@echo "$(GREEN)✅ Redémarrage terminé$(NC)"
+	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
+	@echo "  • API Documentation: https://localhost/docs/"
+	@echo "  • Admin Interface:   https://localhost/admin/"
 
 logs: ## Affiche les logs des conteneurs
 	$(DOCKER_COMPOSE) logs -f
@@ -226,7 +232,6 @@ doctor: ## Diagnostic complet du système
 	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
 	@echo "  • API Documentation: https://localhost/docs/"
 	@echo "  • Admin Interface:   https://localhost/admin/"
-	@echo "  • GraphQL:           https://localhost/graphql/"
 	@echo ""
 	@echo "$(GREEN)💾 Espace disque Docker:$(NC)"
 	@docker system df

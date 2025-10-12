@@ -1,11 +1,15 @@
 import {
   HydraAdmin,
+  ResourceGuesser,
   fetchHydra as baseFetchHydra,
   hydraDataProvider as baseHydraDataProvider,
-  useIntrospection, ResourceGuesser,
+  useIntrospection,
 } from "@api-platform/admin";
 import { parseHydraDocumentation } from "@api-platform/api-doc-parser";
 import authProvider from "./authProvider";
+import { SkillList } from "./collection/SkillList";
+import { SkillShow } from "./view/SkillShow";
+import { CategoryShow } from "./view/CategoryShow";
 
 const entrypoint = window.origin;
 
@@ -59,8 +63,8 @@ const App = () => (
     entrypoint={entrypoint}
     title="LeenUp Admin"
   >
-    <ResourceGuesser name="categories" />
-    <ResourceGuesser name="skills" />
+    <ResourceGuesser name="categories" show={CategoryShow} />
+    <ResourceGuesser name="skills" list={SkillList} show={SkillShow} />
     <ResourceGuesser name="users" />
   </HydraAdmin>
 );
