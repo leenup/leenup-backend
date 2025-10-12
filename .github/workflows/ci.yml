@@ -58,16 +58,16 @@ jobs:
         run: docker compose exec -T php sh -c "php bin/console lexik:jwt:generate-keypair --skip-if-exists"
       -
         name: Create test database
-        run: docker compose exec -T -e APP_ENV=test php bin/console doctrine:database:create --if-not-exists
+        run: docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:database:create --if-not-exists
       -
         name: Run migrations
-        run: docker compose exec -T -e APP_ENV=test php bin/console doctrine:migrations:migrate --no-interaction
-      -  
+        run: docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:migrations:migrate --no-interaction
+      -
         name: Run PHPUnit
-        run: docker compose exec -T -e APP_ENV=test php bin/phpunit --configuration phpunit.ci.xml
+        run: docker compose exec -T php bin/phpunit --configuration phpunit.ci.xml
       -
         name: Doctrine Schema Validator
-        run: docker compose exec -T -e APP_ENV=test php bin/console doctrine:schema:validate
+        run: docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:schema:validate
 
   lint:
     name: Docker Lint
