@@ -18,6 +18,12 @@ final class DefaultUsersStory extends Story
 
         echo "Admin créé: admin@leenup.com / admin123\n";
 
+        UserFactory::createOne([
+            'email' => 'admin2@leenup.com',
+            'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
+            'plainPassword' => 'admin123',
+        ]);
+
         // Quelques professeurs / formateurs réalistes
         UserFactory::createOne([
             'email' => 'sarah.dev@leenup.com',

@@ -20,20 +20,27 @@ use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: CategoryRepository::class)]
+#[ORM\HasLifecycleCallbacks]
 #[UniqueEntity(fields: ['title'], message: 'This category already exists')]
 #[ApiResource(
     operations: [
-        new GetCollection(),
+        new GetCollection(
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+        ),
         new Post(),
-        new Get(),
+        new Get(
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+        ),
         new Patch(),
         new Delete(),
     ],
     normalizationContext: ['groups' => ['category:read']],
     denormalizationContext: ['groups' => ['category:write']],
+    security: "is_granted('ROLE_ADMIN')",
+    securityMessage: 'Only admins can access this resource.',
 )]
 #[ApiFilter(SearchFilter::class, properties: ['title' => 'partial'])]
-#[ApiFilter(OrderFilter::class, properties: ['id', 'title'])]
+#[ApiFilter(OrderFilter::class, properties: ['id', 'title', 'createdAt'])]
 class Category
 {
     #[ORM\Id]
@@ -59,9 +66,29 @@ class Category
     #[ORM\OneToMany(targetEntity: Skill::class, mappedBy: 'category', cascade: ['remove'])]
     private Collection $skills;
 
+    #[ORM\Column]
+    #[Groups(['category:read'])]
+    private ?\DateTimeImmutable $createdAt = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['category:read'])]
+    private ?\DateTimeImmutable $updatedAt = null;
+
     public function __construct()
     {
         $this->skills = new ArrayCollection();
+    }
+
+    #[ORM\PrePersist]
+    public function onPrePersist(): void
+    {
+        $this->createdAt = new \DateTimeImmutable();
+    }
+
+    #[ORM\PreUpdate]
+    public function onPreUpdate(): void
+    {
+        $this->updatedAt = new \DateTimeImmutable();
     }
 
     public function getId(): ?int
@@ -105,5 +132,15 @@ class Category
             }
         }
         return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): ?\DateTimeImmutable
+    {
+        return $this->updatedAt;
     }
 }

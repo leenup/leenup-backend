@@ -2,6 +2,10 @@
 
 namespace App\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
@@ -19,8 +23,12 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: '`user`')]
+#[ORM\HasLifecycleCallbacks]
 #[ORM\UniqueConstraint(name: 'UNIQ_IDENTIFIER_EMAIL', fields: ['email'])]
 #[UniqueEntity(fields: ['email'], message: 'This email is already in use')]
+#[ApiFilter(SearchFilter::class, properties: ['email' => 'partial'])]
+#[ApiFilter(OrderFilter::class, properties: ['id', 'email', 'createdAt', 'updatedAt'])]
+#[ApiFilter(DateFilter::class, properties: ['createdAt', 'updatedAt'])]
 #[ApiResource(
     operations: [
         new GetCollection(
@@ -32,14 +40,17 @@ use Symfony\Component\Validator\Constraints as Assert;
             securityMessage: 'Only admins can view user details.'
         ),
         new Patch(
-            security: "is_granted('ROLE_ADMIN') or object == user",
-            securityPostDenormalize: "is_granted('ROLE_ADMIN') or (object == user and previous_object.getRoles() == object.getRoles())",
-            securityPostDenormalizeMessage: "Only admins can modify user roles.",
+            security: "is_granted('ROLE_ADMIN')",
+            securityMessage: "Only admins can update users.",
+            securityPostDenormalize: "!('ROLE_ADMIN' in previous_object.getRoles())",
+            securityPostDenormalizeMessage: "Admins cannot modify admin users (including themselves).",
             processor: UserPasswordHasher::class
         ),
         new Delete(
             security: "is_granted('ROLE_ADMIN')",
-            securityMessage: 'Only admins can delete users.'
+            securityMessage: "Only admins can delete users.",
+            securityPostDenormalize: "!('ROLE_ADMIN' in previous_object.getRoles())",
+            securityPostDenormalizeMessage: "Admins cannot delete admin users (including themselves).",
         ),
         new Post(
             uriTemplate: '/register',
@@ -78,6 +89,30 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Assert\NotBlank(groups: ['user:create'])]
     #[Groups(['user:create', 'user:update:admin'])]
     private ?string $plainPassword = null;
+
+    #[ORM\Column]
+    #[Groups(['user:read'])]
+    private ?\DateTimeImmutable $createdAt = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['user:read'])]
+    private ?\DateTimeImmutable $updatedAt = null;
+
+    // === Lifecycle Callbacks ===
+
+    #[ORM\PrePersist]
+    public function onPrePersist(): void
+    {
+        $this->createdAt = new \DateTimeImmutable();
+    }
+
+    #[ORM\PreUpdate]
+    public function onPreUpdate(): void
+    {
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    // === Getters / Setters ===
 
     public function getId(): ?int
     {
@@ -135,10 +170,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    /**
-     * ✅ Garder la méthode mais vide (pas de logique)
-     * Le plainPassword est déjà nettoyé dans UserPasswordHasher
-     */
     public function eraseCredentials(): void
     {
     }
@@ -146,5 +177,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function hasRole(string $role): bool
     {
         return in_array($role, $this->roles, true);
+    }
+
+    public function getCreatedAt(): ?\DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): ?\DateTimeImmutable
+    {
+        return $this->updatedAt;
     }
 }

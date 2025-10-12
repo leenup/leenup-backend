@@ -18,26 +18,33 @@ use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: SkillRepository::class)]
+#[ORM\HasLifecycleCallbacks]
 #[UniqueEntity(
     fields: ['title', 'category'],
     message: 'This skill already exists in this category'
 )]
 #[ApiResource(
     operations: [
-        new GetCollection(),
+        new GetCollection(
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+        ),
         new Post(),
-        new Get(),
+        new Get(
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+        ),
         new Patch(),
         new Delete(),
     ],
     normalizationContext: ['groups' => ['skill:read']],
     denormalizationContext: ['groups' => ['skill:write']],
+    security: "is_granted('ROLE_ADMIN')",
+    securityMessage: 'Only admins can access this resource.',
 )]
 #[ApiFilter(SearchFilter::class, properties: [
     'category' => 'exact',
     'title' => 'partial'
 ])]
-#[ApiFilter(OrderFilter::class, properties: ['id', 'title'])]
+#[ApiFilter(OrderFilter::class, properties: ['id', 'title', 'createdAt'])]
 class Skill
 {
     #[ORM\Id]
@@ -63,6 +70,30 @@ class Skill
     #[Groups(['skill:read', 'skill:write'])]
     private ?Category $category = null;
 
+    #[ORM\Column]
+    #[Groups(['skill:read'])]
+    private ?\DateTimeImmutable $createdAt = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['skill:read'])]
+    private ?\DateTimeImmutable $updatedAt = null;
+
+    // === Lifecycle Callbacks ===
+
+    #[ORM\PrePersist]
+    public function onPrePersist(): void
+    {
+        $this->createdAt = new \DateTimeImmutable();
+    }
+
+    #[ORM\PreUpdate]
+    public function onPreUpdate(): void
+    {
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    // === Getters / Setters ===
+
     public function getId(): ?int
     {
         return $this->id;
@@ -76,7 +107,6 @@ class Skill
     public function setTitle(string $title): static
     {
         $this->title = $title;
-
         return $this;
     }
 
@@ -88,7 +118,16 @@ class Skill
     public function setCategory(?Category $category): static
     {
         $this->category = $category;
-
         return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    public function getUpdatedAt(): ?\DateTimeImmutable
+    {
+        return $this->updatedAt;
     }
 }

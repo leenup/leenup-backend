@@ -13,11 +13,13 @@ NC = \033[0m # No Color
 .PHONY: help build start stop restart logs clean doctor
 
 ## —— 🚀 LeenUp Backend Makefile 🚀 ——————————————————————————————————
+
 help: ## Affiche cette aide
 	@echo "$(GREEN)LeenUp Backend - Commandes disponibles:$(NC)"
 	@grep -E '(^[a-zA-Z0-9_-]+:.*?##.*$$)|(^##)' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}{printf "\033[32m%-30s\033[0m %s\n", $$1, $$2}' | sed -e 's/\[32m##/[33m/'
 
 ## —— 🐳 Docker ——————————————————————————————————————————————————————
+
 build: ## Construit les images Docker
 	@echo "$(YELLOW)🔨 Construction des images Docker...$(NC)"
 	$(DOCKER_COMPOSE) build --no-cache
@@ -30,8 +32,8 @@ stop: ## Arrête les conteneurs
 	@echo "$(YELLOW)🛑 Arrêt des conteneurs...$(NC)"
 	$(DOCKER_COMPOSE) down
 
-restart: stop start db-test-reset ## Redémarre les conteneurs et reconfigure la BD de test
-	@echo "$(GREEN)✅ Redémarrage terminé avec BD de test configurée$(NC)"
+restart: stop start ## Redémarre les conteneurs et reconfigure la BD de test
+	@echo "$(GREEN)✅ Redémarrage terminé$(NC)"
 
 logs: ## Affiche les logs des conteneurs
 	$(DOCKER_COMPOSE) logs -f
@@ -51,7 +53,10 @@ db-drop: ## Supprime la base de données
 	@echo "$(RED)🗑️ Suppression de la base de données...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists
 
-db-reset: db-drop db-create migration-migrate ## Recrée la base de données à zéro
+db-reset: restart db-drop db-create migration-migrate ## Recrée la base de données à zéro
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
+
+db-reset-fixture: restart db-drop db-create migration-migrate fixtures-load ## Recrée la base de données à zéro
 	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
 
 migration-diff: ## Génère une nouvelle migration
@@ -113,7 +118,8 @@ fixtures-load: ## Charge les fixtures
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:fixtures:load --no-interaction
 
 ## —— 🧪 Tests et Qualité ———————————————————————————————————————————
-test: ## Lance les tests (usage: make test ou make test FILE=tests/Api/Profile/CurrentUserTest.php)
+
+test: db-test-reset ## Lance les tests (usage: make test ou make test FILE=tests/Api/Profile/CurrentUserTest.php)
 	@echo "$(YELLOW)🧪 Lancement des tests...$(NC)"
 ifdef FILE
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit $(FILE)
@@ -121,7 +127,7 @@ else
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
 endif
 
-test-parallel: ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
+test-parallel: db-test-reset ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
 	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
 ifdef FILE
 ifdef PROCESSES
@@ -136,6 +142,7 @@ else
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
 endif
 endif
+
 
 test-coverage: ## Lance les tests avec couverture
 	@echo "$(YELLOW)🧪 Génération de la couverture de code...$(NC)"
