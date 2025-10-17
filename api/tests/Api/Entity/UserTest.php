@@ -38,12 +38,18 @@ class UserTest extends ApiTestCase
             'email' => 'user-target@exemple.com',
             'plainPassword' => 'admin123',
             'roles' => ['ROLE_USER'],
+            'firstName' => 'John',
+            'lastName' => 'Doe',
+            'bio' => 'Original bio',
+            'location' => 'Paris, France',
         ]);
 
         $this->adminTarget = UserFactory::createOne([
             'email' => 'admin-target@exemple.com',
             'plainPassword' => 'admin123',
             'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
+            'firstName' => 'Admin',
+            'lastName' => 'User',
         ]);
 
         $client = static::createClient();
@@ -88,6 +94,8 @@ class UserTest extends ApiTestCase
         foreach ($data['member'] as $user) {
             $this->assertArrayNotHasKey('password', $user);
             $this->assertArrayNotHasKey('plainPassword', $user);
+            $this->assertArrayHasKey('firstName', $user);
+            $this->assertArrayHasKey('lastName', $user);
         }
     }
 
@@ -248,7 +256,11 @@ class UserTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains([
             '@type' => 'User',
-            'email' => $this->userTarget->getEmail()
+            'email' => $this->userTarget->getEmail(),
+            'firstName' => 'John',
+            'lastName' => 'Doe',
+            'bio' => 'Original bio',
+            'location' => 'Paris, France',
         ]);
 
         $data = $response->toArray();
@@ -289,6 +301,90 @@ class UserTest extends ApiTestCase
         $this->assertJsonContains(['email' => 'user-target-updated@exemple.com']);
     }
 
+    public function testUpdateUserFirstNameAsAdmin(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['firstName' => 'UpdatedFirstName'],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains(['firstName' => 'UpdatedFirstName']);
+    }
+
+    public function testUpdateUserLastNameAsAdmin(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['lastName' => 'UpdatedLastName'],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains(['lastName' => 'UpdatedLastName']);
+    }
+
+    public function testUpdateUserBioAsAdmin(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['bio' => 'Updated bio'],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains(['bio' => 'Updated bio']);
+    }
+
+    public function testUpdateUserLocationAsAdmin(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['location' => 'London, UK'],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains(['location' => 'London, UK']);
+    }
+
+    public function testUpdateUserTimezoneAsAdmin(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['timezone' => 'America/New_York'],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains(['timezone' => 'America/New_York']);
+    }
+
+    public function testUpdateUserLocaleAsAdmin(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['locale' => 'en'],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains(['locale' => 'en']);
+    }
+
+    public function testUpdateUserAvatarUrlAsAdmin(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['avatarUrl' => 'https://example.com/avatar.jpg'],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains(['avatarUrl' => 'https://example.com/avatar.jpg']);
+    }
+
     public function testUpdateUserRoleAsAdmin(): void
     {
         static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
@@ -326,7 +422,6 @@ class UserTest extends ApiTestCase
 
     public function testUpdateAdminAsAdmin(): void
     {
-
         static::createClient()->request('PATCH', '/users/' . $this->adminTarget->getId(), [
             'auth_bearer' => $this->adminToken,
             'json' => ['email' => 'newemail@exemple.com'],
@@ -394,6 +489,66 @@ class UserTest extends ApiTestCase
         ]);
     }
 
+    public function testUpdateUserFirstNameTooShort(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['firstName' => 'A'], // 1 caractère (min 2)
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
+            'violations' => [['propertyPath' => 'firstName']],
+        ]);
+    }
+
+    public function testUpdateUserFirstNameTooLong(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['firstName' => str_repeat('a', 101)], // 101 caractères (max 100)
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
+            'violations' => [['propertyPath' => 'firstName']],
+        ]);
+    }
+
+    public function testUpdateUserBioTooLong(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['bio' => str_repeat('a', 501)], // 501 caractères (max 500)
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
+            'violations' => [['propertyPath' => 'bio']],
+        ]);
+    }
+
+    public function testUpdateUserAvatarUrlInvalid(): void
+    {
+        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
+            'auth_bearer' => $this->adminToken,
+            'json' => ['avatarUrl' => 'not-a-valid-url'],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
+            'violations' => [['propertyPath' => 'avatarUrl']],
+        ]);
+    }
+
     // ==================== DELETE /users/{id} ====================
 
     public function testUserCannotDeleteOtherUser(): void
@@ -425,7 +580,7 @@ class UserTest extends ApiTestCase
 
         // Vérifier que l'utilisateur ne peut plus se connecter
         static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'deleteme@exemple.com', 'password' => 'password'],
+            'json' => ['email' => $this->userTarget->getEmail(), 'password' => 'admin123'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
