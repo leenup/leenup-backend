@@ -5,6 +5,7 @@ namespace App\State\Processor\Profile;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Entity\User;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 
 /**
@@ -15,19 +16,20 @@ use Symfony\Bundle\SecurityBundle\Security;
 final class CurrentUserRemoveProcessor implements ProcessorInterface
 {
     public function __construct(
-        private ProcessorInterface $removeProcessor,
-        private Security $security
+        private Security $security,
+        private EntityManagerInterface $entityManager,
     ) {
     }
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): void
     {
-        $currentUser = $this->security->getUser();
+        $user = $this->security->getUser();
 
-        if (!$currentUser instanceof User) {
+        if (!$user instanceof User) {
             throw new \LogicException('User not authenticated');
         }
 
-        $this->removeProcessor->process($currentUser, $operation, $uriVariables, $context);
+        $this->entityManager->remove($user);
+        $this->entityManager->flush();
     }
 }
