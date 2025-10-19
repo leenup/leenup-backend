@@ -125,6 +125,33 @@ class MySkillsTest extends ApiTestCase
         $this->assertContains($javascriptSkillIri, $actualSkillIris);
     }
 
+    public function testGetMySkillsResponseStructure(): void
+    {
+        $response = static::createClient()->request('GET', '/me/skills', [
+            'auth_bearer' => $this->userToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        // Vérifier la structure d'un item
+        $firstSkill = $data['member'][0];
+        $this->assertArrayHasKey('@id', $firstSkill);
+        $this->assertArrayHasKey('@type', $firstSkill);
+        $this->assertEquals('MySkill', $firstSkill['@type']);
+        $this->assertArrayHasKey('id', $firstSkill);
+        $this->assertArrayHasKey('skill', $firstSkill);
+        $this->assertArrayHasKey('type', $firstSkill);
+        $this->assertArrayHasKey('level', $firstSkill);
+        $this->assertArrayHasKey('createdAt', $firstSkill);
+
+        // Vérifier les types
+        $this->assertIsInt($firstSkill['id']);
+        $this->assertIsArray($firstSkill['skill']);
+        $this->assertIsString($firstSkill['type']);
+        $this->assertIsString($firstSkill['createdAt']);
+    }
+
     public function testGetMySkillsWithoutAuth(): void
     {
         static::createClient()->request('GET', '/me/skills');
@@ -135,20 +162,31 @@ class MySkillsTest extends ApiTestCase
         ]);
     }
 
-    // ==================== GET /me/skills/:id ====================
-
-    public function testGetAnotherUsersSkillByIdFails(): void
+    public function testGetMySkillsWhenEmpty(): void
     {
-        $response = static::createClient()->request('GET', '/me/skills/' . $this->anotherUserSkillAngular->getId(), [
-            'auth_bearer' => $this->userToken,
+        // Créer un nouveau user sans skills
+        $newUser = UserFactory::createOne([
+            'email' => 'noskills@example.com',
+            'plainPassword' => 'password',
         ]);
 
-        $this->assertResponseStatusCodeSame(404);
-        $this->assertJsonContains([
-            '@type' => 'Error',
-            'detail' => 'UserSkill not found',
+        $response = static::createClient()->request('POST', '/auth', [
+            'json' => ['email' => 'noskills@example.com', 'password' => 'password'],
+            'headers' => ['Content-Type' => 'application/json'],
         ]);
+        $newToken = $response->toArray()['token'];
+
+        $response = static::createClient()->request('GET', '/me/skills', [
+            'auth_bearer' => $newToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+        $this->assertSame(0, $data['totalItems']);
+        $this->assertCount(0, $data['member']);
     }
+
+    // ==================== GET /me/skills/:id ====================
 
     public function testGetMySkillById(): void
     {
@@ -165,6 +203,34 @@ class MySkillsTest extends ApiTestCase
         $this->assertSame('beginner', $data['level']);
     }
 
+    public function testGetAnotherUsersSkillByIdFails(): void
+    {
+        $response = static::createClient()->request('GET', '/me/skills/' . $this->anotherUserSkillAngular->getId(), [
+            'auth_bearer' => $this->userToken,
+        ]);
+
+        $this->assertResponseStatusCodeSame(404);
+        $this->assertJsonContains([
+            '@type' => 'Error',
+            'detail' => 'UserSkill not found',
+        ]);
+    }
+
+    public function testGetNonExistentMySkillReturns404(): void
+    {
+        static::createClient()->request('GET', '/me/skills/99999', [
+            'auth_bearer' => $this->userToken,
+        ]);
+
+        $this->assertResponseStatusCodeSame(404);
+    }
+
+    public function testGetMySkillByIdWithoutAuth(): void
+    {
+        static::createClient()->request('GET', '/me/skills/' . $this->userSkillReact->getId());
+        $this->assertResponseStatusCodeSame(401);
+    }
+
     // ==================== POST /me/skills ====================
 
     public function testPostNewMySkillSuccessfully(): void
@@ -177,10 +243,7 @@ class MySkillsTest extends ApiTestCase
                 'type' => UserSkill::TYPE_TEACH,
                 'level' => UserSkill::LEVEL_EXPERT,
             ],
-            'headers' => [
-                'Content-Type' => 'application/ld+json',
-                'Accept' => 'application/ld+json',
-            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(201);
@@ -188,6 +251,7 @@ class MySkillsTest extends ApiTestCase
 
         $this->assertArrayHasKey('id', $data);
         $this->assertSame(UserSkill::TYPE_TEACH, $data['type']);
+        $this->assertSame(UserSkill::LEVEL_EXPERT, $data['level']);
     }
 
     public function testPostSameSkillWithDifferentTypeSuccessfully(): void
@@ -200,10 +264,7 @@ class MySkillsTest extends ApiTestCase
                 'type' => UserSkill::TYPE_TEACH,
                 'level' => UserSkill::LEVEL_EXPERT,
             ],
-            'headers' => [
-                'Content-Type' => 'application/ld+json',
-                'Accept' => 'application/ld+json',
-            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(201);
@@ -224,10 +285,7 @@ class MySkillsTest extends ApiTestCase
                 'type' => UserSkill::TYPE_LEARN,
                 'level' => UserSkill::LEVEL_INTERMEDIATE,
             ],
-            'headers' => [
-                'Content-Type' => 'application/ld+json',
-                'Accept' => 'application/ld+json',
-            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(422);
@@ -252,10 +310,7 @@ class MySkillsTest extends ApiTestCase
                 'type' => 'invalid_type',
                 'level' => UserSkill::LEVEL_BEGINNER,
             ],
-            'headers' => [
-                'Content-Type' => 'application/ld+json',
-                'Accept' => 'application/ld+json',
-            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
         $this->assertResponseStatusCodeSame(422);
@@ -268,6 +323,117 @@ class MySkillsTest extends ApiTestCase
                 ],
             ],
         ]);
+    }
+
+    public function testPostMySkillWithInvalidLevelFails(): void
+    {
+        static::createClient()->request('POST', '/me/skills', [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'skill' => '/skills/' . $this->phpSkill->getId(),
+                'type' => UserSkill::TYPE_TEACH,
+                'level' => 'invalid_level',
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
+            'violations' => [[
+                'propertyPath' => 'level',
+            ]],
+        ]);
+    }
+
+    public function testPostMySkillWithoutSkillFails(): void
+    {
+        static::createClient()->request('POST', '/me/skills', [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'type' => UserSkill::TYPE_TEACH,
+                'level' => UserSkill::LEVEL_EXPERT,
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
+            'violations' => [[
+                'propertyPath' => 'skill',
+            ]],
+        ]);
+    }
+
+    public function testPostMySkillWithoutTypeFails(): void
+    {
+        static::createClient()->request('POST', '/me/skills', [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'skill' => '/skills/' . $this->phpSkill->getId(),
+                'level' => UserSkill::LEVEL_EXPERT,
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
+            'violations' => [[
+                'propertyPath' => 'type',
+            ]],
+        ]);
+    }
+
+    public function testPostMySkillWithNullLevelSucceeds(): void
+    {
+        // Le level est optionnel
+        $response = static::createClient()->request('POST', '/me/skills', [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'skill' => '/skills/' . $this->phpSkill->getId(),
+                'type' => UserSkill::TYPE_LEARN,
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(201);
+        $data = $response->toArray();
+
+        // Vérifier que la création a réussi
+        $this->assertArrayHasKey('id', $data);
+        $this->assertArrayHasKey('type', $data);
+        $this->assertSame(UserSkill::TYPE_LEARN, $data['type']);
+    }
+
+    public function testPostMySkillWithoutAuthFails(): void
+    {
+        static::createClient()->request('POST', '/me/skills', [
+            'json' => [
+                'skill' => '/skills/' . $this->phpSkill->getId(),
+                'type' => UserSkill::TYPE_TEACH,
+                'level' => UserSkill::LEVEL_EXPERT,
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testPostMySkillWithInvalidSkillIriFails(): void
+    {
+        static::createClient()->request('POST', '/me/skills', [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'skill' => '/skills/99999',
+                'type' => UserSkill::TYPE_TEACH,
+                'level' => UserSkill::LEVEL_EXPERT,
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(400);
     }
 
     // =================== DELETE /me/skills/:id ====================
@@ -309,9 +475,41 @@ class MySkillsTest extends ApiTestCase
         $this->assertResponseIsSuccessful('The other user\'s skill should still exist.');
     }
 
+    public function testDeleteNonExistentMySkillReturns404(): void
+    {
+        static::createClient()->request('DELETE', '/me/skills/99999', [
+            'auth_bearer' => $this->userToken,
+        ]);
+
+        $this->assertResponseStatusCodeSame(404);
+    }
+
     public function testDeleteMySkillByIdWithoutAuth(): void
     {
         static::createClient()->request('DELETE', '/me/skills/' . $this->userSkillJavaScript->getId());
         $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testDeleteMySkillAndVerifyCountDecreases(): void
+    {
+        // Vérifier le count initial
+        $response = static::createClient()->request('GET', '/me/skills', [
+            'auth_bearer' => $this->userToken,
+        ]);
+        $initialCount = $response->toArray()['totalItems'];
+
+        // Supprimer une skill
+        static::createClient()->request('DELETE', '/me/skills/' . $this->userSkillReact->getId(), [
+            'auth_bearer' => $this->userToken,
+        ]);
+        $this->assertResponseStatusCodeSame(204);
+
+        // Vérifier le nouveau count
+        $response = static::createClient()->request('GET', '/me/skills', [
+            'auth_bearer' => $this->userToken,
+        ]);
+        $newCount = $response->toArray()['totalItems'];
+
+        $this->assertSame($initialCount - 1, $newCount);
     }
 }

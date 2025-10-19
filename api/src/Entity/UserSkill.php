@@ -77,7 +77,7 @@ class UserSkill
     #[ORM\ManyToOne(inversedBy: 'userSkills')]
     #[ORM\JoinColumn(nullable: false)]
     #[Assert\NotNull(message: 'The skill cannot be null')]
-    #[Groups(['user_skill:read', 'user_skill:write'])]
+    #[Groups(['user_skill:read', 'user_skill:write', 'user:read'])]
     private ?Skill $skill = null;
 
     #[ORM\Column(length: 20)]

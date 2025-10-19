@@ -63,7 +63,7 @@ class Skill
         minMessage: 'The title must be at least {{ limit }} characters long',
         maxMessage: 'The title cannot be longer than {{ limit }} characters'
     )]
-    #[Groups(['skill:read', 'skill:write', 'category:read', 'my_skill:read'])]
+    #[Groups(['skill:read', 'skill:write', 'category:read', 'my_skill:read', 'my_skill:read'])]
     private ?string $title = null;
 
     #[ORM\ManyToOne(inversedBy: 'skills')]

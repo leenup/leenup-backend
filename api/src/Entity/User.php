@@ -161,7 +161,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
      * @var Collection<int, UserSkill>
      */
     #[ORM\OneToMany(targetEntity: UserSkill::class, mappedBy: 'owner', cascade: ['remove'], orphanRemoval: true)]
-    #[Groups(['user:read'])]
     private Collection $userSkills;
 
     public function __construct()
