@@ -32,17 +32,7 @@ final class MySkillsRemoveProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
-        // Debug
-        error_log("DELETE /me/skills - User ID: " . $user->getId());
-        error_log("DELETE /me/skills - URI Variables: " . json_encode($uriVariables));
-        error_log("DELETE /me/skills - Trying to find UserSkill ID: " . ($uriVariables['id'] ?? 'NO ID'));
-
         $userSkill = $this->userSkillRepository->find($uriVariables['id']);
-
-        error_log("DELETE /me/skills - UserSkill found: " . ($userSkill ? 'YES' : 'NO'));
-        if ($userSkill) {
-            error_log("DELETE /me/skills - UserSkill owner ID: " . $userSkill->getOwner()->getId());
-        }
 
         if (!$userSkill || $userSkill->getOwner()->getId() !== $user->getId()) {
             throw new NotFoundHttpException('UserSkill not found or you do not have permission to delete it');

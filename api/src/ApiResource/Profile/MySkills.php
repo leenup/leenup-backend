@@ -52,7 +52,7 @@ class MySkills
     public ?int $id = null;
 
     #[Assert\NotNull(message: 'The skill cannot be null')]
-    #[Groups(['my_skill:read', 'my_skill:write'])]
+    #[Groups(['my_skill:read', 'my_skill:write', 'skill:read'])]
     public ?Skill $skill = null;
 
     #[Assert\NotBlank(message: 'The type cannot be blank')]

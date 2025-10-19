@@ -52,7 +52,7 @@ class Skill
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['skill:read'])]
+    #[Groups(['skill:read', 'my_skill:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
@@ -63,17 +63,17 @@ class Skill
         minMessage: 'The title must be at least {{ limit }} characters long',
         maxMessage: 'The title cannot be longer than {{ limit }} characters'
     )]
-    #[Groups(['skill:read', 'skill:write', 'category:read'])]
+    #[Groups(['skill:read', 'skill:write', 'category:read', 'my_skill:read'])]
     private ?string $title = null;
 
     #[ORM\ManyToOne(inversedBy: 'skills')]
     #[ORM\JoinColumn(nullable: false)]
     #[Assert\NotNull(message: 'The category cannot be null')]
-    #[Groups(['skill:read', 'skill:write'])]
+    #[Groups(['skill:read', 'skill:write', 'my_skill:read'])]
     private ?Category $category = null;
 
     #[ORM\Column]
-    #[Groups(['skill:read'])]
+    #[Groups(['skill:read', 'my_skill:read'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(nullable: true)]
@@ -84,7 +84,6 @@ class Skill
      * @var Collection<int, UserSkill>
      */
     #[ORM\OneToMany(targetEntity: UserSkill::class, mappedBy: 'skill', orphanRemoval: true)]
-    #[Groups(['skill:read'])]
     private Collection $userSkills;
 
     public function __construct()
