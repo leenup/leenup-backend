@@ -166,6 +166,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function __construct()
     {
         $this->userSkills = new ArrayCollection();
+        $this->roles = ['ROLE_USER'];
     }
 
     // === Lifecycle Callbacks ===
