@@ -14,6 +14,8 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\UserRepository;
 use App\State\UserPasswordHasher;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
@@ -154,6 +156,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(nullable: true)]
     #[Groups(['user:read'])]
     private ?\DateTimeImmutable $updatedAt = null;
+
+    /**
+     * @var Collection<int, UserSkill>
+     */
+    #[ORM\OneToMany(targetEntity: UserSkill::class, mappedBy: 'owner', cascade: ['remove'], orphanRemoval: true)]
+    private Collection $userSkills;
+
+    public function __construct()
+    {
+        $this->userSkills = new ArrayCollection();
+    }
 
     // === Lifecycle Callbacks ===
 
@@ -344,6 +357,36 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setLastLoginAt(?\DateTimeImmutable $lastLoginAt): static
     {
         $this->lastLoginAt = $lastLoginAt;
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, UserSkill>
+     */
+    public function getUserSkills(): Collection
+    {
+        return $this->userSkills;
+    }
+
+    public function addUserSkill(UserSkill $userSkill): static
+    {
+        if (!$this->userSkills->contains($userSkill)) {
+            $this->userSkills->add($userSkill);
+            $userSkill->setOwner($this);
+        }
+
+        return $this;
+    }
+
+    public function removeUserSkill(UserSkill $userSkill): static
+    {
+        if ($this->userSkills->removeElement($userSkill)) {
+            // set the owning side to null (unless already changed)
+            if ($userSkill->getOwner() === $this) {
+                $userSkill->setOwner(null);
+            }
+        }
+
         return $this;
     }
 }

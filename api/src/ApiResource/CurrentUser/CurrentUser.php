@@ -28,9 +28,9 @@ use Symfony\Component\Validator\Constraints as Assert;
             uriTemplate: '/me',
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
             securityMessage: 'You must be authenticated to update your profile.',
+            validationContext: ['groups' => ['Default']],
             provider: CurrentUserProvider::class,
             processor: CurrentUserProcessor::class,
-            validationContext: ['groups' => ['Default']],
         ),
         new Delete(
             uriTemplate: '/me',
@@ -40,7 +40,7 @@ use Symfony\Component\Validator\Constraints as Assert;
             processor: CurrentUserRemoveProcessor::class,
         ),
     ],
-    normalizationContext: ['groups' => ['user:read']],
+    normalizationContext: ['groups' => ['user:read', 'my_skill:read']],
     denormalizationContext: ['groups' => ['user:update']],
 )]
 class CurrentUser
@@ -79,6 +79,9 @@ class CurrentUser
 
     #[Groups(['user:read', 'user:update'])]
     public ?string $locale = null;
+
+    #[Groups(['my_skill:read'])]
+    public array $userSkills = [];
 
     #[Groups(['user:read'])]
     public ?\DateTimeImmutable $lastLoginAt = null;

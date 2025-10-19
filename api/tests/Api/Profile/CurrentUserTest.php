@@ -4,7 +4,11 @@ namespace App\Tests\Api\Profile;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Entity\User;
+use App\Entity\UserSkill;
+use App\Factory\CategoryFactory;
+use App\Factory\SkillFactory;
 use App\Factory\UserFactory;
+use App\Factory\UserSkillFactory;
 use Zenstruck\Foundry\Test\Factories;
 
 class CurrentUserTest extends ApiTestCase
@@ -12,13 +16,21 @@ class CurrentUserTest extends ApiTestCase
     use Factories;
 
     private string $userToken;
+    private $user;
+    private $skill1;
+    private $skill2;
 
     protected function setUp(): void
     {
         parent::setUp();
 
+        // Créer une catégorie et des skills
+        $category = CategoryFactory::createOne(['title' => 'Development']);
+        $this->skill1 = SkillFactory::createOne(['title' => 'React', 'category' => $category]);
+        $this->skill2 = SkillFactory::createOne(['title' => 'Vue.js', 'category' => $category]);
+
         // Créer un utilisateur et obtenir son token
-        UserFactory::createOne([
+        $this->user = UserFactory::createOne([
             'email' => 'test@example.com',
             'plainPassword' => 'password',
             'firstName' => 'John',
@@ -27,6 +39,21 @@ class CurrentUserTest extends ApiTestCase
             'location' => 'Paris, France',
             'timezone' => 'Europe/Paris',
             'locale' => 'fr',
+        ]);
+
+        // Ajouter des skills au user
+        UserSkillFactory::createOne([
+            'owner' => $this->user,
+            'skill' => $this->skill1,
+            'type' => UserSkill::TYPE_TEACH,
+            'level' => UserSkill::LEVEL_EXPERT,
+        ]);
+
+        UserSkillFactory::createOne([
+            'owner' => $this->user,
+            'skill' => $this->skill2,
+            'type' => UserSkill::TYPE_LEARN,
+            'level' => UserSkill::LEVEL_BEGINNER,
         ]);
 
         $response = static::createClient()->request('POST', '/auth', [
@@ -62,6 +89,49 @@ class CurrentUserTest extends ApiTestCase
         $this->assertArrayNotHasKey('password', $data);
         $this->assertArrayNotHasKey('plainPassword', $data);
         $this->assertArrayHasKey('createdAt', $data);
+        $this->assertArrayHasKey('userSkills', $data);
+        $this->assertCount(2, $data['userSkills']);
+    }
+
+    public function testGetCurrentUserProfileIncludesUserSkills(): void
+    {
+        $response = static::createClient()->request('GET', '/me', [
+            'auth_bearer' => $this->userToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        $this->assertArrayHasKey('userSkills', $data);
+        $this->assertIsArray($data['userSkills']);
+        $this->assertCount(2, $data['userSkills']);
+
+        // Vérifier la structure d'un UserSkill
+        $firstSkill = $data['userSkills'][0];
+        $this->assertArrayHasKey('@id', $firstSkill);
+        $this->assertArrayHasKey('@type', $firstSkill);
+        $this->assertEquals('UserSkill', $firstSkill['@type']);
+        $this->assertArrayHasKey('skill', $firstSkill);
+
+        // Vérifier que le skill contient category
+        $this->assertArrayHasKey('category', $firstSkill['skill']);
+        $this->assertArrayHasKey('title', $firstSkill['skill']['category']);
+    }
+
+    public function testGetCurrentUserProfileUserSkillsHaveCorrectData(): void
+    {
+        $response = static::createClient()->request('GET', '/me', [
+            'auth_bearer' => $this->userToken,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        // Extraire les titres des skills
+        $skillTitles = array_map(fn($us) => $us['skill']['title'], $data['userSkills']);
+
+        $this->assertContains('React', $skillTitles);
+        $this->assertContains('Vue.js', $skillTitles);
     }
 
     public function testGetCurrentUserProfileWithoutAuthentication(): void
@@ -82,11 +152,22 @@ class CurrentUserTest extends ApiTestCase
 
     public function testDifferentUsersGetTheirOwnProfile(): void
     {
+        $category2 = CategoryFactory::createOne(['title' => 'Design']);
+        $skill3 = SkillFactory::createOne(['title' => 'Figma', 'category' => $category2]);
+
         $user2 = UserFactory::createOne([
             'email' => 'user2@example.com',
             'plainPassword' => 'password',
             'firstName' => 'Jane',
             'lastName' => 'Smith',
+        ]);
+
+        // Ajouter une skill différente à user2
+        UserSkillFactory::createOne([
+            'owner' => $user2,
+            'skill' => $skill3,
+            'type' => UserSkill::TYPE_TEACH,
+            'level' => UserSkill::LEVEL_ADVANCED,
         ]);
 
         // Token user2
@@ -102,6 +183,7 @@ class CurrentUserTest extends ApiTestCase
         $data1 = $profile1->toArray();
         $this->assertEquals('test@example.com', $data1['email']);
         $this->assertEquals('John', $data1['firstName']);
+        $this->assertCount(2, $data1['userSkills']);
 
         // User2 récupère son profil
         $profile2 = static::createClient()->request('GET', '/me', ['auth_bearer' => $token2]);
@@ -109,8 +191,18 @@ class CurrentUserTest extends ApiTestCase
         $data2 = $profile2->toArray();
         $this->assertEquals('user2@example.com', $data2['email']);
         $this->assertEquals('Jane', $data2['firstName']);
+        $this->assertCount(1, $data2['userSkills']);
 
         $this->assertNotEquals($data1['id'], $data2['id']);
+
+        // Vérifier que les skills sont différentes
+        $skillTitles1 = array_map(fn($us) => $us['skill']['title'], $data1['userSkills']);
+        $skillTitles2 = array_map(fn($us) => $us['skill']['title'], $data2['userSkills']);
+
+        $this->assertContains('React', $skillTitles1);
+        $this->assertNotContains('Figma', $skillTitles1);
+        $this->assertContains('Figma', $skillTitles2);
+        $this->assertNotContains('React', $skillTitles2);
     }
 
     public function testCurrentUserProfileResponseStructure(): void
@@ -130,6 +222,7 @@ class CurrentUserTest extends ApiTestCase
         $this->assertArrayHasKey('firstName', $data);
         $this->assertArrayHasKey('lastName', $data);
         $this->assertArrayHasKey('createdAt', $data);
+        $this->assertArrayHasKey('userSkills', $data);
 
         // Types
         $this->assertIsInt($data['id']);
@@ -137,7 +230,33 @@ class CurrentUserTest extends ApiTestCase
         $this->assertIsArray($data['roles']);
         $this->assertIsString($data['firstName']);
         $this->assertIsString($data['lastName']);
+        $this->assertIsArray($data['userSkills']);
         $this->assertEquals('User', $data['@type']);
+    }
+
+    public function testCurrentUserWithNoSkills(): void
+    {
+        // Créer un user sans skills
+        $userNoSkills = UserFactory::createOne([
+            'email' => 'noskills@example.com',
+            'plainPassword' => 'password',
+            'firstName' => 'No',
+            'lastName' => 'Skills',
+        ]);
+
+        $response = static::createClient()->request('POST', '/auth', [
+            'json' => ['email' => 'noskills@example.com', 'password' => 'password'],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $tokenNoSkills = $response->toArray()['token'];
+
+        $profile = static::createClient()->request('GET', '/me', ['auth_bearer' => $tokenNoSkills]);
+        $this->assertResponseIsSuccessful();
+        $data = $profile->toArray();
+
+        $this->assertArrayHasKey('userSkills', $data);
+        $this->assertIsArray($data['userSkills']);
+        $this->assertCount(0, $data['userSkills']);
     }
 
     // ==================== PATCH /me ====================
@@ -310,8 +429,6 @@ class CurrentUserTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
-        // TODO: Implémenter la validation d'unicité de l'email dans le processor
-        // Pour l'instant on accepte que ça passe (à corriger en V1)
         $this->assertResponseStatusCodeSame(422);
     }
 
@@ -439,5 +556,27 @@ class CurrentUserTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testDeleteCurrentUserAccountAlsoDeletesUserSkills(): void
+    {
+        // Récupérer les IDs des UserSkills avant suppression
+        $em = self::getContainer()->get('doctrine')->getManager();
+        $userSkills = $em->getRepository(UserSkill::class)->findBy(['owner' => $this->user]);
+        $userSkillIds = array_map(fn($us) => $us->getId(), $userSkills);
+
+        $this->assertCount(2, $userSkillIds);
+
+        // Supprimer le compte
+        static::createClient()->request('DELETE', '/me', ['auth_bearer' => $this->userToken]);
+        $this->assertResponseStatusCodeSame(204);
+
+        // Vider le cache Doctrine
+        $em->clear();
+
+        // Vérifier que les UserSkills sont supprimés (CASCADE)
+        foreach ($userSkillIds as $id) {
+            $this->assertNull($em->getRepository(UserSkill::class)->find($id));
+        }
     }
 }

@@ -46,7 +46,7 @@ class Category
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['category:read'])]
+    #[Groups(['category:read', 'my_skill:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
@@ -57,7 +57,7 @@ class Category
         minMessage: 'The title must be at least {{ limit }} characters long',
         maxMessage: 'The title cannot be longer than {{ limit }} characters'
     )]
-    #[Groups(['category:read', 'category:write', 'skill:read'])]
+    #[Groups(['category:read', 'category:write', 'skill:read', 'my_skill:read'])]
     private ?string $title = null;
 
     /**

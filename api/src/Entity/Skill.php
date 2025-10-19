@@ -12,6 +12,8 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\SkillRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Serializer\Annotation\Groups;
@@ -50,7 +52,7 @@ class Skill
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['skill:read'])]
+    #[Groups(['skill:read', 'my_skill:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
@@ -61,22 +63,33 @@ class Skill
         minMessage: 'The title must be at least {{ limit }} characters long',
         maxMessage: 'The title cannot be longer than {{ limit }} characters'
     )]
-    #[Groups(['skill:read', 'skill:write', 'category:read'])]
+    #[Groups(['skill:read', 'skill:write', 'category:read', 'my_skill:read'])]
     private ?string $title = null;
 
     #[ORM\ManyToOne(inversedBy: 'skills')]
     #[ORM\JoinColumn(nullable: false)]
     #[Assert\NotNull(message: 'The category cannot be null')]
-    #[Groups(['skill:read', 'skill:write'])]
+    #[Groups(['skill:read', 'skill:write', 'my_skill:read'])]
     private ?Category $category = null;
 
     #[ORM\Column]
-    #[Groups(['skill:read'])]
+    #[Groups(['skill:read', 'my_skill:read'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(nullable: true)]
     #[Groups(['skill:read'])]
     private ?\DateTimeImmutable $updatedAt = null;
+
+    /**
+     * @var Collection<int, UserSkill>
+     */
+    #[ORM\OneToMany(targetEntity: UserSkill::class, mappedBy: 'skill', orphanRemoval: true)]
+    private Collection $userSkills;
+
+    public function __construct()
+    {
+        $this->userSkills = new ArrayCollection();
+    }
 
     // === Lifecycle Callbacks ===
 
@@ -129,5 +142,35 @@ class Skill
     public function getUpdatedAt(): ?\DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    /**
+     * @return Collection<int, UserSkill>
+     */
+    public function getUserSkills(): Collection
+    {
+        return $this->userSkills;
+    }
+
+    public function addUserSkill(UserSkill $userSkill): static
+    {
+        if (!$this->userSkills->contains($userSkill)) {
+            $this->userSkills->add($userSkill);
+            $userSkill->setSkill($this);
+        }
+
+        return $this;
+    }
+
+    public function removeUserSkill(UserSkill $userSkill): static
+    {
+        if ($this->userSkills->removeElement($userSkill)) {
+            // set the owning side to null (unless already changed)
+            if ($userSkill->getSkill() === $this) {
+                $userSkill->setSkill(null);
+            }
+        }
+
+        return $this;
     }
 }
