@@ -10,6 +10,8 @@ use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\ConstraintViolation;
+use Symfony\Component\Validator\ConstraintViolationList;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
@@ -58,9 +60,17 @@ final class CurrentUserProcessor implements ProcessorInterface
             // Vérifier l'unicité de l'email
             $existingUser = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $data->email]);
             if ($existingUser && $existingUser->getId() !== $user->getId()) {
-                throw new ValidationException($this->validator->validate($data->email, [
-                    new Assert\IsNull(message: 'This email is already in use'),
-                ]));
+                $violations = new ConstraintViolationList([
+                    new ConstraintViolation(
+                        'This email is already in use',
+                        null,
+                        [],
+                        $data,
+                        'email',
+                        $data->email
+                    )
+                ]);
+                throw new ValidationException($violations);
             }
 
             $user->setEmail($data->email);
