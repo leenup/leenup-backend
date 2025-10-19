@@ -2,6 +2,7 @@
 
 namespace App\DataFixtures;
 
+use App\Story\DefaultUserSkillsStory;
 use App\Story\DefaultUsersStory;
 use App\Story\DefaultCategoriesStory;
 use App\Story\DefaultSkillsStory;
@@ -12,14 +13,18 @@ class AppFixtures extends Fixture
 {
     public function load(ObjectManager $manager): void
     {
-        echo "Loading DefaultUsersStory...\n";
-        DefaultUsersStory::load();
 
         echo "Loading DefaultCategoriesStory...\n";
         DefaultCategoriesStory::load();
 
         echo "Loading DefaultSkillsStory...\n";
         DefaultSkillsStory::load();
+
+        echo "Loading DefaultUsersStory...\n";
+        DefaultUsersStory::load();
+
+        echo "Loading DefaultUserSkillsStory...\n";
+        DefaultUserSkillsStory::load();
 
         echo "Done!\n";
     }
