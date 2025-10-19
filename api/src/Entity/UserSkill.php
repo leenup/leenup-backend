@@ -31,18 +31,16 @@ use Symfony\Component\Validator\Constraints as Assert;
         new GetCollection(
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
         ),
-        new Post(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
-            securityPostDenormalize: "is_granted('ROLE_ADMIN') or object.getOwner() == user",
-            securityPostDenormalizeMessage: "You can only add skills to your own profile."
-        ),
         new Get(
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
         ),
+        new Post(
+            security: "is_granted('ROLE_ADMIN')",
+            securityMessage: "Only admins can create user skills directly."
+        ),
         new Delete(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
-            securityPostDenormalize: "is_granted('ROLE_ADMIN') or previous_object.getOwner() == user",
-            securityPostDenormalizeMessage: "You can only delete your own skills."
+            security: "is_granted('ROLE_ADMIN')",
+            securityMessage: "Only admins can delete user skills directly."
         ),
     ],
     normalizationContext: ['groups' => ['user_skill:read']],
@@ -76,7 +74,7 @@ class UserSkill
     #[Groups(['user_skill:read', 'user_skill:write'])]
     private ?User $owner = null;
 
-    #[ORM\ManyToOne]
+    #[ORM\ManyToOne(inversedBy: 'userSkills')]
     #[ORM\JoinColumn(nullable: false)]
     #[Assert\NotNull(message: 'The skill cannot be null')]
     #[Groups(['user_skill:read', 'user_skill:write'])]

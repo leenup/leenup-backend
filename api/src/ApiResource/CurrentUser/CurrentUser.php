@@ -28,9 +28,9 @@ use Symfony\Component\Validator\Constraints as Assert;
             uriTemplate: '/me',
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
             securityMessage: 'You must be authenticated to update your profile.',
+            validationContext: ['groups' => ['Default']],
             provider: CurrentUserProvider::class,
             processor: CurrentUserProcessor::class,
-            validationContext: ['groups' => ['Default']],
         ),
         new Delete(
             uriTemplate: '/me',
