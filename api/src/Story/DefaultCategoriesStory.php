@@ -21,6 +21,6 @@ final class DefaultCategoriesStory extends Story
         CategoryFactory::createOne(['title' => 'Cybersécurité']);
         CategoryFactory::createOne(['title' => 'Intelligence Artificielle']);
 
-        echo "10 catégories LeenUp créées\n";
+        echo "✅ " . CategoryFactory::count() . " catégories créées\n";
     }
 }

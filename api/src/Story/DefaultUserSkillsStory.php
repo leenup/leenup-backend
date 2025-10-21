@@ -67,7 +67,7 @@ final class DefaultUserSkillsStory extends Story
         // Pour les 15 utilisateurs aléatoires
         $this->addRandomSkillsToRandomUsers();
 
-        echo "Compétences ajoutées avec succès !\n";
+        echo "✅ Compétences ajoutées avec succès !\n";
     }
 
     private function addSkillsToUser(string $email, array $skills): void

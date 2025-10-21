@@ -67,7 +67,6 @@ final class DefaultUsersStory extends Story
         // 15 utilisateurs aléatoires (élèves/profs)
         UserFactory::createMany(15);
 
-        echo "15 utilisateurs aléatoires créés\n";
-        echo "Total: 22 utilisateurs\n";
+        echo "✅ " . UserFactory::count() . " users créées\n";
     }
 }
