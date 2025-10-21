@@ -74,7 +74,6 @@ class Session
 
     #[ORM\ManyToOne(inversedBy: 'sessionsAsStudent')]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull(message: 'The student cannot be null')]
     #[Groups(['session:read', 'session:write'])]
     private ?User $student = null;
 
