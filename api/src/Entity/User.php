@@ -163,10 +163,24 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(targetEntity: UserSkill::class, mappedBy: 'owner', cascade: ['remove'], orphanRemoval: true)]
     private Collection $userSkills;
 
+    /**
+     * @var Collection<int, Session>
+     */
+    #[ORM\OneToMany(targetEntity: Session::class, mappedBy: 'mentor')]
+    private Collection $sessionsAsMentor;
+
+    /**
+     * @var Collection<int, Session>
+     */
+    #[ORM\OneToMany(targetEntity: Session::class, mappedBy: 'student')]
+    private Collection $sessionsAsStudent;
+
     public function __construct()
     {
         $this->userSkills = new ArrayCollection();
         $this->roles = ['ROLE_USER'];
+        $this->sessionsAsMentor = new ArrayCollection();
+        $this->sessionsAsStudent = new ArrayCollection();
     }
 
     // === Lifecycle Callbacks ===
@@ -385,6 +399,66 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
             // set the owning side to null (unless already changed)
             if ($userSkill->getOwner() === $this) {
                 $userSkill->setOwner(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Session>
+     */
+    public function getSessionsAsMentor(): Collection
+    {
+        return $this->sessionsAsMentor;
+    }
+
+    public function addSessionAsMentor(Session $session): static
+    {
+        if (!$this->sessionsAsMentor->contains($session)) {
+            $this->sessionsAsMentor->add($session);
+            $session->setMentor($this);
+        }
+
+        return $this;
+    }
+
+    public function removeSessionAsMentor(Session $session): static
+    {
+        if ($this->sessionsAsMentor->removeElement($session)) {
+            // set the owning side to null (unless already changed)
+            if ($session->getMentor() === $this) {
+                $session->setMentor(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Session>
+     */
+    public function getSessionsAsStudent(): Collection
+    {
+        return $this->sessionsAsStudent;
+    }
+
+    public function addSessionAsStudent(Session $session): static
+    {
+        if (!$this->sessionsAsStudent->contains($session)) {
+            $this->sessionsAsStudent->add($session);
+            $session->setStudent($this);
+        }
+
+        return $this;
+    }
+
+    public function removeSessionAsStudent(Session $session): static
+    {
+        if ($this->sessionsAsStudent->removeElement($session)) {
+            // set the owning side to null (unless already changed)
+            if ($session->getStudent() === $this) {
+                $session->setStudent(null);
             }
         }
 

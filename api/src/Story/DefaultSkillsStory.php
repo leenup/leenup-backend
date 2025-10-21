@@ -2,6 +2,7 @@
 
 namespace App\Story;
 
+use App\Entity\Skill;
 use App\Factory\CategoryFactory;
 use App\Factory\SkillFactory;
 use Zenstruck\Foundry\Story;
@@ -135,6 +136,6 @@ final class DefaultSkillsStory extends Story
             SkillFactory::createOne(['title' => 'ChatGPT / LLMs', 'category' => $ia]);
         }
 
-        echo "~90 skills réalistes LeenUp créées\n";
+        echo "✅ " . SkillFactory::count() . " skills créées\n";
     }
 }
