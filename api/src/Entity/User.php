@@ -16,6 +16,7 @@ use App\Repository\UserRepository;
 use App\State\UserPasswordHasher;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
@@ -175,12 +176,26 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(targetEntity: Session::class, mappedBy: 'student')]
     private Collection $sessionsAsStudent;
 
+    /**
+     * @var Collection<int, Review>
+     */
+    #[ORM\OneToMany(targetEntity: Review::class, mappedBy: 'reviewer', orphanRemoval: true)]
+    private Collection $reviews;
+
+    /**
+     * @var string|null
+     */
+    #[ORM\Column(type: Types::DECIMAL, precision: 3, scale: 2, nullable: true)]
+    #[Groups(['user:read'])]
+    private ?string $averageRating = null;
+
     public function __construct()
     {
         $this->userSkills = new ArrayCollection();
         $this->roles = ['ROLE_USER'];
         $this->sessionsAsMentor = new ArrayCollection();
         $this->sessionsAsStudent = new ArrayCollection();
+        $this->reviews = new ArrayCollection();
     }
 
     // === Lifecycle Callbacks ===
@@ -461,6 +476,48 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
                 $session->setStudent(null);
             }
         }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Review>
+     */
+    public function getReviews(): Collection
+    {
+        return $this->reviews;
+    }
+
+    public function addReview(Review $review): static
+    {
+        if (!$this->reviews->contains($review)) {
+            $this->reviews->add($review);
+            $review->setReviewer($this);
+        }
+
+        return $this;
+    }
+
+    public function removeReview(Review $review): static
+    {
+        if ($this->reviews->removeElement($review)) {
+            // set the owning side to null (unless already changed)
+            if ($review->getReviewer() === $this) {
+                $review->setReviewer(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getAverageRating(): ?string
+    {
+        return $this->averageRating;
+    }
+
+    public function setAverageRating(?string $averageRating): static
+    {
+        $this->averageRating = $averageRating;
 
         return $this;
     }
