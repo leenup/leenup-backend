@@ -2,6 +2,7 @@
 
 namespace App\DataFixtures;
 
+use App\Story\DefaultReviewsStory;
 use App\Story\DefaultSessionsStory;
 use App\Story\DefaultUserSkillsStory;
 use App\Story\DefaultUsersStory;
@@ -29,6 +30,9 @@ class AppFixtures extends Fixture
 
         echo "Loading DefaultSessionsStory...\n";
         DefaultSessionsStory::load();
+
+        echo "Loading DefaultReviewsStory...\n";
+        DefaultReviewsStory::load();
 
         echo "Done!\n";
     }

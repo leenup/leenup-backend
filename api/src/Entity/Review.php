@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\ReviewRepository;
 use App\State\Processor\Review\ReviewCreateProcessor;
+use App\State\Processor\Review\ReviewUpdateProcessor;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
@@ -35,7 +36,8 @@ use Symfony\Component\Validator\Constraints as Assert;
             processor: ReviewCreateProcessor::class,
         ),
         new Patch(
-            security: "is_granted('ROLE_ADMIN') or (object.reviewer == user and object.getCreatedAt() > date('-7 days'))"
+            security: "is_granted('ROLE_ADMIN') or object.getReviewer() == user",
+            processor: ReviewUpdateProcessor::class,
         ),
         new Delete(
             security: "is_granted('ROLE_ADMIN')"

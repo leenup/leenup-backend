@@ -76,7 +76,29 @@ final class ReviewCreateProcessor implements ProcessorInterface
             throw new ValidationException($violations);
         }
 
+        // Validation 3 : Vérifier qu'il n'y a pas déjà une review pour cette session par ce reviewer
+        $existingReview = $this->reviewRepository->findOneBy([
+            'session' => $session,
+            'reviewer' => $currentUser,
+        ]);
+
+        if ($existingReview) {
+            $violations = new ConstraintViolationList([
+                new \Symfony\Component\Validator\ConstraintViolation(
+                    'You have already reviewed this session',
+                    null,
+                    [],
+                    $data,
+                    'session',
+                    $session
+                )
+            ]);
+            throw new ValidationException($violations);
+        }
+
         $this->entityManager->persist($data);
+        $this->entityManager->flush();
+
         $this->updateMentorAverageRating($session->getMentor());
         $this->entityManager->flush();
 
