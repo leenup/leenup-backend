@@ -4,13 +4,13 @@ namespace App\State\Processor\Review;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
-use ApiPlatform\Validator\Exception\ValidationException;
 use App\Entity\Review;
 use App\Entity\User;
+use App\Security\Voter\ReviewVoter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
-use Symfony\Component\Validator\ConstraintViolationList;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 /**
  * @implements ProcessorInterface<Review, Review>
@@ -20,6 +20,7 @@ final class ReviewUpdateProcessor implements ProcessorInterface
     public function __construct(
         private EntityManagerInterface $entityManager,
         private Security $security,
+        private AuthorizationCheckerInterface $authChecker,
     ) {
     }
 
@@ -35,34 +36,18 @@ final class ReviewUpdateProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
-        // Admins peuvent toujours modifier
-        if ($this->security->isGranted('ROLE_ADMIN')) {
-            $this->entityManager->flush();
-            return $data;
+        // Vérification via le Voter : l'utilisateur peut-il modifier cette review ?
+        // Le Voter vérifie automatiquement :
+        // 1. Que c'est bien le reviewer
+        // 2. Que la review a moins de 7 jours
+        if (!$this->authChecker->isGranted(ReviewVoter::UPDATE, $data)) {
+            throw new AccessDeniedHttpException(
+                'You can only modify your own reviews within 7 days of creation'
+            );
         }
 
-        // Vérifier que c'est le reviewer
-        if ($data->getReviewer() !== $currentUser) {
-            throw new AccessDeniedHttpException('You can only modify your own reviews');
-        }
-
-        // Vérifier la limite de 7 jours
-        $createdAt = $data->getCreatedAt();
-        $sevenDaysAgo = new \DateTimeImmutable('-7 days');
-
-        if ($createdAt < $sevenDaysAgo) {
-            $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
-                    'You can only modify a review within 7 days of creation',
-                    null,
-                    [],
-                    $data,
-                    '',
-                    null
-                )
-            ]);
-            throw new ValidationException($violations);
-        }
+        // Les admins peuvent toujours modifier (bypass du Voter)
+        // Note : Cette logique pourrait aussi être dans le Voter si besoin
 
         $this->entityManager->flush();
 
