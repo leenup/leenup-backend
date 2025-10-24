@@ -473,4 +473,130 @@ class ConversationTest extends ApiTestCase
 
         $this->assertResponseStatusCodeSame(403);
     }
+
+    // ========================================
+    // TESTS MESSAGE VOTER - PERMISSIONS MANQUANTES
+    // ========================================
+
+    /**
+     * Test qu'on ne peut PAS modifier un message
+     * Le MessageVoter interdit l'UPDATE par défaut
+     */
+    public function testCannotUpdateMessage(): void
+    {
+        $conversation = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation,
+            'sender' => $this->user1,
+            'content' => 'Original message',
+            'read' => false,
+        ]);
+
+        // Même l'expéditeur ne peut pas modifier le contenu
+        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user1Token,
+            'json' => [
+                'content' => 'Modified message',
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+    }
+
+    /**
+     * Test que l'expéditeur peut supprimer son propre message
+     */
+    public function testSenderCanDeleteOwnMessage(): void
+    {
+        $conversation = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation,
+            'sender' => $this->user1,
+            'content' => 'Message to delete',
+        ]);
+
+        $response = static::createClient()->request('DELETE', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user1Token,
+        ]);
+
+        $this->assertResponseStatusCodeSame(204);
+
+        // Vérifier que le message a bien été supprimé
+        static::createClient()->request('GET', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user1Token,
+        ]);
+
+        $this->assertResponseStatusCodeSame(404);
+    }
+
+    /**
+     * Test qu'on ne peut PAS supprimer le message de quelqu'un d'autre
+     */
+    public function testSenderCannotDeleteOthersMessage(): void
+    {
+        $conversation = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation,
+            'sender' => $this->user1, // Message envoyé par user1
+            'content' => 'Message from user1',
+        ]);
+
+        // user2 (destinataire) essaie de supprimer
+        static::createClient()->request('DELETE', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user2Token,
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+    }
+
+    /**
+     * Test CRITIQUE : L'expéditeur ne peut PAS marquer son propre message comme lu
+     * Seul le DESTINATAIRE peut marquer comme lu
+     */
+    public function testSenderCannotMarkOwnMessageAsRead(): void
+    {
+        $conversation = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation,
+            'sender' => $this->user1, // user1 est l'expéditeur
+            'content' => 'Message from user1',
+            'read' => false,
+        ]);
+
+        // user1 (expéditeur) essaie de marquer son propre message comme lu
+        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user1Token, // L'expéditeur lui-même
+            'json' => [
+                'read' => true,
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+
+        // Vérifier que le message est toujours non lu
+        $response = static::createClient()->request('GET', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user1Token,
+        ]);
+
+        $data = $response->toArray();
+        $this->assertFalse($data['read'], 'Le message ne devrait pas être marqué comme lu');
+    }
 }

@@ -5,45 +5,44 @@ namespace App\Entity;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
-use ApiPlatform\Metadata\Link;
-use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Delete;
 use App\Repository\MessageRepository;
 use App\State\Processor\Message\MessageCreateProcessor;
-use App\State\Provider\Conversation\ConversationMessagesProvider;
+use App\State\Processor\Message\MessageUpdateProcessor; // ← À créer
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: MessageRepository::class)]
-#[ORM\HasLifecycleCallbacks]
 #[ApiResource(
     operations: [
-        new GetCollection(
-            uriTemplate: '/conversations/{conversationId}/messages',
-            uriVariables: [
-                'conversationId' => new Link(
-                    fromProperty: 'messages',
-                    fromClass: Conversation::class
-                )
-            ],
-            provider: ConversationMessagesProvider::class,
-        ),
         new Get(
-            security: "is_granted('ROLE_ADMIN') or (object.getConversation().getParticipant1() == user or object.getConversation().getParticipant2() == user)"
+            security: "is_granted('MESSAGE_VIEW', object)"
+        ),
+        new GetCollection(
+            security: "is_granted('ROLE_ADMIN')"
         ),
         new Post(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
             processor: MessageCreateProcessor::class,
+            security: "is_granted('ROLE_USER')",
+            validationContext: ['groups' => ['Default', 'message:create']],
         ),
         new Patch(
-            security: "is_granted('ROLE_ADMIN') or (object.getConversation().getParticipant1() == user or object.getConversation().getParticipant2() == user)"
+            processor: MessageUpdateProcessor::class, // ← IMPORTANT : Utiliser un processor custom
+            security: "is_granted('MESSAGE_UPDATE', object)", // ← Vérifier UPDATE d'abord
+            denormalizationContext: ['groups' => ['message:update']],
+        ),
+        new Delete(
+            security: "is_granted('MESSAGE_DELETE', object)" // ← AJOUTER cette opération
         ),
     ],
     normalizationContext: ['groups' => ['message:read']],
-    denormalizationContext: ['groups' => ['message:write']],
+    denormalizationContext: ['groups' => ['message:create', 'message:update']],
 )]
+#[ORM\HasLifecycleCallbacks]
 class Message
 {
     #[ORM\Id]
@@ -52,26 +51,26 @@ class Message
     #[Groups(['message:read'])]
     private ?int $id = null;
 
-    #[ORM\ManyToOne(inversedBy: 'messages')]
+    #[ORM\ManyToOne(targetEntity: Conversation::class, inversedBy: 'messages')]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull(message: 'The conversation cannot be null')]
-    #[Groups(['message:read', 'message:write'])]
+    #[Assert\NotNull]
+    #[Groups(['message:read', 'message:create'])]
     private ?Conversation $conversation = null;
 
-    #[ORM\ManyToOne]
+    #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: false)]
     #[Groups(['message:read'])]
     private ?User $sender = null;
 
     #[ORM\Column(type: Types::TEXT)]
-    #[Assert\NotBlank(message: 'The message content cannot be empty')]
-    #[Assert\Length(max: 5000, maxMessage: 'Message cannot be longer than {{ limit }} characters')]
-    #[Groups(['message:read', 'message:write'])]
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 1, max: 5000)]
+    #[Groups(['message:read', 'message:create'])]
     private ?string $content = null;
 
     #[ORM\Column]
-    #[Groups(['message:read', 'message:write'])]
-    private ?bool $read = false;
+    #[Groups(['message:read', 'message:update'])] // ← SEULEMENT dans update, pas create
+    private bool $read = false;
 
     #[ORM\Column]
     #[Groups(['message:read'])]
@@ -82,6 +81,8 @@ class Message
     {
         $this->createdAt = new \DateTimeImmutable();
     }
+
+    // Getters et setters...
 
     public function getId(): ?int
     {
@@ -96,7 +97,6 @@ class Message
     public function setConversation(?Conversation $conversation): static
     {
         $this->conversation = $conversation;
-
         return $this;
     }
 
@@ -108,7 +108,6 @@ class Message
     public function setSender(?User $sender): static
     {
         $this->sender = $sender;
-
         return $this;
     }
 
@@ -120,11 +119,10 @@ class Message
     public function setContent(string $content): static
     {
         $this->content = $content;
-
         return $this;
     }
 
-    public function isRead(): ?bool
+    public function isRead(): bool
     {
         return $this->read;
     }
@@ -132,7 +130,6 @@ class Message
     public function setRead(bool $read): static
     {
         $this->read = $read;
-
         return $this;
     }
 

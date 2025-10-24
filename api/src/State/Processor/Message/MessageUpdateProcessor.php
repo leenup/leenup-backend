@@ -15,7 +15,7 @@ use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 /**
  * @implements ProcessorInterface<Message, Message>
  */
-final class MessageCreateProcessor implements ProcessorInterface
+final class MessageUpdateProcessor implements ProcessorInterface
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -36,29 +36,30 @@ final class MessageCreateProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
-        // Vérification via le Voter : l'utilisateur peut-il créer un message dans cette conversation ?
-        // Le Voter vérifie automatiquement que l'utilisateur est participant de la conversation
-        if (!$this->authChecker->isGranted(MessageVoter::CREATE, $data)) {
-            throw new AccessDeniedHttpException(
-                'You can only send messages in conversations you are part of'
-            );
+        // 🔴 CRITIQUE : Détecter si l'utilisateur essaie de modifier le contenu
+        // Le seul champ modifiable devrait être "read"
+
+        // Récupérer les données originales pour détecter les changements
+        $originalData = $this->entityManager->getUnitOfWork()->getOriginalEntityData($data);
+
+        // Si le contenu a été modifié, c'est une tentative d'UPDATE
+        if (isset($originalData['content']) && $originalData['content'] !== $data->getContent()) {
+            if (!$this->authChecker->isGranted(MessageVoter::UPDATE, $data)) {
+                throw new AccessDeniedHttpException(
+                    'You cannot modify the content of a message'
+                );
+            }
         }
 
-        // Définir l'expéditeur
-        $data->setSender($currentUser);
-
-        // Marquer comme non lu par défaut
-        $data->setRead(false);
-
-        // Note: createdAt est automatiquement défini par le #[ORM\PrePersist] de l'entité
-
-        // ✅ AJOUT : Mettre à jour le timestamp de la dernière activité de la conversation
-        $conversation = $data->getConversation();
-        if ($conversation) {
-            $conversation->setLastMessageAt(new \DateTimeImmutable());
+        // Si le champ "read" a été modifié, c'est une tentative de MARK_READ
+        if (isset($originalData['read']) && $originalData['read'] !== $data->isRead()) {
+            if (!$this->authChecker->isGranted(MessageVoter::MARK_READ, $data)) {
+                throw new AccessDeniedHttpException(
+                    'Only the recipient can mark a message as read'
+                );
+            }
         }
 
-        $this->entityManager->persist($data);
         $this->entityManager->flush();
 
         return $data;
