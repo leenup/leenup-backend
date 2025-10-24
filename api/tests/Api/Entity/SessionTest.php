@@ -226,15 +226,10 @@ class SessionTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
+        $this->assertResponseStatusCodeSame(403);
         $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [
-                [
-                    'propertyPath' => 'status',
-                    'message' => 'Only the mentor can confirm a session',
-                ],
-            ],
+            '@type' => 'Error',
+            'detail' => 'Only the mentor can confirm a session',
         ]);
     }
 
@@ -370,6 +365,182 @@ class SessionTest extends ApiTestCase
             ],
         ]);
     }
+
+    // ========================================
+    // 🆕 NOUVEAUX TESTS POUR LE VOTER
+    // ========================================
+
+    /**
+     * Test que le MENTOR peut modifier l'horaire (scheduledAt)
+     */
+    public function testMentorCanUpdateSchedule(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->user,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+            'scheduledAt' => new \DateTimeImmutable('+1 week'),
+            'duration' => 60,
+        ]);
+
+        $newScheduledAt = (new \DateTimeImmutable('+2 weeks'))->format(\DateTimeInterface::ATOM);
+
+        $response = static::createClient()->request('PATCH', '/sessions/' . $session->getId(), [
+            'auth_bearer' => $this->mentorToken,
+            'json' => [
+                'scheduledAt' => $newScheduledAt,
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+        $this->assertEquals($newScheduledAt, $data['scheduledAt']);
+    }
+
+    /**
+     * Test que le STUDENT ne peut PAS modifier l'horaire (scheduledAt)
+     * 🔥 C'est LE test qui valide notre fix de sécurité !
+     */
+    public function testStudentCannotUpdateSchedule(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->user,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+            'scheduledAt' => new \DateTimeImmutable('+1 week'),
+            'duration' => 60,
+        ]);
+
+        $newScheduledAt = (new \DateTimeImmutable('+2 weeks'))->format(\DateTimeInterface::ATOM);
+
+        static::createClient()->request('PATCH', '/sessions/' . $session->getId(), [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'scheduledAt' => $newScheduledAt,
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+        $this->assertJsonContains([
+            'detail' => 'Only the mentor can modify the schedule',
+        ]);
+    }
+
+    /**
+     * Test que le MENTOR peut modifier la durée
+     */
+    public function testMentorCanUpdateDuration(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->user,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+            'scheduledAt' => new \DateTimeImmutable('+1 week'),
+            'duration' => 60,
+        ]);
+
+        $response = static::createClient()->request('PATCH', '/sessions/' . $session->getId(), [
+            'auth_bearer' => $this->mentorToken,
+            'json' => [
+                'duration' => 90,
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+        $this->assertEquals(90, $data['duration']);
+    }
+
+    /**
+     * Test que le STUDENT ne peut PAS modifier la durée
+     * 🔥 Autre test critique pour valider le fix !
+     */
+    public function testStudentCannotUpdateDuration(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->user,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+            'scheduledAt' => new \DateTimeImmutable('+1 week'),
+            'duration' => 60,
+        ]);
+
+        static::createClient()->request('PATCH', '/sessions/' . $session->getId(), [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'duration' => 90,
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+        $this->assertJsonContains([
+            'detail' => 'Only the mentor can modify the schedule',
+        ]);
+    }
+
+    /**
+     * Test que le STUDENT peut modifier les notes (reste autorisé)
+     */
+    public function testStudentCanUpdateNotes(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->user,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+            'notes' => 'Original notes',
+        ]);
+
+        $response = static::createClient()->request('PATCH', '/sessions/' . $session->getId(), [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'notes' => 'Updated notes by student',
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+        $this->assertEquals('Updated notes by student', $data['notes']);
+    }
+
+    /**
+     * Test que le STUDENT peut modifier la location (reste autorisé)
+     */
+    public function testStudentCanUpdateLocation(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->user,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+            'location' => 'Zoom',
+        ]);
+
+        $response = static::createClient()->request('PATCH', '/sessions/' . $session->getId(), [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'location' => 'Google Meet',
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+        $this->assertEquals('Google Meet', $data['location']);
+    }
+
+    // ========================================
+    // Tests existants (inchangés)
+    // ========================================
 
     public function testGetMySessionsAsMentor(): void
     {
