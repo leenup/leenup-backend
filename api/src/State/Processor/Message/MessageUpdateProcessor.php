@@ -15,7 +15,7 @@ use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 /**
  * @implements ProcessorInterface<Message, Message>
  */
-final class MessageCreateProcessor implements ProcessorInterface
+final class MessageUpdateProcessor implements ProcessorInterface
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -36,23 +36,28 @@ final class MessageCreateProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
-        if (!$this->authChecker->isGranted(MessageVoter::CREATE, $data)) {
-            throw new AccessDeniedHttpException(
-                'You can only send messages in conversations you are part of'
-            );
+        $uow = $this->entityManager->getUnitOfWork();
+
+        $uow->computeChangeSets();
+
+        $changeSet = $uow->getEntityChangeSet($data);
+
+        if (isset($changeSet['content'])) {
+            if (!$this->authChecker->isGranted(MessageVoter::UPDATE, $data)) {
+                throw new AccessDeniedHttpException(
+                    'You cannot modify the content of a message'
+                );
+            }
         }
 
-        $data->setSender($currentUser);
-
-        $data->setRead(false);
-
-        $conversation = $data->getConversation();
-
-        if ($conversation) {
-            $conversation->setLastMessageAt(new \DateTimeImmutable());
+        if (isset($changeSet['read'])) {
+            if (!$this->authChecker->isGranted(MessageVoter::MARK_READ, $data)) {
+                throw new AccessDeniedHttpException(
+                    'Only the recipient can mark a message as read'
+                );
+            }
         }
 
-        $this->entityManager->persist($data);
         $this->entityManager->flush();
 
         return $data;

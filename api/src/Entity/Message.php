@@ -6,10 +6,12 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Link;
-use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Delete;
 use App\Repository\MessageRepository;
 use App\State\Processor\Message\MessageCreateProcessor;
+use App\State\Processor\Message\MessageUpdateProcessor;
 use App\State\Provider\Conversation\ConversationMessagesProvider;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
@@ -31,18 +33,26 @@ use Symfony\Component\Validator\Constraints as Assert;
             provider: ConversationMessagesProvider::class,
         ),
         new Get(
-            security: "is_granted('ROLE_ADMIN') or (object.getConversation().getParticipant1() == user or object.getConversation().getParticipant2() == user)"
+            security: "is_granted('MESSAGE_VIEW', object)"
+        ),
+        new GetCollection(
+            security: "is_granted('ROLE_ADMIN')"
         ),
         new Post(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            security: "is_granted('ROLE_USER')",
+            validationContext: ['groups' => ['Default', 'message:create']],
             processor: MessageCreateProcessor::class,
         ),
         new Patch(
-            security: "is_granted('ROLE_ADMIN') or (object.getConversation().getParticipant1() == user or object.getConversation().getParticipant2() == user)"
+            denormalizationContext: ['groups' => ['message:update']],
+            processor: MessageUpdateProcessor::class,
+        ),
+        new Delete(
+            security: "is_granted('MESSAGE_DELETE', object)"
         ),
     ],
     normalizationContext: ['groups' => ['message:read']],
-    denormalizationContext: ['groups' => ['message:write']],
+    denormalizationContext: ['groups' => ['message:create', 'message:update']],
 )]
 class Message
 {
@@ -55,7 +65,7 @@ class Message
     #[ORM\ManyToOne(inversedBy: 'messages')]
     #[ORM\JoinColumn(nullable: false)]
     #[Assert\NotNull(message: 'The conversation cannot be null')]
-    #[Groups(['message:read', 'message:write'])]
+    #[Groups(['message:read', 'message:create'])]
     private ?Conversation $conversation = null;
 
     #[ORM\ManyToOne]
@@ -65,12 +75,12 @@ class Message
 
     #[ORM\Column(type: Types::TEXT)]
     #[Assert\NotBlank(message: 'The message content cannot be empty')]
-    #[Assert\Length(max: 5000, maxMessage: 'Message cannot be longer than {{ limit }} characters')]
-    #[Groups(['message:read', 'message:write'])]
+    #[Assert\Length(min: 1, max: 5000, maxMessage: 'Message cannot be longer than {{ limit }} characters')]
+    #[Groups(['message:read', 'message:create', 'message:update'])]
     private ?string $content = null;
 
     #[ORM\Column]
-    #[Groups(['message:read', 'message:write'])]
+    #[Groups(['message:read', 'message:update'])]
     private ?bool $read = false;
 
     #[ORM\Column]
@@ -96,7 +106,6 @@ class Message
     public function setConversation(?Conversation $conversation): static
     {
         $this->conversation = $conversation;
-
         return $this;
     }
 
@@ -108,7 +117,6 @@ class Message
     public function setSender(?User $sender): static
     {
         $this->sender = $sender;
-
         return $this;
     }
 
@@ -120,7 +128,6 @@ class Message
     public function setContent(string $content): static
     {
         $this->content = $content;
-
         return $this;
     }
 
@@ -132,7 +139,6 @@ class Message
     public function setRead(bool $read): static
     {
         $this->read = $read;
-
         return $this;
     }
 
