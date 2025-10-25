@@ -20,17 +20,17 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     operations: [
         new GetCollection(
-            security: "is_granted('ROLE_ADMIN')",
+            security: "is_granted('ROLE_ADMIN')", // Admins only pour voir toutes les conversations
         ),
         new Get(
-            security: "is_granted('ROLE_ADMIN') or (object.getParticipant1() == user or object.getParticipant2() == user)"
+            security: "is_granted('CONVERSATION_VIEW', object)" // ← Utilise le Voter
         ),
         new Post(
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
             processor: ConversationCreateProcessor::class,
         ),
         new Delete(
-            security: "is_granted('ROLE_ADMIN')"
+            security: "is_granted('CONVERSATION_DELETE', object)" // ← Utilise le Voter
         ),
     ],
     normalizationContext: ['groups' => ['conversation:read']],
