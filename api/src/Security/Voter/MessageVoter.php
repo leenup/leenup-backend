@@ -12,7 +12,6 @@ use Symfony\Component\Security\Core\Authorization\Voter\Voter;
  */
 class MessageVoter extends Voter
 {
-    // Constantes pour les permissions
     public const VIEW = 'MESSAGE_VIEW';
     public const CREATE = 'MESSAGE_CREATE';
     public const UPDATE = 'MESSAGE_UPDATE';
@@ -21,12 +20,10 @@ class MessageVoter extends Voter
 
     protected function supports(string $attribute, mixed $subject): bool
     {
-        // Ce voter ne s'applique que sur les objets Message
         if (!$subject instanceof Message) {
             return false;
         }
 
-        // Et uniquement pour les permissions qu'on gère
         return in_array($attribute, [
             self::VIEW,
             self::CREATE,
@@ -40,7 +37,6 @@ class MessageVoter extends Voter
     {
         $user = $token->getUser();
 
-        // L'utilisateur doit être connecté
         if (!$user instanceof User) {
             return false;
         }
@@ -48,7 +44,6 @@ class MessageVoter extends Voter
         /** @var Message $message */
         $message = $subject;
 
-        // Déléguer la vérification selon la permission demandée
         return match ($attribute) {
             self::VIEW => $this->canView($message, $user),
             self::CREATE => $this->canCreate($message, $user),
@@ -115,11 +110,9 @@ class MessageVoter extends Voter
         $conversation = $message->getConversation();
         $sender = $message->getSender();
 
-        // Vérifier qu'on est participant
         $isParticipant = $conversation->getParticipant1() === $user
             || $conversation->getParticipant2() === $user;
 
-        // Vérifier qu'on n'est PAS l'expéditeur
         $isNotSender = $sender !== $user;
 
         return $isParticipant && $isNotSender;

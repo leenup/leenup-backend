@@ -36,14 +36,13 @@ final class MessageUpdateProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
-        // 🔴 CRITIQUE : Détecter si l'utilisateur essaie de modifier le contenu
-        // Le seul champ modifiable devrait être "read"
+        $uow = $this->entityManager->getUnitOfWork();
 
-        // Récupérer les données originales pour détecter les changements
-        $originalData = $this->entityManager->getUnitOfWork()->getOriginalEntityData($data);
+        $uow->computeChangeSets();
 
-        // Si le contenu a été modifié, c'est une tentative d'UPDATE
-        if (isset($originalData['content']) && $originalData['content'] !== $data->getContent()) {
+        $changeSet = $uow->getEntityChangeSet($data);
+
+        if (isset($changeSet['content'])) {
             if (!$this->authChecker->isGranted(MessageVoter::UPDATE, $data)) {
                 throw new AccessDeniedHttpException(
                     'You cannot modify the content of a message'
@@ -51,8 +50,7 @@ final class MessageUpdateProcessor implements ProcessorInterface
             }
         }
 
-        // Si le champ "read" a été modifié, c'est une tentative de MARK_READ
-        if (isset($originalData['read']) && $originalData['read'] !== $data->isRead()) {
+        if (isset($changeSet['read'])) {
             if (!$this->authChecker->isGranted(MessageVoter::MARK_READ, $data)) {
                 throw new AccessDeniedHttpException(
                     'Only the recipient can mark a message as read'

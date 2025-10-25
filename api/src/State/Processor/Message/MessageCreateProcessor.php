@@ -36,24 +36,18 @@ final class MessageCreateProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
-        // Vérification via le Voter : l'utilisateur peut-il créer un message dans cette conversation ?
-        // Le Voter vérifie automatiquement que l'utilisateur est participant de la conversation
         if (!$this->authChecker->isGranted(MessageVoter::CREATE, $data)) {
             throw new AccessDeniedHttpException(
                 'You can only send messages in conversations you are part of'
             );
         }
 
-        // Définir l'expéditeur
         $data->setSender($currentUser);
 
-        // Marquer comme non lu par défaut
         $data->setRead(false);
 
-        // Note: createdAt est automatiquement défini par le #[ORM\PrePersist] de l'entité
-
-        // ✅ AJOUT : Mettre à jour le timestamp de la dernière activité de la conversation
         $conversation = $data->getConversation();
+
         if ($conversation) {
             $conversation->setLastMessageAt(new \DateTimeImmutable());
         }

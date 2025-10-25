@@ -5,20 +5,33 @@ namespace App\Entity;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Link;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Delete;
 use App\Repository\MessageRepository;
 use App\State\Processor\Message\MessageCreateProcessor;
-use App\State\Processor\Message\MessageUpdateProcessor; // ← À créer
+use App\State\Processor\Message\MessageUpdateProcessor;
+use App\State\Provider\Conversation\ConversationMessagesProvider;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: MessageRepository::class)]
+#[ORM\HasLifecycleCallbacks]
 #[ApiResource(
     operations: [
+        new GetCollection(
+            uriTemplate: '/conversations/{conversationId}/messages',
+            uriVariables: [
+                'conversationId' => new Link(
+                    fromProperty: 'messages',
+                    fromClass: Conversation::class
+                )
+            ],
+            provider: ConversationMessagesProvider::class,
+        ),
         new Get(
             security: "is_granted('MESSAGE_VIEW', object)"
         ),
@@ -26,23 +39,21 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "is_granted('ROLE_ADMIN')"
         ),
         new Post(
-            processor: MessageCreateProcessor::class,
             security: "is_granted('ROLE_USER')",
             validationContext: ['groups' => ['Default', 'message:create']],
+            processor: MessageCreateProcessor::class,
         ),
         new Patch(
-            processor: MessageUpdateProcessor::class, // ← IMPORTANT : Utiliser un processor custom
-            security: "is_granted('MESSAGE_UPDATE', object)", // ← Vérifier UPDATE d'abord
             denormalizationContext: ['groups' => ['message:update']],
+            processor: MessageUpdateProcessor::class,
         ),
         new Delete(
-            security: "is_granted('MESSAGE_DELETE', object)" // ← AJOUTER cette opération
+            security: "is_granted('MESSAGE_DELETE', object)"
         ),
     ],
     normalizationContext: ['groups' => ['message:read']],
     denormalizationContext: ['groups' => ['message:create', 'message:update']],
 )]
-#[ORM\HasLifecycleCallbacks]
 class Message
 {
     #[ORM\Id]
@@ -51,26 +62,26 @@ class Message
     #[Groups(['message:read'])]
     private ?int $id = null;
 
-    #[ORM\ManyToOne(targetEntity: Conversation::class, inversedBy: 'messages')]
+    #[ORM\ManyToOne(inversedBy: 'messages')]
     #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull]
+    #[Assert\NotNull(message: 'The conversation cannot be null')]
     #[Groups(['message:read', 'message:create'])]
     private ?Conversation $conversation = null;
 
-    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false)]
     #[Groups(['message:read'])]
     private ?User $sender = null;
 
     #[ORM\Column(type: Types::TEXT)]
-    #[Assert\NotBlank]
-    #[Assert\Length(min: 1, max: 5000)]
-    #[Groups(['message:read', 'message:create'])]
+    #[Assert\NotBlank(message: 'The message content cannot be empty')]
+    #[Assert\Length(min: 1, max: 5000, maxMessage: 'Message cannot be longer than {{ limit }} characters')]
+    #[Groups(['message:read', 'message:create', 'message:update'])]
     private ?string $content = null;
 
     #[ORM\Column]
-    #[Groups(['message:read', 'message:update'])] // ← SEULEMENT dans update, pas create
-    private bool $read = false;
+    #[Groups(['message:read', 'message:update'])]
+    private ?bool $read = false;
 
     #[ORM\Column]
     #[Groups(['message:read'])]
@@ -81,8 +92,6 @@ class Message
     {
         $this->createdAt = new \DateTimeImmutable();
     }
-
-    // Getters et setters...
 
     public function getId(): ?int
     {
@@ -122,7 +131,7 @@ class Message
         return $this;
     }
 
-    public function isRead(): bool
+    public function isRead(): ?bool
     {
         return $this->read;
     }
