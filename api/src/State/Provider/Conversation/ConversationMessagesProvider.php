@@ -8,8 +8,10 @@ use App\Entity\Conversation;
 use App\Entity\Message;
 use App\Entity\User;
 use App\Repository\ConversationRepository;
+use App\Security\Voter\ConversationVoter;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 /**
  * @implements ProviderInterface<Message>
@@ -19,6 +21,7 @@ final class ConversationMessagesProvider implements ProviderInterface
     public function __construct(
         private ConversationRepository $conversationRepository,
         private Security $security,
+        private AuthorizationCheckerInterface $authChecker,
     ) {
     }
 
@@ -42,11 +45,11 @@ final class ConversationMessagesProvider implements ProviderInterface
             throw new \LogicException('Conversation not found');
         }
 
-        // Vérifier que l'user est participant (sauf si admin)
-        if (!$this->security->isGranted('ROLE_ADMIN')) {
-            if ($conversation->getParticipant1() !== $user && $conversation->getParticipant2() !== $user) {
-                throw new AccessDeniedHttpException('You can only view messages from your own conversations');
-            }
+        // ✅ Utiliser le Voter pour vérifier l'accès aux messages
+        if (!$this->authChecker->isGranted(ConversationVoter::VIEW_MESSAGES, $conversation)) {
+            throw new AccessDeniedHttpException(
+                'You can only view messages from your own conversations'
+            );
         }
 
         return $conversation->getMessages()->toArray();
