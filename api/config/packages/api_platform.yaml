@@ -12,6 +12,7 @@ api_platform:
         include_type: true
     # Good defaults for REST APIs
     defaults:
+        skip_null_values: false
         stateless: true
         cache_headers:
             vary: ['Content-Type', 'Authorization', 'Origin']

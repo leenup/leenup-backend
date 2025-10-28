@@ -32,13 +32,7 @@ final class NotificationFactory extends PersistentObjectFactory
                 Notification::TYPE_NEW_REVIEW,
             ]),
             'title' => self::faker()->sentence(6),
-            'content' => self::faker()->optional(0.7)->sentence(12),
-            'link' => self::faker()->optional(0.5)->randomElement([
-                '/sessions/1',
-                '/messages/1',
-                '/reviews/1',
-            ]),
-            'isRead' => self::faker()->boolean(30), // 30% de chance d'être lu
+            'content' => self::faker()->optional(0.7)->sentence(12)
         ];
     }
 
