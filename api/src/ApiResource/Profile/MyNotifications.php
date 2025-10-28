@@ -2,10 +2,17 @@
 
 namespace App\ApiResource\Profile;
 
+use ApiPlatform\Doctrine\Orm\Filter\BooleanFilter;
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
+use App\State\Processor\Profile\MyNotificationsMarkAllReadProcessor;
 use App\State\Processor\Profile\MyNotificationsUpdateProcessor;
 use App\State\Provider\Profile\MyNotificationsProvider;
 use Symfony\Component\Serializer\Annotation\Groups;
@@ -32,10 +39,23 @@ use Symfony\Component\Serializer\Annotation\Groups;
             provider: MyNotificationsProvider::class,
             processor: MyNotificationsUpdateProcessor::class,
         ),
+        new Post(
+            uriTemplate: '/me/notifications/mark-all-read',
+            status: 200,
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            output: ['count' => 'int', 'message' => 'string'],
+            read: false,
+            serialize: false,
+            processor: MyNotificationsMarkAllReadProcessor::class,
+        ),
     ],
     normalizationContext: ['groups' => ['my_notification:read']],
     denormalizationContext: ['groups' => ['my_notification:update']],
 )]
+#[ApiFilter(BooleanFilter::class, properties: ['isRead'])]
+#[ApiFilter(SearchFilter::class, properties: ['type' => 'exact'])]
+#[ApiFilter(DateFilter::class, properties: ['createdAt'])]
+#[ApiFilter(OrderFilter::class, properties: ['createdAt', 'readAt'], arguments: ['orderParameterName' => 'order'])]
 class MyNotifications
 {
     #[Groups(['my_notification:read'])]

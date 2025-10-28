@@ -274,4 +274,289 @@ class MyNotificationsTest extends ApiTestCase
 
         $this->assertResponseStatusCodeSame(404);
     }
+
+    public function testMarkAllNotificationsAsRead(): void
+    {
+        // Créer plusieurs notifications non lues pour user1
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Notification 1',
+        ]);
+
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_SESSION_CONFIRMED,
+            'title' => 'Notification 2',
+        ]);
+
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_REVIEW,
+            'title' => 'Notification 3',
+        ]);
+
+        // Créer une notification déjà lue (ne doit pas être comptée)
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Already read',
+            'isRead' => true,
+        ]);
+
+        // Créer une notification pour user2 (ne doit pas être affectée)
+        NotificationFactory::createOne([
+            'user' => $this->user2,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'User2 notification',
+        ]);
+
+        // Vérifier qu'il y a 3 notifications non lues pour user1
+        $unreadCount = NotificationFactory::count([
+            'user' => $this->user1,
+            'isRead' => false,
+        ]);
+        $this->assertEquals(3, $unreadCount);
+
+        // Appeler l'endpoint
+        $response = static::createClient()->request('POST', '/me/notifications/mark-all-read', [
+            'auth_bearer' => $this->user1Token,
+            'json' => [], // ← Ajoute un body JSON vide
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $data = $response->toArray();
+        $this->assertEquals(3, $data['count']);
+        $this->assertStringContainsString('3 notification(s) marked as read', $data['message']);
+
+        // Vérifier qu'il n'y a plus de notifications non lues pour user1
+        $unreadCountAfter = NotificationFactory::count([
+            'user' => $this->user1,
+            'isRead' => false,
+        ]);
+        $this->assertEquals(0, $unreadCountAfter);
+
+        // Vérifier que toutes les notifications de user1 sont maintenant lues
+        $allUser1Notifications = NotificationFactory::findBy(['user' => $this->user1]);
+        foreach ($allUser1Notifications as $notif) {
+            $this->assertTrue($notif->isRead());
+        }
+
+        // Vérifier que la notification de user2 n'a pas été affectée
+        $user2Notification = NotificationFactory::findBy(['user' => $this->user2])[0];
+        $this->assertFalse($user2Notification->isRead());
+    }
+
+    public function testMarkAllAsReadWhenNoUnreadNotifications(): void
+    {
+        // Créer seulement des notifications déjà lues
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Already read 1',
+            'isRead' => true,
+        ]);
+
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Already read 2',
+            'isRead' => true,
+        ]);
+
+        $response = static::createClient()->request('POST', '/me/notifications/mark-all-read', [
+            'auth_bearer' => $this->user1Token,
+            'json' => [], // ← Ajoute un body JSON vide
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $data = $response->toArray();
+        $this->assertEquals(0, $data['count']);
+        $this->assertStringContainsString('0 notification(s) marked as read', $data['message']);
+    }
+
+    public function testMarkAllAsReadWithoutAuth(): void
+    {
+        static::createClient()->request('POST', '/me/notifications/mark-all-read', [
+            'json' => [], // ← Ajoute un body JSON vide
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(401);
+    }
+
+    // ========================================
+// TESTS FILTRES ET TRI
+// ========================================
+
+    public function testFilterNotificationsByIsRead(): void
+    {
+        // Créer des notifications lues et non lues
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Unread 1',
+            'isRead' => false,
+        ]);
+
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Read 1',
+            'isRead' => true,
+        ]);
+
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Unread 2',
+            'isRead' => false,
+        ]);
+
+        // Filtrer les non lues
+        $response = static::createClient()->request('GET', '/me/notifications?isRead=false', [
+            'auth_bearer' => $this->user1Token,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        $this->assertEquals(2, $data['totalItems']);
+        foreach ($data['member'] as $notification) {
+            $this->assertFalse($notification['isRead']);
+        }
+
+        // Filtrer les lues
+        $response = static::createClient()->request('GET', '/me/notifications?isRead=true', [
+            'auth_bearer' => $this->user1Token,
+        ]);
+
+        $data = $response->toArray();
+        $this->assertEquals(1, $data['totalItems']);
+        $this->assertTrue($data['member'][0]['isRead']);
+    }
+
+    public function testFilterNotificationsByType(): void
+    {
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Message notif',
+        ]);
+
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_SESSION_CONFIRMED,
+            'title' => 'Session notif',
+        ]);
+
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Another message',
+        ]);
+
+        // Filtrer par type
+        $response = static::createClient()->request('GET', '/me/notifications?type=new_message', [
+            'auth_bearer' => $this->user1Token,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        $this->assertEquals(2, $data['totalItems']);
+        foreach ($data['member'] as $notification) {
+            $this->assertEquals(Notification::TYPE_NEW_MESSAGE, $notification['type']);
+        }
+    }
+
+    public function testOrderNotificationsByCreatedAt(): void
+    {
+        // Créer des notifications avec des dates différentes
+        $notif1 = NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'First',
+        ]);
+
+        sleep(1); // Attendre 1 seconde
+
+        $notif2 = NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Second',
+        ]);
+
+        sleep(1);
+
+        $notif3 = NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Third',
+        ]);
+
+        // Ordre décroissant (par défaut, du plus récent au plus ancien)
+        $response = static::createClient()->request('GET', '/me/notifications', [
+            'auth_bearer' => $this->user1Token,
+        ]);
+
+        $data = $response->toArray();
+        $titles = array_column($data['member'], 'title');
+
+        $this->assertEquals('Third', $titles[0]);
+        $this->assertEquals('Second', $titles[1]);
+        $this->assertEquals('First', $titles[2]);
+
+        // Ordre croissant (du plus ancien au plus récent)
+        $response = static::createClient()->request('GET', '/me/notifications?order[createdAt]=asc', [
+            'auth_bearer' => $this->user1Token,
+        ]);
+
+        $data = $response->toArray();
+        $titles = array_column($data['member'], 'title');
+
+        $this->assertEquals('First', $titles[0]);
+        $this->assertEquals('Second', $titles[1]);
+        $this->assertEquals('Third', $titles[2]);
+    }
+
+    public function testCombineFilters(): void
+    {
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Unread message',
+            'isRead' => false,
+        ]);
+
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_SESSION_CONFIRMED,
+            'title' => 'Unread session',
+            'isRead' => false,
+        ]);
+
+        NotificationFactory::createOne([
+            'user' => $this->user1,
+            'type' => Notification::TYPE_NEW_MESSAGE,
+            'title' => 'Read message',
+            'isRead' => true,
+        ]);
+
+        $response = static::createClient()->request('GET', '/me/notifications?isRead=false&type=new_message', [
+            'auth_bearer' => $this->user1Token,
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+
+        $this->assertEquals(1, $data['totalItems']);
+        $this->assertEquals('Unread message', $data['member'][0]['title']);
+        $this->assertFalse($data['member'][0]['isRead']);
+        $this->assertEquals(Notification::TYPE_NEW_MESSAGE, $data['member'][0]['type']);
+    }
 }
