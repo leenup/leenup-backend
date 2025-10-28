@@ -26,6 +26,7 @@ final class NotificationFactory extends PersistentObjectFactory
             'user' => UserFactory::new(),
             'type' => self::faker()->randomElement([
                 Notification::TYPE_NEW_MESSAGE,
+                Notification::TYPE_SESSION_REQUESTED,
                 Notification::TYPE_SESSION_CONFIRMED,
                 Notification::TYPE_SESSION_CANCELLED,
                 Notification::TYPE_SESSION_COMPLETED,

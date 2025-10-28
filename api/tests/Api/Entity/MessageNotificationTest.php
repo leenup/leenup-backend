@@ -10,7 +10,7 @@ use App\Factory\NotificationFactory;
 use App\Factory\UserFactory;
 use Zenstruck\Foundry\Test\Factories;
 
-class NotificationTest extends ApiTestCase
+class MessageNotificationTest extends ApiTestCase
 {
     use Factories;
 
