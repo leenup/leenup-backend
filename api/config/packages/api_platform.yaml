@@ -1,6 +1,6 @@
 api_platform:
-    title: LeenUp API
-    description: 'LeenUp API documentation'
+    title: Leenup API
+    description: 'Leenup API documentation'
     swagger:
         api_keys:
             JWT:
