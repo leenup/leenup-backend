@@ -27,6 +27,9 @@ class SessionNotificationTest extends ApiTestCase
     {
         parent::setUp();
 
+        // Générer un suffix unique pour éviter les deadlocks en tests parallèles
+        $uniqueId = uniqid();
+
         $category = CategoryFactory::createOne(['title' => 'Programming']);
 
         $this->skill = SkillFactory::createOne([
@@ -35,14 +38,14 @@ class SessionNotificationTest extends ApiTestCase
         ]);
 
         $this->mentor = UserFactory::createOne([
-            'email' => 'mentor@test.com',
+            'email' => "mentor-{$uniqueId}@test.com",
             'plainPassword' => 'password',
             'firstName' => 'John',
             'lastName' => 'Mentor',
         ]);
 
         $this->student = UserFactory::createOne([
-            'email' => 'student@test.com',
+            'email' => "student-{$uniqueId}@test.com",
             'plainPassword' => 'password',
             'firstName' => 'Alice',
             'lastName' => 'Student',
@@ -57,13 +60,13 @@ class SessionNotificationTest extends ApiTestCase
         ]);
 
         $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'mentor@test.com', 'password' => 'password'],
+            'json' => ['email' => "mentor-{$uniqueId}@test.com", 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         $this->mentorToken = $response->toArray()['token'];
 
         $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'student@test.com', 'password' => 'password'],
+            'json' => ['email' => "student-{$uniqueId}@test.com", 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         $this->studentToken = $response->toArray()['token'];
