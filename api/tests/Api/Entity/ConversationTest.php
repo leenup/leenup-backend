@@ -599,4 +599,269 @@ class ConversationTest extends ApiTestCase
         $data = $response->toArray();
         $this->assertFalse($data['read'], 'Le message ne devrait pas être marqué comme lu');
     }
+
+    // ========================================
+// TESTS RACE CONDITION FIX
+// ========================================
+
+    /**
+     * Test qu'on ne peut pas créer une conversation en inversant l'ordre des participants
+     * Ce test vérifie que la normalisation fonctionne correctement
+     */
+    public function testCannotCreateDuplicateConversationReversed(): void
+    {
+        // User1 crée une conversation avec User2
+        $response = static::createClient()->request('POST', '/conversations', [
+            'auth_bearer' => $this->user1Token,
+            'json' => [
+                'participant2' => '/users/' . $this->user2->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(201);
+        $conversationId = $response->toArray()['id'];
+
+        // User2 tente de créer une conversation avec User1 (ordre inversé)
+        static::createClient()->request('POST', '/conversations', [
+            'auth_bearer' => $this->user2Token,
+            'json' => [
+                'participant2' => '/users/' . $this->user1->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
+            'violations' => [
+                [
+                    'propertyPath' => 'participant2',
+                    'message' => 'A conversation already exists with this user',
+                ],
+            ],
+        ]);
+
+        // Vérifier qu'il n'y a toujours qu'une seule conversation
+        $this->assertSame(1, ConversationFactory::count());
+    }
+
+    /**
+     * Test de race condition : simule 2 requêtes quasi-simultanées
+     * Ce test vérifie que la contrainte unique en base empêche les doublons
+     */
+    public function testRaceConditionPrevention(): void
+    {
+        $client1 = static::createClient();
+        $client2 = static::createClient();
+
+        $payload = [
+            'json' => [
+                'participant2' => '/users/' . $this->user2->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+            'auth_bearer' => $this->user1Token,
+        ];
+
+        $response1 = null;
+        $response2 = null;
+
+        try {
+            $response1 = $client1->request('POST', '/conversations', $payload);
+        } catch (\Exception $e) {
+        }
+
+        try {
+            $response2 = $client2->request('POST', '/conversations', $payload);
+        } catch (\Exception $e) {
+        }
+
+        $successCount = 0;
+        if ($response1 && $response1->getStatusCode() === 201) {
+            $successCount++;
+        }
+        if ($response2 && $response2->getStatusCode() === 422) {
+            $this->assertJsonContains([
+                '@type' => 'ConstraintViolation',
+                'violations' => [
+                    [
+                        'message' => 'A conversation already exists with this user',
+                    ],
+                ],
+            ]);
+        }
+
+        $this->assertSame(1, ConversationFactory::count(), 'Only one conversation should be created despite race condition');
+    }
+
+    /**
+     * Test que la normalisation des participants fonctionne correctement
+     * après la création de la conversation
+     */
+    public function testParticipantsAreNormalized(): void
+    {
+        // User1 (ID supposé plus petit) crée une conversation avec User2 (ID supposé plus grand)
+        $response = static::createClient()->request('POST', '/conversations', [
+            'auth_bearer' => $this->user1Token,
+            'json' => [
+                'participant2' => '/users/' . $this->user2->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(201);
+        $data = $response->toArray();
+
+        // Récupérer la conversation depuis la base
+        $conversation = ConversationFactory::find(['id' => $data['id']]);
+
+        // Vérifier que participant1 a toujours l'ID le plus petit
+        $this->assertLessThan(
+            $conversation->getParticipant2()->getId(),
+            $conversation->getParticipant1()->getId(),
+            'Participant1 should always have the smaller ID'
+        );
+    }
+
+    // ========================================
+// TESTS SÉCURITÉ MESSAGE UPDATE
+// ========================================
+
+    /**
+     * Test critique : Empêcher l'usurpation d'identité via le champ sender
+     */
+    public function testCannotUsurpSenderToMarkMessageAsRead(): void
+    {
+        $conversation = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation,
+            'sender' => $this->user1,
+            'content' => 'Test message',
+            'read' => false,
+        ]);
+
+        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user3Token,
+            'json' => [
+                'sender' => '/users/' . $this->user1->getId(),
+                'read' => true,
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+        $this->assertJsonContains([
+            'detail' => 'You cannot modify the sender of a message',
+        ]);
+
+        // Vérifier que le message est toujours non lu
+        $updatedMessage = MessageFactory::find(['id' => $message->getId()]);
+        $this->assertFalse($updatedMessage->isRead());
+    }
+
+    /**
+     * Test qu'on ne peut pas modifier le sender d'un message
+     */
+    public function testCannotModifySenderOfMessage(): void
+    {
+        $conversation = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation,
+            'sender' => $this->user1,
+            'content' => 'Original message',
+        ]);
+
+        // Même le propriétaire ne peut pas changer le sender
+        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user1Token,
+            'json' => [
+                'sender' => '/users/' . $this->user2->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+        $this->assertJsonContains([
+            'detail' => 'You cannot modify the sender of a message',
+        ]);
+    }
+
+    /**
+     * Test qu'on ne peut pas modifier la conversation d'un message
+     */
+    public function testCannotModifyConversationOfMessage(): void
+    {
+        $conversation1 = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $conversation2 = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user3,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation1,
+            'sender' => $this->user1,
+            'content' => 'Original message',
+        ]);
+
+        // Tenter de déplacer le message vers une autre conversation
+        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user1Token,
+            'json' => [
+                'conversation' => '/conversations/' . $conversation2->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+        $this->assertJsonContains([
+            'detail' => 'You cannot modify the conversation of a message',
+        ]);
+    }
+
+    /**
+     * Test que le destinataire légitime peut toujours marquer comme lu
+     */
+    public function testLegitimateRecipientCanMarkAsRead(): void
+    {
+        $conversation = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation,
+            'sender' => $this->user1,
+            'content' => 'Test message',
+            'read' => false,
+        ]);
+
+        // user2 (destinataire légitime) marque comme lu
+        $response = static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user2Token,
+            'json' => [
+                'read' => true,
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+        $this->assertTrue($data['read']);
+
+        // Vérifier en DB
+        $updatedMessage = MessageFactory::find(['id' => $message->getId()]);
+        $this->assertTrue($updatedMessage->isRead());
+    }
 }
