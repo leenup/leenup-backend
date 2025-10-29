@@ -8,8 +8,10 @@ use ApiPlatform\Validator\Exception\ValidationException;
 use App\Entity\Conversation;
 use App\Entity\User;
 use App\Repository\ConversationRepository;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationList;
 
 /**
@@ -36,15 +38,13 @@ final class ConversationCreateProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
-        // Auto-set participant1 = currentUser
         $data->setParticipant1($currentUser);
 
         $participant2 = $data->getParticipant2();
 
-        // Validation 1 : On ne peut pas créer une conversation avec soi-même
         if ($participant2 === $currentUser) {
             $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+                new ConstraintViolation(
                     'You cannot create a conversation with yourself',
                     null,
                     [],
@@ -56,15 +56,16 @@ final class ConversationCreateProcessor implements ProcessorInterface
             throw new ValidationException($violations);
         }
 
-        // Validation 2 : Vérifier qu'il n'existe pas déjà une conversation entre ces 2 users
+        $data->normalizeParticipants();
+
         $existingConversation = $this->conversationRepository->findConversationBetweenUsers(
-            $currentUser,
-            $participant2
+            $data->getParticipant1(),
+            $data->getParticipant2()
         );
 
         if ($existingConversation) {
             $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+                new ConstraintViolation(
                     'A conversation already exists with this user',
                     null,
                     [],
@@ -76,8 +77,22 @@ final class ConversationCreateProcessor implements ProcessorInterface
             throw new ValidationException($violations);
         }
 
-        $this->entityManager->persist($data);
-        $this->entityManager->flush();
+        try {
+            $this->entityManager->persist($data);
+            $this->entityManager->flush();
+        } catch (UniqueConstraintViolationException $e) {
+            $violations = new ConstraintViolationList([
+                new ConstraintViolation(
+                    'A conversation already exists with this user',
+                    null,
+                    [],
+                    $data,
+                    'participant2',
+                    $participant2
+                )
+            ]);
+            throw new ValidationException($violations);
+        }
 
         return $data;
     }

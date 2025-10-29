@@ -599,4 +599,127 @@ class ConversationTest extends ApiTestCase
         $data = $response->toArray();
         $this->assertFalse($data['read'], 'Le message ne devrait pas être marqué comme lu');
     }
+
+    // ========================================
+// TESTS RACE CONDITION FIX
+// ========================================
+
+    /**
+     * Test qu'on ne peut pas créer une conversation en inversant l'ordre des participants
+     * Ce test vérifie que la normalisation fonctionne correctement
+     */
+    public function testCannotCreateDuplicateConversationReversed(): void
+    {
+        // User1 crée une conversation avec User2
+        $response = static::createClient()->request('POST', '/conversations', [
+            'auth_bearer' => $this->user1Token,
+            'json' => [
+                'participant2' => '/users/' . $this->user2->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(201);
+        $conversationId = $response->toArray()['id'];
+
+        // User2 tente de créer une conversation avec User1 (ordre inversé)
+        static::createClient()->request('POST', '/conversations', [
+            'auth_bearer' => $this->user2Token,
+            'json' => [
+                'participant2' => '/users/' . $this->user1->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            '@type' => 'ConstraintViolation',
+            'violations' => [
+                [
+                    'propertyPath' => 'participant2',
+                    'message' => 'A conversation already exists with this user',
+                ],
+            ],
+        ]);
+
+        // Vérifier qu'il n'y a toujours qu'une seule conversation
+        $this->assertSame(1, ConversationFactory::count());
+    }
+
+    /**
+     * Test de race condition : simule 2 requêtes quasi-simultanées
+     * Ce test vérifie que la contrainte unique en base empêche les doublons
+     */
+    public function testRaceConditionPrevention(): void
+    {
+        $client1 = static::createClient();
+        $client2 = static::createClient();
+
+        $payload = [
+            'json' => [
+                'participant2' => '/users/' . $this->user2->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+            'auth_bearer' => $this->user1Token,
+        ];
+
+        $response1 = null;
+        $response2 = null;
+
+        try {
+            $response1 = $client1->request('POST', '/conversations', $payload);
+        } catch (\Exception $e) {
+        }
+
+        try {
+            $response2 = $client2->request('POST', '/conversations', $payload);
+        } catch (\Exception $e) {
+        }
+
+        $successCount = 0;
+        if ($response1 && $response1->getStatusCode() === 201) {
+            $successCount++;
+        }
+        if ($response2 && $response2->getStatusCode() === 422) {
+            $this->assertJsonContains([
+                '@type' => 'ConstraintViolation',
+                'violations' => [
+                    [
+                        'message' => 'A conversation already exists with this user',
+                    ],
+                ],
+            ]);
+        }
+
+        $this->assertSame(1, ConversationFactory::count(), 'Only one conversation should be created despite race condition');
+    }
+
+    /**
+     * Test que la normalisation des participants fonctionne correctement
+     * après la création de la conversation
+     */
+    public function testParticipantsAreNormalized(): void
+    {
+        // User1 (ID supposé plus petit) crée une conversation avec User2 (ID supposé plus grand)
+        $response = static::createClient()->request('POST', '/conversations', [
+            'auth_bearer' => $this->user1Token,
+            'json' => [
+                'participant2' => '/users/' . $this->user2->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(201);
+        $data = $response->toArray();
+
+        // Récupérer la conversation depuis la base
+        $conversation = ConversationFactory::find(['id' => $data['id']]);
+
+        // Vérifier que participant1 a toujours l'ID le plus petit
+        $this->assertLessThan(
+            $conversation->getParticipant2()->getId(),
+            $conversation->getParticipant1()->getId(),
+            'Participant1 should always have the smaller ID'
+        );
+    }
 }

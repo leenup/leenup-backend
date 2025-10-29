@@ -17,20 +17,39 @@ class ConversationRepository extends ServiceEntityRepository
         parent::__construct($registry, Conversation::class);
     }
 
+    /**
+     * Trouve une conversation entre deux utilisateurs
+     * Fonctionne peu importe l'ordre des participants grâce à la normalisation
+     */
     public function findConversationBetweenUsers(User $user1, User $user2): ?Conversation
     {
+        // Normaliser l'ordre des IDs pour la recherche
+        $smallerId = min($user1->getId(), $user2->getId());
+        $biggerId = max($user1->getId(), $user2->getId());
+
         return $this->createQueryBuilder('c')
-            ->where('(c.participant1 = :user1 AND c.participant2 = :user2) OR (c.participant1 = :user2 AND c.participant2 = :user1)')
-            ->setParameter('user1', $user1)
-            ->setParameter('user2', $user2)
+            ->join('c.participant1', 'p1')
+            ->join('c.participant2', 'p2')
+            ->where('p1.id = :smallerId AND p2.id = :biggerId')
+            ->setParameter('smallerId', $smallerId)
+            ->setParameter('biggerId', $biggerId)
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
     }
 
+    /**
+     * Trouve toutes les conversations d'un utilisateur
+     * Optimisée avec eager loading pour éviter les N+1 queries
+     */
     public function findUserConversations(User $user): array
     {
         return $this->createQueryBuilder('c')
+            ->leftJoin('c.messages', 'm')
+            ->addSelect('m')
+            ->leftJoin('c.participant1', 'p1')
+            ->leftJoin('c.participant2', 'p2')
+            ->addSelect('p1', 'p2')
             ->where('c.participant1 = :user OR c.participant2 = :user')
             ->setParameter('user', $user)
             ->orderBy('c.lastMessageAt', 'DESC')

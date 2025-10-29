@@ -17,20 +17,28 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: ConversationRepository::class)]
 #[ORM\HasLifecycleCallbacks]
+#[ORM\UniqueConstraint(
+    name: 'unique_conversation_participants',
+    columns: ['participant1_id', 'participant2_id']
+)]
+#[ORM\Index(
+    name: 'idx_conversation_participants_reversed',
+    columns: ['participant2_id', 'participant1_id']
+)]
 #[ApiResource(
     operations: [
         new GetCollection(
-            security: "is_granted('ROLE_ADMIN')", // Admins only pour voir toutes les conversations
+            security: "is_granted('ROLE_ADMIN')",
         ),
         new Get(
-            security: "is_granted('CONVERSATION_VIEW', object)" // ← Utilise le Voter
+            security: "is_granted('CONVERSATION_VIEW', object)"
         ),
         new Post(
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
             processor: ConversationCreateProcessor::class,
         ),
         new Delete(
-            security: "is_granted('CONVERSATION_DELETE', object)" // ← Utilise le Voter
+            security: "is_granted('CONVERSATION_DELETE', object)"
         ),
     ],
     normalizationContext: ['groups' => ['conversation:read']],
@@ -79,10 +87,26 @@ class Conversation
         $this->messages = new ArrayCollection();
     }
 
+    /**
+     * Normalise l'ordre des participants pour garantir l'unicité
+     * Participant1 aura toujours l'ID le plus petit
+     */
+    public function normalizeParticipants(): void
+    {
+        if ($this->participant1 && $this->participant2) {
+            if ($this->participant1->getId() > $this->participant2->getId()) {
+                $temp = $this->participant1;
+                $this->participant1 = $this->participant2;
+                $this->participant2 = $temp;
+            }
+        }
+    }
+
     #[ORM\PrePersist]
     public function setCreatedAtValue(): void
     {
         $this->createdAt = new \DateTimeImmutable();
+        $this->normalizeParticipants();
     }
 
     public function getId(): ?int
