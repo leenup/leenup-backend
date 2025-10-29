@@ -274,20 +274,3 @@ dev: start ## Alias pour start (environnement de dev)
 
 full-reset: stop clean-docker build start db-reset db-test-reset fixtures-load ## Reset complet du projet
 	@echo "$(GREEN)🔄 Reset complet terminé !$(NC)"
-
-test-setup-paratest: db-test-reset ## Configure les BDD pour ParaTest (workers isolés)
-	@echo "$(YELLOW)🗄️  Configuration des BDD pour ParaTest...$(NC)"
-	@./setup-test-databases.sh 4
-	@echo "$(GREEN)✅ BDD workers créées$(NC)"
-
-test-paratest: test-setup-paratest ## Lance les tests avec ParaTest (4 workers, BDD isolées)
-	@echo "$(YELLOW)⚡ Tests ParaTest (4 workers avec BDD isolées)...$(NC)"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest --processes=4
-
-test-paratest-8: test-setup-paratest ## Lance les tests avec ParaTest (8 workers, BDD isolées)
-	@echo "$(YELLOW)⚡ Tests ParaTest (8 workers avec BDD isolées)...$(NC)"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest --processes=8
-
-test-paratest-coverage: test-setup-paratest ## Tests ParaTest avec couverture de code
-	@echo "$(YELLOW)⚡ Tests ParaTest avec couverture...$(NC)"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest --processes=4 --coverage-html public/coverage
