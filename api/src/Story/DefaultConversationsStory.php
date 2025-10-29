@@ -200,15 +200,119 @@ final class DefaultConversationsStory extends Story
 
         $conv2->setLastMessageAt(new \DateTimeImmutable('-1 day'));
 
-        // Quelques conversations aléatoires
-        ConversationFactory::createMany(5, function() {
-            return [
-                'participant1' => UserFactory::random(),
-                'participant2' => UserFactory::random(),
-            ];
-        });
+        // ========================================
+        // 🔧 CONVERSATIONS ALÉATOIRES (CORRIGÉES)
+        // ========================================
+        $this->createRandomConversations(5);
 
         echo "✅ " . ConversationFactory::count() . " conversations créées\n";
         echo "✅ " . MessageFactory::count() . " messages créés\n";
+    }
+
+    /**
+     * Crée des conversations aléatoires en évitant les doublons et l'auto-conversation
+     */
+    private function createRandomConversations(int $count): void
+    {
+        // Récupérer tous les utilisateurs existants
+        $allUsers = UserFactory::all();
+
+        if (count($allUsers) < 2) {
+            echo "⚠️  Pas assez d'utilisateurs pour créer des conversations aléatoires\n";
+            return;
+        }
+
+        // Récupérer les paires déjà existantes pour éviter les doublons
+        $existingPairs = [];
+        $existingConversations = ConversationFactory::all();
+
+        foreach ($existingConversations as $conv) {
+            $id1 = $conv->getParticipant1()->getId();
+            $id2 = $conv->getParticipant2()->getId();
+
+            // Normaliser la paire (toujours le plus petit ID en premier)
+            $minId = min($id1, $id2);
+            $maxId = max($id1, $id2);
+            $existingPairs[] = "{$minId}-{$maxId}";
+        }
+
+        $created = 0;
+        $attempts = 0;
+        $maxAttempts = $count * 10; // Éviter une boucle infinie
+
+        while ($created < $count && $attempts < $maxAttempts) {
+            $attempts++;
+
+            // Sélectionner 2 utilisateurs aléatoires
+            $user1 = $allUsers[array_rand($allUsers)];
+            $user2 = $allUsers[array_rand($allUsers)];
+
+            // Vérifier qu'ils sont différents
+            if ($user1->getId() === $user2->getId()) {
+                continue;
+            }
+
+            // Normaliser la paire
+            $id1 = $user1->getId();
+            $id2 = $user2->getId();
+            $minId = min($id1, $id2);
+            $maxId = max($id1, $id2);
+            $pairKey = "{$minId}-{$maxId}";
+
+            // Vérifier si cette paire existe déjà
+            if (in_array($pairKey, $existingPairs)) {
+                continue;
+            }
+
+            // Déterminer participant1 et participant2 (ID le plus petit en premier)
+            $participant1 = $id1 === $minId ? $user1 : $user2;
+            $participant2 = $id1 === $maxId ? $user1 : $user2;
+
+            // Créer la conversation
+            $conversation = ConversationFactory::createOne([
+                'participant1' => $participant1,
+                'participant2' => $participant2,
+                'session' => null,
+            ]);
+
+            // Créer 1-3 messages aléatoires
+            $messageCount = rand(1, 3);
+            for ($i = 0; $i < $messageCount; $i++) {
+                $sender = $i % 2 === 0 ? $participant1 : $participant2;
+
+                MessageFactory::createOne([
+                    'conversation' => $conversation,
+                    'sender' => $sender,
+                    'content' => $this->getRandomMessageContent(),
+                    'read' => rand(0, 1) === 1,
+                ]);
+            }
+
+            // Marquer cette paire comme créée
+            $existingPairs[] = $pairKey;
+            $created++;
+        }
+
+        if ($created < $count) {
+            echo "⚠️  Seulement {$created}/{$count} conversations aléatoires créées (pas assez d'utilisateurs uniques)\n";
+        }
+    }
+
+    private function getRandomMessageContent(): string
+    {
+        $messages = [
+            "Bonjour ! Comment allez-vous ?",
+            "Je suis disponible pour une session la semaine prochaine.",
+            "Merci pour votre aide, c'était très utile !",
+            "Pouvez-vous me donner plus de détails ?",
+            "Parfait, je vous recontacte bientôt.",
+            "Avez-vous des disponibilités cette semaine ?",
+            "Super, merci pour votre réponse rapide !",
+            "Je confirme notre rendez-vous.",
+            "Désolé, je dois reporter notre session.",
+            "C'était un plaisir d'échanger avec vous !",
+        ];
+
+        return $messages[array_rand($messages)];
     }
 }

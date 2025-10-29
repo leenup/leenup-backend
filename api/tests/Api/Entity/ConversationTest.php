@@ -722,4 +722,146 @@ class ConversationTest extends ApiTestCase
             'Participant1 should always have the smaller ID'
         );
     }
+
+    // ========================================
+// TESTS SÉCURITÉ MESSAGE UPDATE
+// ========================================
+
+    /**
+     * Test critique : Empêcher l'usurpation d'identité via le champ sender
+     */
+    public function testCannotUsurpSenderToMarkMessageAsRead(): void
+    {
+        $conversation = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation,
+            'sender' => $this->user1,
+            'content' => 'Test message',
+            'read' => false,
+        ]);
+
+        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user3Token,
+            'json' => [
+                'sender' => '/users/' . $this->user1->getId(),
+                'read' => true,
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+        $this->assertJsonContains([
+            'detail' => 'You cannot modify the sender of a message',
+        ]);
+
+        // Vérifier que le message est toujours non lu
+        $updatedMessage = MessageFactory::find(['id' => $message->getId()]);
+        $this->assertFalse($updatedMessage->isRead());
+    }
+
+    /**
+     * Test qu'on ne peut pas modifier le sender d'un message
+     */
+    public function testCannotModifySenderOfMessage(): void
+    {
+        $conversation = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation,
+            'sender' => $this->user1,
+            'content' => 'Original message',
+        ]);
+
+        // Même le propriétaire ne peut pas changer le sender
+        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user1Token,
+            'json' => [
+                'sender' => '/users/' . $this->user2->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+        $this->assertJsonContains([
+            'detail' => 'You cannot modify the sender of a message',
+        ]);
+    }
+
+    /**
+     * Test qu'on ne peut pas modifier la conversation d'un message
+     */
+    public function testCannotModifyConversationOfMessage(): void
+    {
+        $conversation1 = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $conversation2 = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user3,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation1,
+            'sender' => $this->user1,
+            'content' => 'Original message',
+        ]);
+
+        // Tenter de déplacer le message vers une autre conversation
+        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user1Token,
+            'json' => [
+                'conversation' => '/conversations/' . $conversation2->getId(),
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(403);
+        $this->assertJsonContains([
+            'detail' => 'You cannot modify the conversation of a message',
+        ]);
+    }
+
+    /**
+     * Test que le destinataire légitime peut toujours marquer comme lu
+     */
+    public function testLegitimateRecipientCanMarkAsRead(): void
+    {
+        $conversation = ConversationFactory::createOne([
+            'participant1' => $this->user1,
+            'participant2' => $this->user2,
+        ]);
+
+        $message = MessageFactory::createOne([
+            'conversation' => $conversation,
+            'sender' => $this->user1,
+            'content' => 'Test message',
+            'read' => false,
+        ]);
+
+        // user2 (destinataire légitime) marque comme lu
+        $response = static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
+            'auth_bearer' => $this->user2Token,
+            'json' => [
+                'read' => true,
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $data = $response->toArray();
+        $this->assertTrue($data['read']);
+
+        // Vérifier en DB
+        $updatedMessage = MessageFactory::find(['id' => $message->getId()]);
+        $this->assertTrue($updatedMessage->isRead());
+    }
 }
