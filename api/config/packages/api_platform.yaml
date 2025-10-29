@@ -1,6 +1,6 @@
 api_platform:
-    title: LeenUp API
-    description: 'LeenUp API documentation'
+    title: Leenup API
+    description: 'Leenup API documentation'
     swagger:
         api_keys:
             JWT:
@@ -12,6 +12,7 @@ api_platform:
         include_type: true
     # Good defaults for REST APIs
     defaults:
+        skip_null_values: false
         stateless: true
         cache_headers:
             vary: ['Content-Type', 'Authorization', 'Origin']
