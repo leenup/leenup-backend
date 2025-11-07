@@ -249,7 +249,7 @@ clean-docker: ## Nettoie les ressources Docker inutiles
 clean-all: clean clean-docker ## Nettoyage complet
 
 ## —— 🚀 Installation complète ——————————————————————————————————————
-install: build start db-create migration-migrate db-test-reset ## Installation complète du projet
+install: build start composer-install db-create migration-migrate db-test-reset ## Installation complète du projet
 	@echo "$(GREEN)✅ Installation terminée !$(NC)"
 	@echo "$(YELLOW)🌐 Accédez à votre API: https://localhost/docs/$(NC)"
 
