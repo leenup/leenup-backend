@@ -12,15 +12,12 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
 /**
  * EventListener pour appliquer le rate limiting sur les endpoints critiques
  */
-#[AsEventListener(event: KernelEvents::REQUEST, priority: 10)]
 class RateLimitListener
 {
     public function __construct(
         private RateLimiterFactory $authLimiter,
         private RateLimiterFactory $registerLimiter,
-        private RateLimiterFactory $refreshTokenLimiter,
-        #[Autowire('%kernel.environment%')]
-        private string $environment,
+        private RateLimiterFactory $refreshTokenLimiter
     ) {
     }
 
