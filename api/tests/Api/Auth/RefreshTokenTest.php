@@ -4,20 +4,46 @@ namespace App\Tests\Api\Auth;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Factory\UserFactory;
+use Symfony\Contracts\HttpClient\ResponseInterface;
 use Zenstruck\Foundry\Test\Factories;
 
 class RefreshTokenTest extends ApiTestCase
 {
     use Factories;
 
-    public function testLoginReturnsRefreshToken(): void
+    private function extractRefreshTokenFromResponse(ResponseInterface $response): ?string
+    {
+        $headers = $response->getHeaders(false);
+
+        if (!isset($headers['set-cookie'])) {
+            return null;
+        }
+
+        foreach ($headers['set-cookie'] as $cookieLine) {
+            if (!str_contains($cookieLine, 'refresh_token=')) {
+                continue;
+            }
+
+            // Exemple : "refresh_token=XXXX; Expires=...; Path=/; HttpOnly; ..."
+            $parts = explode(';', $cookieLine);
+            $first = $parts[0] ?? '';
+            if (str_starts_with($first, 'refresh_token=')) {
+                return substr($first, \strlen('refresh_token='));
+            }
+        }
+
+        return null;
+    }
+
+    public function testLoginReturnsRefreshTokenCookie(): void
     {
         UserFactory::createOne([
             'email' => 'test@example.com',
             'plainPassword' => 'password',
         ]);
 
-        $response = static::createClient()->request('POST', '/auth', [
+        $client = static::createClient();
+        $response = $client->request('POST', '/auth', [
             'json' => [
                 'email' => 'test@example.com',
                 'password' => 'password',
@@ -28,13 +54,18 @@ class RefreshTokenTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $data = $response->toArray();
 
-        // Vérifie que la réponse contient token ET refresh_token
+        // Le body contient toujours le JWT
         $this->assertArrayHasKey('token', $data);
-        $this->assertArrayHasKey('refresh_token', $data);
         $this->assertIsString($data['token']);
-        $this->assertIsString($data['refresh_token']);
         $this->assertNotEmpty($data['token']);
-        $this->assertNotEmpty($data['refresh_token']);
+
+        // Le refresh_token ne doit plus être dans le body
+        $this->assertArrayNotHasKey('refresh_token', $data);
+
+        // Mais il doit être présent dans un cookie HttpOnly
+        $refreshToken = $this->extractRefreshTokenFromResponse($response);
+        $this->assertNotNull($refreshToken);
+        $this->assertNotEmpty($refreshToken);
     }
 
     public function testRefreshToken(): void
@@ -44,8 +75,10 @@ class RefreshTokenTest extends ApiTestCase
             'plainPassword' => 'password',
         ]);
 
-        // 1. Se connecter pour obtenir les tokens
-        $loginResponse = static::createClient()->request('POST', '/auth', [
+        $client = static::createClient();
+
+        // 1. Login
+        $loginResponse = $client->request('POST', '/auth', [
             'json' => [
                 'email' => 'test@example.com',
                 'password' => 'password',
@@ -53,65 +86,65 @@ class RefreshTokenTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
-        $loginData = $loginResponse->toArray();
-        $refreshToken = $loginData['refresh_token'];
+        $this->assertResponseIsSuccessful();
+        $oldRefreshToken = $this->extractRefreshTokenFromResponse($loginResponse);
+        $this->assertNotNull($oldRefreshToken);
 
-        // 2. Utiliser le refresh token pour obtenir de nouveaux tokens
-        $refreshResponse = static::createClient()->request('POST', '/api/token/refresh', [
-            'json' => [
-                'refresh_token' => $refreshToken,
-            ],
+        // 2. Refresh SANS body -> le cookie est utilisé automatiquement
+        $refreshResponse = $client->request('POST', '/api/token/refresh', [
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
         $this->assertResponseIsSuccessful();
         $refreshData = $refreshResponse->toArray();
 
-        // Vérifie que la réponse contient les nouveaux tokens
+        // Le body contient le nouveau JWT
         $this->assertArrayHasKey('token', $refreshData);
-        $this->assertArrayHasKey('refresh_token', $refreshData);
-
-        // Le refresh_token doit être différent (rotation activée avec single_use: true)
-        $this->assertNotEquals($refreshToken, $refreshData['refresh_token']);
-
-        // Le JWT peut être identique si généré dans la même seconde (normal)
-        // On vérifie juste qu'il est présent et valide
         $this->assertNotEmpty($refreshData['token']);
+
+        // Nouveau refresh token dans le cookie (rotation)
+        $newRefreshToken = $this->extractRefreshTokenFromResponse($refreshResponse);
+        $this->assertNotNull($newRefreshToken);
+        $this->assertNotEquals($oldRefreshToken, $newRefreshToken);
     }
 
-    public function testRefreshTokenWithInvalidToken(): void
+    public function testRefreshTokenWithInvalidTokenCookie(): void
     {
-        static::createClient()->request('POST', '/api/token/refresh', [
-            'json' => [
-                'refresh_token' => 'invalid_token_12345',
+        $client = static::createClient();
+
+        // On envoie un cookie refresh_token invalide à la main
+        $client->request('POST', '/api/token/refresh', [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Cookie' => 'refresh_token=invalid_token_12345',
             ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(401);
+    }
+
+    public function testRefreshTokenWithoutCookie(): void
+    {
+        $client = static::createClient();
+
+        // Aucun cookie -> pas de refresh possible
+        $client->request('POST', '/api/token/refresh', [
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
         $this->assertResponseStatusCodeSame(401);
     }
 
-    public function testRefreshTokenWithoutToken(): void
+    public function testRefreshTokenBodyIsIgnoredWithoutCookie(): void
     {
-        static::createClient()->request('POST', '/api/token/refresh', [
-            'json' => [],
+        $client = static::createClient();
+
+        // On envoie un body mais pas de cookie -> doit échouer aussi
+        $client->request('POST', '/api/token/refresh', [
+            'json' => ['refresh_token' => 'some_value'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
-        // Le bundle renvoie 401 (Unauthorized) au lieu de 400 (Bad Request)
-        $this->assertResponseStatusCodeSame(401);
-    }
-
-    public function testRefreshTokenWithMissingParameter(): void
-    {
-        static::createClient()->request('POST', '/api/token/refresh', [
-            'json' => [
-                'wrong_parameter' => 'some_value',
-            ],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-
-        // Le bundle renvoie 401 (Unauthorized) au lieu de 400 (Bad Request)
         $this->assertResponseStatusCodeSame(401);
     }
 
@@ -122,22 +155,24 @@ class RefreshTokenTest extends ApiTestCase
             'plainPassword' => 'password',
         ]);
 
-        // 1. Se connecter
-        $loginResponse = static::createClient()->request('POST', '/auth', [
+        $client = static::createClient();
+
+        // 1. Login
+        $loginResponse = $client->request('POST', '/auth', [
             'json' => ['email' => 'test@example.com', 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
-        $refreshToken = $loginResponse->toArray()['refresh_token'];
+        $this->assertResponseIsSuccessful();
 
-        // 2. Obtenir un nouveau token via refresh
-        $refreshResponse = static::createClient()->request('POST', '/api/token/refresh', [
-            'json' => ['refresh_token' => $refreshToken],
+        // 2. Refresh -> nouveau JWT
+        $refreshResponse = $client->request('POST', '/api/token/refresh', [
             'headers' => ['Content-Type' => 'application/json'],
         ]);
+        $this->assertResponseIsSuccessful();
         $newToken = $refreshResponse->toArray()['token'];
 
         // 3. Utiliser le nouveau token sur une route protégée
-        static::createClient()->request('GET', '/me', [
+        $client->request('GET', '/me', [
             'auth_bearer' => $newToken,
         ]);
 
@@ -152,62 +187,69 @@ class RefreshTokenTest extends ApiTestCase
             'plainPassword' => 'password',
         ]);
 
-        // 1. Se connecter
-        $loginResponse = static::createClient()->request('POST', '/auth', [
+        $client = static::createClient();
+
+        // 1. Login
+        $loginResponse = $client->request('POST', '/auth', [
             'json' => ['email' => 'test@example.com', 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
+        $this->assertResponseIsSuccessful();
         $loginData = $loginResponse->toArray();
         $oldToken = $loginData['token'];
-        $refreshToken = $loginData['refresh_token'];
 
-        // 2. Refresh pour obtenir un nouveau token
-        static::createClient()->request('POST', '/api/token/refresh', [
-            'json' => ['refresh_token' => $refreshToken],
+        // 2. Refresh (nouveau refresh token + nouveau access token)
+        $client->request('POST', '/api/token/refresh', [
             'headers' => ['Content-Type' => 'application/json'],
         ]);
+        $this->assertResponseIsSuccessful();
 
-        // 3. L'ancien JWT doit toujours fonctionner (pas expiré)
-        static::createClient()->request('GET', '/me', [
+        // 3. L'ancien JWT (encore valide niveau TTL) doit toujours fonctionner
+        $client->request('GET', '/me', [
             'auth_bearer' => $oldToken,
         ]);
 
         $this->assertResponseIsSuccessful();
     }
 
-    public function testRefreshTokenCanBeUsedMultipleTimes(): void
+    public function testRefreshTokenCanBeUsedMultipleTimesWithRotation(): void
     {
         UserFactory::createOne([
             'email' => 'test@example.com',
             'plainPassword' => 'password',
         ]);
 
-        // 1. Se connecter
-        $loginResponse = static::createClient()->request('POST', '/auth', [
+        $client = static::createClient();
+
+        // 1. Login -> premier refresh_token en cookie
+        $loginResponse = $client->request('POST', '/auth', [
             'json' => ['email' => 'test@example.com', 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
-        $refreshToken = $loginResponse->toArray()['refresh_token'];
+        $this->assertResponseIsSuccessful();
+        $refreshToken1 = $this->extractRefreshTokenFromResponse($loginResponse);
+        $this->assertNotNull($refreshToken1);
 
         // 2. Premier refresh
-        $refresh1 = static::createClient()->request('POST', '/api/token/refresh', [
-            'json' => ['refresh_token' => $refreshToken],
+        $refreshResponse1 = $client->request('POST', '/api/token/refresh', [
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         $this->assertResponseIsSuccessful();
-        $refreshToken2 = $refresh1->toArray()['refresh_token'];
+        $refreshToken2 = $this->extractRefreshTokenFromResponse($refreshResponse1);
+        $this->assertNotNull($refreshToken2);
 
-        // 3. Deuxième refresh avec le nouveau refresh_token
-        $refresh2 = static::createClient()->request('POST', '/api/token/refresh', [
-            'json' => ['refresh_token' => $refreshToken2],
+        // 3. Deuxième refresh (doit utiliser le 2e cookie, pas le 1er)
+        $refreshResponse2 = $client->request('POST', '/api/token/refresh', [
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         $this->assertResponseIsSuccessful();
+        $refreshToken3 = $this->extractRefreshTokenFromResponse($refreshResponse2);
+        $this->assertNotNull($refreshToken3);
 
-        // 4. Vérifier que les tokens changent à chaque fois
-        $this->assertNotEquals($refreshToken, $refreshToken2);
-        $this->assertNotEquals($refreshToken2, $refresh2->toArray()['refresh_token']);
+        // 4. Vérifie que les refresh tokens changent à chaque fois (rotation single_use)
+        $this->assertNotEquals($refreshToken1, $refreshToken2);
+        $this->assertNotEquals($refreshToken2, $refreshToken3);
     }
 
     public function testDifferentUsersHaveDifferentRefreshTokens(): void
@@ -215,17 +257,25 @@ class RefreshTokenTest extends ApiTestCase
         UserFactory::createOne(['email' => 'user1@example.com', 'plainPassword' => 'password']);
         UserFactory::createOne(['email' => 'user2@example.com', 'plainPassword' => 'password']);
 
-        // User 1 login
-        $response1 = static::createClient()->request('POST', '/auth', [
+        // Client 1 : user1
+        $client1 = static::createClient();
+        $response1 = $client1->request('POST', '/auth', [
             'json' => ['email' => 'user1@example.com', 'password' => 'password'],
+            'headers' => ['Content-Type' => 'application/json'],
         ]);
-        $refreshToken1 = $response1->toArray()['refresh_token'];
+        $this->assertResponseIsSuccessful();
+        $refreshToken1 = $this->extractRefreshTokenFromResponse($response1);
+        $this->assertNotNull($refreshToken1);
 
-        // User 2 login
-        $response2 = static::createClient()->request('POST', '/auth', [
+        // Client 2 : user2
+        $client2 = static::createClient();
+        $response2 = $client2->request('POST', '/auth', [
             'json' => ['email' => 'user2@example.com', 'password' => 'password'],
+            'headers' => ['Content-Type' => 'application/json'],
         ]);
-        $refreshToken2 = $response2->toArray()['refresh_token'];
+        $this->assertResponseIsSuccessful();
+        $refreshToken2 = $this->extractRefreshTokenFromResponse($response2);
+        $this->assertNotNull($refreshToken2);
 
         // Les refresh tokens doivent être différents
         $this->assertNotEquals($refreshToken1, $refreshToken2);
