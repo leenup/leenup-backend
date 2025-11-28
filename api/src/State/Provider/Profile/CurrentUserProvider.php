@@ -9,8 +9,6 @@ use App\Entity\User;
 use Symfony\Bundle\SecurityBundle\Security;
 
 /**
- * Provider pour récupérer l'utilisateur actuellement connecté
- *
  * @implements ProviderInterface<CurrentUser>
  */
 final class CurrentUserProvider implements ProviderInterface
@@ -28,7 +26,6 @@ final class CurrentUserProvider implements ProviderInterface
             return null;
         }
 
-        // Mapper User entity vers CurrentUser DTO
         $currentUser = new CurrentUser();
         $currentUser->id = $user->getId();
         $currentUser->email = $user->getEmail();
@@ -40,6 +37,11 @@ final class CurrentUserProvider implements ProviderInterface
         $currentUser->location = $user->getLocation();
         $currentUser->timezone = $user->getTimezone();
         $currentUser->locale = $user->getLocale();
+        $currentUser->birthdate = $user->getBirthdate();
+        $currentUser->languages = $user->getLanguages();
+        $currentUser->exchangeFormat = $user->getExchangeFormat();
+        $currentUser->learningStyles = $user->getLearningStyles();
+        $currentUser->isMentor = $user->isMentor();
         $currentUser->lastLoginAt = $user->getLastLoginAt();
         $currentUser->createdAt = $user->getCreatedAt();
         $currentUser->updatedAt = $user->getUpdatedAt();
