@@ -95,8 +95,19 @@ class MessageNotificationTest extends ApiTestCase
         $notificationsAfter = NotificationFactory::count(['user' => $this->user2]);
         $this->assertEquals($notificationsBefore + 1, $notificationsAfter);
 
-        // Récupérer la notification créée
-        $notification = NotificationFactory::findBy(['user' => $this->user2], ['createdAt' => 'DESC'])[0];
+        // ⚠️ On récupère spécifiquement une notif de type NEW_MESSAGE
+        $notifications = NotificationFactory::findBy(
+            [
+                'user' => $this->user2,
+                'type' => Notification::TYPE_NEW_MESSAGE,
+            ],
+            ['createdAt' => 'DESC']
+        );
+
+        $this->assertNotEmpty($notifications, 'Aucune notification de type new_message trouvée pour user2.');
+
+        /** @var Notification $notification */
+        $notification = $notifications[0];
 
         // Vérifier le contenu de la notification
         $this->assertEquals(Notification::TYPE_NEW_MESSAGE, $notification->getType());
