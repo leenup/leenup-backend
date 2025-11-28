@@ -97,13 +97,10 @@ class CurrentUserTest extends ApiTestCase
         $this->assertArrayHasKey('createdAt', $data);
         $this->assertArrayHasKey('userSkills', $data);
         $this->assertCount(2, $data['userSkills']);
-
-        // nouveaux champs présents
         $this->assertArrayHasKey('birthdate', $data);
         $this->assertArrayHasKey('languages', $data);
         $this->assertArrayHasKey('exchangeFormat', $data);
         $this->assertArrayHasKey('learningStyles', $data);
-        $this->assertArrayHasKey('isMentor', $data);
     }
 
     public function testGetCurrentUserProfileIncludesUserSkills(): void
@@ -227,14 +224,10 @@ class CurrentUserTest extends ApiTestCase
         $this->assertArrayHasKey('lastName', $data);
         $this->assertArrayHasKey('createdAt', $data);
         $this->assertArrayHasKey('userSkills', $data);
-
-        // nouveaux champs
         $this->assertArrayHasKey('birthdate', $data);
         $this->assertArrayHasKey('languages', $data);
         $this->assertArrayHasKey('exchangeFormat', $data);
         $this->assertArrayHasKey('learningStyles', $data);
-        $this->assertArrayHasKey('isMentor', $data);
-
         $this->assertIsInt($data['id']);
         $this->assertIsString($data['email']);
         $this->assertIsArray($data['roles']);
@@ -442,13 +435,12 @@ class CurrentUserTest extends ApiTestCase
         $this->assertEquals(['concrete_examples', 'structured'], $data['learningStyles']);
     }
 
-    public function testUpdateCurrentUserExchangeFormatAndIsMentor(): void
+    public function testUpdateCurrentUserExchangeFormat(): void
     {
         static::createClient()->request('PATCH', '/me', [
             'auth_bearer' => $this->userToken,
             'json' => [
                 'exchangeFormat' => 'chat',
-                'isMentor' => false,
             ],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -461,7 +453,6 @@ class CurrentUserTest extends ApiTestCase
         $data = $response->toArray();
 
         $this->assertEquals('chat', $data['exchangeFormat']);
-        $this->assertFalse($data['isMentor']);
     }
 
     public function testUpdateCurrentUserWithoutAuthentication(): void

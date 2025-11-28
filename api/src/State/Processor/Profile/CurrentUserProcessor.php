@@ -138,12 +138,6 @@ final class CurrentUserProcessor implements ProcessorInterface
             $hasChanges = true;
         }
 
-        // isMentor
-        if ($data->isMentor !== null && $data->isMentor !== $user->getIsMentor()) {
-            $user->setIsMentor($data->isMentor);
-            $hasChanges = true;
-        }
-
         if ($hasChanges) {
             $violations = $this->validator->validate($user);
             if (count($violations) > 0) {
@@ -169,7 +163,6 @@ final class CurrentUserProcessor implements ProcessorInterface
         $data->languages = $user->getLanguages();
         $data->exchangeFormat = $user->getExchangeFormat();
         $data->learningStyles = $user->getLearningStyles();
-        $data->isMentor = $user->getIsMentor();
         $data->lastLoginAt = $user->getLastLoginAt();
         $data->createdAt = $user->getCreatedAt();
         $data->updatedAt = $user->getUpdatedAt();
