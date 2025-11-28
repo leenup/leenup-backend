@@ -33,7 +33,6 @@ class Notification
 {
     // Types de notifications
     public const TYPE_NEW_MESSAGE = 'new_message';
-
     public const TYPE_SESSION_REQUESTED = 'session_requested';
     public const TYPE_SESSION_CONFIRMED = 'session_confirmed';
     public const TYPE_SESSION_CANCELLED = 'session_cancelled';
