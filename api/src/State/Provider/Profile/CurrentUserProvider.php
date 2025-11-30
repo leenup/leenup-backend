@@ -41,6 +41,7 @@ final class CurrentUserProvider implements ProviderInterface
         $currentUser->languages = $user->getLanguages();
         $currentUser->exchangeFormat = $user->getExchangeFormat();
         $currentUser->learningStyles = $user->getLearningStyles();
+        $currentUser->isMentor = $user->getIsMentor();
         $currentUser->lastLoginAt = $user->getLastLoginAt();
         $currentUser->createdAt = $user->getCreatedAt();
         $currentUser->updatedAt = $user->getUpdatedAt();

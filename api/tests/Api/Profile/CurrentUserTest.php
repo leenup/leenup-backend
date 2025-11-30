@@ -228,6 +228,7 @@ class CurrentUserTest extends ApiTestCase
         $this->assertArrayHasKey('languages', $data);
         $this->assertArrayHasKey('exchangeFormat', $data);
         $this->assertArrayHasKey('learningStyles', $data);
+        $this->assertArrayHasKey('isMentor', $data);
         $this->assertIsInt($data['id']);
         $this->assertIsString($data['email']);
         $this->assertIsArray($data['roles']);
@@ -435,12 +436,13 @@ class CurrentUserTest extends ApiTestCase
         $this->assertEquals(['concrete_examples', 'structured'], $data['learningStyles']);
     }
 
-    public function testUpdateCurrentUserExchangeFormat(): void
+    public function testUpdateCurrentUserExchangeFormatAndIsMentor(): void
     {
         static::createClient()->request('PATCH', '/me', [
             'auth_bearer' => $this->userToken,
             'json' => [
                 'exchangeFormat' => 'chat',
+                'isMentor' => false,
             ],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -453,6 +455,7 @@ class CurrentUserTest extends ApiTestCase
         $data = $response->toArray();
 
         $this->assertEquals('chat', $data['exchangeFormat']);
+        $this->assertTrue($data['isMentor']);
     }
 
     public function testUpdateCurrentUserWithoutAuthentication(): void

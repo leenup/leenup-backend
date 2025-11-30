@@ -95,6 +95,9 @@ class CurrentUser
     #[Groups(['user:read', 'user:update'])]
     public ?array $learningStyles = null;
 
+    #[Groups(['user:read', 'user:update'])]
+    public ?bool $isMentor = null;
+
     #[Groups(['my_skill:read'])]
     public array $userSkills = [];
 

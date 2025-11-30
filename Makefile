@@ -30,6 +30,7 @@ start: ## Démarre les conteneurs
 	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
 	@echo "  • API Documentation: https://localhost/docs/"
 	@echo "  • Admin Interface:   https://localhost/admin/"
+	@echo "  . Github Repo:       https://github.com/leenup/leenup-backend/tree/develop"
 
 stop: ## Arrête les conteneurs
 	@echo "$(YELLOW)🛑 Arrêt des conteneurs...$(NC)"
@@ -156,7 +157,7 @@ else
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
 endif
 
-test-parallel: db-test-reset ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
+test-parallel: db-test-reset cache-clear ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
 	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
 ifdef FILE
 ifdef PROCESSES
