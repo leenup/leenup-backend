@@ -3,72 +3,76 @@
 namespace App\Tests\Api\Entity;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
+use App\Entity\User;
 use App\Factory\ConversationFactory;
 use App\Factory\MessageFactory;
-use App\Factory\UserFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Zenstruck\Foundry\Test\Factories;
 
 class ConversationTest extends ApiTestCase
 {
     use Factories;
+    use AuthenticatedApiTestTrait;
 
-    private string $adminToken;
-    private string $user1Token;
-    private string $user2Token;
-    private string $user3Token;
-    private $admin;
-    private $user1;
-    private $user2;
-    private $user3;
+    private HttpClientInterface $adminClient;
+    private HttpClientInterface $user1Client;
+    private HttpClientInterface $user2Client;
+    private HttpClientInterface $user3Client;
+
+    private string $adminCsrfToken;
+    private string $user1CsrfToken;
+    private string $user2CsrfToken;
+    private string $user3CsrfToken;
+
+    private User $admin;
+    private User $user1;
+    private User $user2;
+    private User $user3;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->admin = UserFactory::createOne([
-            'email' => 'admin@test.com',
-            'plainPassword' => 'password',
-            'roles' => ['ROLE_ADMIN'],
-        ]);
+        // Admin
+        [
+            $this->adminClient,
+            $this->adminCsrfToken,
+            $this->admin
+        ] = $this->createAuthenticatedAdmin(
+            email: 'admin@test.com',
+            password: 'password',
+        );
 
-        $this->user1 = UserFactory::createOne([
-            'email' => 'user1@test.com',
-            'plainPassword' => 'password',
-        ]);
+        // User 1
+        [
+            $this->user1Client,
+            $this->user1CsrfToken,
+            $this->user1
+        ] = $this->createAuthenticatedUser(
+            email: 'user1@test.com',
+            password: 'password',
+        );
 
-        $this->user2 = UserFactory::createOne([
-            'email' => 'user2@test.com',
-            'plainPassword' => 'password',
-        ]);
+        // User 2
+        [
+            $this->user2Client,
+            $this->user2CsrfToken,
+            $this->user2
+        ] = $this->createAuthenticatedUser(
+            email: 'user2@test.com',
+            password: 'password',
+        );
 
-        $this->user3 = UserFactory::createOne([
-            'email' => 'user3@test.com',
-            'plainPassword' => 'password',
-        ]);
-
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'admin@test.com', 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $this->adminToken = $response->toArray()['token'];
-
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'user1@test.com', 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $this->user1Token = $response->toArray()['token'];
-
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'user2@test.com', 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $this->user2Token = $response->toArray()['token'];
-
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'user3@test.com', 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $this->user3Token = $response->toArray()['token'];
+        // User 3
+        [
+            $this->user3Client,
+            $this->user3CsrfToken,
+            $this->user3
+        ] = $this->createAuthenticatedUser(
+            email: 'user3@test.com',
+            password: 'password',
+        );
     }
 
     // ========================================
@@ -82,70 +86,82 @@ class ConversationTest extends ApiTestCase
             'participant2' => $this->user2,
         ]);
 
-        $response = static::createClient()->request('GET', '/conversations', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/conversations');
 
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
-            '@context' => '/contexts/Conversation',
-            '@type' => 'Collection',
-        ]);
+        self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray();
-        $this->assertGreaterThanOrEqual(1, $data['totalItems']);
+        self::assertSame('/contexts/Conversation', $data['@context'] ?? null);
+        self::assertSame('Collection', $data['@type'] ?? null);
+        self::assertArrayHasKey('totalItems', $data);
+        self::assertGreaterThanOrEqual(1, $data['totalItems']);
     }
 
     public function testUserCannotGetAllConversations(): void
     {
-        static::createClient()->request('GET', '/conversations', [
-            'auth_bearer' => $this->user1Token,
-        ]);
+        $response = $this->user1Client->request('GET', '/conversations');
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
     }
 
     public function testUserCanCreateConversation(): void
     {
-        $response = static::createClient()->request('POST', '/conversations', [
-            'auth_bearer' => $this->user1Token,
-            'json' => [
-                'participant2' => '/users/' . $this->user2->getId(),
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user1Client,
+            'POST',
+            '/conversations',
+            $this->user1CsrfToken,
+            [
+                'json' => [
+                    'participant2' => '/users/'.$this->user2->getId(),
+                ],
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(201);
+        self::assertSame(201, $response->getStatusCode());
+
         $data = $response->toArray();
-
-        $this->assertArrayHasKey('@id', $data);
-        $this->assertArrayHasKey('@type', $data);
-        $this->assertEquals('Conversation', $data['@type']);
-        $this->assertEquals('/users/' . $this->user1->getId(), $data['participant1']);
-        $this->assertEquals('/users/' . $this->user2->getId(), $data['participant2']);
-        // lastMessageAt peut être null ou absent, on ne teste pas
+        self::assertArrayHasKey('@id', $data);
+        self::assertArrayHasKey('@type', $data);
+        self::assertSame('Conversation', $data['@type']);
+        self::assertSame('/users/'.$this->user1->getId(), $data['participant1']);
+        self::assertSame('/users/'.$this->user2->getId(), $data['participant2']);
     }
 
     public function testCannotCreateConversationWithSelf(): void
     {
-        static::createClient()->request('POST', '/conversations', [
-            'auth_bearer' => $this->user1Token,
-            'json' => [
-                'participant2' => '/users/' . $this->user1->getId(),
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
-
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [
-                [
-                    'propertyPath' => 'participant2',
-                    'message' => 'You cannot create a conversation with yourself',
+        $response = $this->requestUnsafe(
+            $this->user1Client,
+            'POST',
+            '/conversations',
+            $this->user1CsrfToken,
+            [
+                'json' => [
+                    'participant2' => '/users/'.$this->user1->getId(),
                 ],
-            ],
-        ]);
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
+            ]
+        );
+
+        self::assertSame(422, $response->getStatusCode());
+
+        // Important: ne pas lever d'exception sur 422
+        $data = $response->toArray(false);
+
+        self::assertSame('ConstraintViolation', $data['@type'] ?? null);
+
+        $violations = $data['violations'] ?? [];
+        self::assertNotEmpty($violations);
+        self::assertSame('participant2', $violations[0]['propertyPath'] ?? null);
+        self::assertSame(
+            'You cannot create a conversation with yourself',
+            $violations[0]['message'] ?? null
+        );
     }
 
     public function testCannotCreateDuplicateConversation(): void
@@ -155,24 +171,34 @@ class ConversationTest extends ApiTestCase
             'participant2' => $this->user2,
         ]);
 
-        static::createClient()->request('POST', '/conversations', [
-            'auth_bearer' => $this->user1Token,
-            'json' => [
-                'participant2' => '/users/' . $this->user2->getId(),
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
-
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [
-                [
-                    'propertyPath' => 'participant2',
-                    'message' => 'A conversation already exists with this user',
+        $response = $this->requestUnsafe(
+            $this->user1Client,
+            'POST',
+            '/conversations',
+            $this->user1CsrfToken,
+            [
+                'json' => [
+                    'participant2' => '/users/'.$this->user2->getId(),
                 ],
-            ],
-        ]);
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
+            ]
+        );
+
+        self::assertSame(422, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        self::assertSame('ConstraintViolation', $data['@type'] ?? null);
+
+        $violations = $data['violations'] ?? [];
+        self::assertNotEmpty($violations);
+        self::assertSame('participant2', $violations[0]['propertyPath'] ?? null);
+        self::assertSame(
+            'A conversation already exists with this user',
+            $violations[0]['message'] ?? null
+        );
     }
 
     public function testParticipantCanViewConversation(): void
@@ -182,16 +208,14 @@ class ConversationTest extends ApiTestCase
             'participant2' => $this->user2,
         ]);
 
-        $response = static::createClient()->request('GET', '/conversations/' . $conversation->getId(), [
-            'auth_bearer' => $this->user1Token,
-        ]);
+        $response = $this->user1Client->request('GET', '/conversations/'.$conversation->getId());
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
+
         $data = $response->toArray();
-
-        $this->assertEquals($conversation->getId(), $data['id']);
-        $this->assertEquals('/users/' . $this->user1->getId(), $data['participant1']);
-        $this->assertEquals('/users/' . $this->user2->getId(), $data['participant2']);
+        self::assertSame($conversation->getId(), $data['id'] ?? null);
+        self::assertSame('/users/'.$this->user1->getId(), $data['participant1'] ?? null);
+        self::assertSame('/users/'.$this->user2->getId(), $data['participant2'] ?? null);
     }
 
     public function testNonParticipantCannotViewConversation(): void
@@ -201,41 +225,39 @@ class ConversationTest extends ApiTestCase
             'participant2' => $this->user2,
         ]);
 
-        static::createClient()->request('GET', '/conversations/' . $conversation->getId(), [
-            'auth_bearer' => $this->user3Token,
-        ]);
+        $response = $this->user3Client->request('GET', '/conversations/'.$conversation->getId());
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
     }
 
     public function testGetMyConversations(): void
     {
-        ConversationFactory::createOne([
+        $conversation = ConversationFactory::createOne([
             'participant1' => $this->user1,
             'participant2' => $this->user2,
         ]);
 
         MessageFactory::createOne([
-            'conversation' => ConversationFactory::first(),
+            'conversation' => $conversation,
             'sender' => $this->user1,
             'content' => 'Hello!',
             'read' => false,
         ]);
 
-        $response = static::createClient()->request('GET', '/me/conversations', [
-            'auth_bearer' => $this->user1Token,
-        ]);
+        $response = $this->user1Client->request('GET', '/me/conversations');
 
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
-            '@context' => '/contexts/MyConversation',
-            '@type' => 'Collection',
-        ]);
+        self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray();
-        $this->assertGreaterThanOrEqual(1, $data['totalItems']);
-        $this->assertEquals('Hello!', $data['member'][0]['lastMessage']);
-        $this->assertEquals('/users/' . $this->user2->getId(), $data['member'][0]['otherParticipant']);
+        self::assertSame('/contexts/MyConversation', $data['@context'] ?? null);
+        self::assertSame('Collection', $data['@type'] ?? null);
+        self::assertArrayHasKey('totalItems', $data);
+        self::assertGreaterThanOrEqual(1, $data['totalItems']);
+
+        $first = $data['member'][0] ?? null;
+        self::assertNotNull($first);
+        self::assertSame('Hello!', $first['lastMessage'] ?? null);
+        self::assertSame('/users/'.$this->user2->getId(), $first['otherParticipant'] ?? null);
     }
 
     // ========================================
@@ -249,24 +271,27 @@ class ConversationTest extends ApiTestCase
             'participant2' => $this->user2,
         ]);
 
-        $response = static::createClient()->request('POST', '/messages', [
-            'auth_bearer' => $this->user1Token,
-            'json' => [
-                'conversation' => '/conversations/' . $conversation->getId(),
-                'content' => 'Hello from user1!',
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user1Client,
+            'POST',
+            '/messages',
+            $this->user1CsrfToken,
+            [
+                'json' => [
+                    'conversation' => '/conversations/'.$conversation->getId(),
+                    'content' => 'Hello from user1!',
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(201);
+        self::assertSame(201, $response->getStatusCode());
+
         $data = $response->toArray();
-
-        $this->assertArrayHasKey('@id', $data);
-        $this->assertArrayHasKey('@type', $data);
-        $this->assertEquals('Message', $data['@type']);
-        $this->assertEquals('Hello from user1!', $data['content']);
-        $this->assertEquals('/users/' . $this->user1->getId(), $data['sender']);
-        $this->assertFalse($data['read']);
+        self::assertSame('Message', $data['@type'] ?? null);
+        self::assertSame('Hello from user1!', $data['content'] ?? null);
+        self::assertSame('/users/'.$this->user1->getId(), $data['sender'] ?? null);
+        self::assertFalse($data['read'] ?? true);
     }
 
     public function testNonParticipantCannotSendMessage(): void
@@ -276,16 +301,21 @@ class ConversationTest extends ApiTestCase
             'participant2' => $this->user2,
         ]);
 
-        static::createClient()->request('POST', '/messages', [
-            'auth_bearer' => $this->user3Token,
-            'json' => [
-                'conversation' => '/conversations/' . $conversation->getId(),
-                'content' => 'I should not be able to send this!',
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user3Client,
+            'POST',
+            '/messages',
+            $this->user3CsrfToken,
+            [
+                'json' => [
+                    'conversation' => '/conversations/'.$conversation->getId(),
+                    'content' => 'I should not be able to send this!',
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
     }
 
     public function testMessageContentCannotBeEmpty(): void
@@ -295,19 +325,29 @@ class ConversationTest extends ApiTestCase
             'participant2' => $this->user2,
         ]);
 
-        static::createClient()->request('POST', '/messages', [
-            'auth_bearer' => $this->user1Token,
-            'json' => [
-                'conversation' => '/conversations/' . $conversation->getId(),
-                'content' => '',
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user1Client,
+            'POST',
+            '/messages',
+            $this->user1CsrfToken,
+            [
+                'json' => [
+                    'conversation' => '/conversations/'.$conversation->getId(),
+                    'content' => '',
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-        ]);
+        self::assertSame(422, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+        self::assertSame('ConstraintViolation', $data['@type'] ?? null);
+
+        // Optionnel : vérifier le détail
+        // $violations = $data['violations'] ?? [];
+        // self::assertNotEmpty($violations);
+        // self::assertSame('content', $violations[0]['propertyPath'] ?? null);
     }
 
     public function testMessageUpdatesLastMessageAt(): void
@@ -318,20 +358,27 @@ class ConversationTest extends ApiTestCase
             'lastMessageAt' => null,
         ]);
 
-        $this->assertNull($conversation->getLastMessageAt());
+        self::assertNull($conversation->getLastMessageAt());
 
-        static::createClient()->request('POST', '/messages', [
-            'auth_bearer' => $this->user1Token,
-            'json' => [
-                'conversation' => '/conversations/' . $conversation->getId(),
-                'content' => 'This should update lastMessageAt',
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user1Client,
+            'POST',
+            '/messages',
+            $this->user1CsrfToken,
+            [
+                'json' => [
+                    'conversation' => '/conversations/'.$conversation->getId(),
+                    'content' => 'This should update lastMessageAt',
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
+
+        self::assertSame(201, $response->getStatusCode());
 
         // Récupérer la conversation depuis la BDD pour avoir la valeur à jour
         $updatedConversation = ConversationFactory::find(['id' => $conversation->getId()]);
-        $this->assertNotNull($updatedConversation->getLastMessageAt());
+        self::assertNotNull($updatedConversation->getLastMessageAt());
     }
 
     public function testParticipantCanViewMessages(): void
@@ -353,15 +400,16 @@ class ConversationTest extends ApiTestCase
             'content' => 'Message 2',
         ]);
 
-        $response = static::createClient()->request('GET', '/conversations/' . $conversation->getId() . '/messages', [
-            'auth_bearer' => $this->user1Token,
-        ]);
+        $response = $this->user1Client->request(
+            'GET',
+            '/conversations/'.$conversation->getId().'/messages'
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
+
         $data = $response->toArray();
-
-        $this->assertEquals(2, $data['totalItems']);
-        $this->assertCount(2, $data['member']);
+        self::assertEquals(2, $data['totalItems'] ?? null);
+        self::assertCount(2, $data['member'] ?? []);
     }
 
     public function testNonParticipantCannotViewMessages(): void
@@ -371,11 +419,12 @@ class ConversationTest extends ApiTestCase
             'participant2' => $this->user2,
         ]);
 
-        static::createClient()->request('GET', '/conversations/' . $conversation->getId() . '/messages', [
-            'auth_bearer' => $this->user3Token,
-        ]);
+        $response = $this->user3Client->request(
+            'GET',
+            '/conversations/'.$conversation->getId().'/messages'
+        );
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
     }
 
     public function testParticipantCanMarkMessageAsRead(): void
@@ -392,17 +441,23 @@ class ConversationTest extends ApiTestCase
             'read' => false,
         ]);
 
-        $response = static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
-            'auth_bearer' => $this->user2Token,
-            'json' => [
-                'read' => true,
-            ],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user2Client,
+            'PATCH',
+            '/messages/'.$message->getId(),
+            $this->user2CsrfToken,
+            [
+                'json' => [
+                    'read' => true,
+                ],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
+
         $data = $response->toArray();
-        $this->assertTrue($data['read']);
+        self::assertTrue($data['read'] ?? false);
     }
 
     public function testNonParticipantCannotMarkMessageAsRead(): void
@@ -419,15 +474,20 @@ class ConversationTest extends ApiTestCase
             'read' => false,
         ]);
 
-        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
-            'auth_bearer' => $this->user3Token,
-            'json' => [
-                'read' => true,
-            ],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user3Client,
+            'PATCH',
+            '/messages/'.$message->getId(),
+            $this->user3CsrfToken,
+            [
+                'json' => [
+                    'read' => true,
+                ],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
     }
 
     public function testParticipantCanViewSingleMessage(): void
@@ -443,15 +503,13 @@ class ConversationTest extends ApiTestCase
             'content' => 'Single message test',
         ]);
 
-        $response = static::createClient()->request('GET', '/messages/' . $message->getId(), [
-            'auth_bearer' => $this->user1Token,
-        ]);
+        $response = $this->user1Client->request('GET', '/messages/'.$message->getId());
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
+
         $data = $response->toArray();
-
-        $this->assertEquals($message->getId(), $data['id']);
-        $this->assertEquals('Single message test', $data['content']);
+        self::assertSame($message->getId(), $data['id'] ?? null);
+        self::assertSame('Single message test', $data['content'] ?? null);
     }
 
     public function testNonParticipantCannotViewSingleMessage(): void
@@ -467,15 +525,13 @@ class ConversationTest extends ApiTestCase
             'content' => 'Secret message',
         ]);
 
-        static::createClient()->request('GET', '/messages/' . $message->getId(), [
-            'auth_bearer' => $this->user3Token,
-        ]);
+        $response = $this->user3Client->request('GET', '/messages/'.$message->getId());
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
     }
 
     // ========================================
-    // TESTS MESSAGE VOTER - PERMISSIONS MANQUANTES
+    // TESTS MESSAGE VOTER - PERMISSIONS
     // ========================================
 
     /**
@@ -496,16 +552,20 @@ class ConversationTest extends ApiTestCase
             'read' => false,
         ]);
 
-        // Même l'expéditeur ne peut pas modifier le contenu
-        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
-            'auth_bearer' => $this->user1Token,
-            'json' => [
-                'content' => 'Modified message',
-            ],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user1Client,
+            'PATCH',
+            '/messages/'.$message->getId(),
+            $this->user1CsrfToken,
+            [
+                'json' => [
+                    'content' => 'Modified message',
+                ],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
     }
 
     /**
@@ -524,18 +584,18 @@ class ConversationTest extends ApiTestCase
             'content' => 'Message to delete',
         ]);
 
-        $response = static::createClient()->request('DELETE', '/messages/' . $message->getId(), [
-            'auth_bearer' => $this->user1Token,
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user1Client,
+            'DELETE',
+            '/messages/'.$message->getId(),
+            $this->user1CsrfToken
+        );
 
-        $this->assertResponseStatusCodeSame(204);
+        self::assertSame(204, $response->getStatusCode());
 
         // Vérifier que le message a bien été supprimé
-        static::createClient()->request('GET', '/messages/' . $message->getId(), [
-            'auth_bearer' => $this->user1Token,
-        ]);
-
-        $this->assertResponseStatusCodeSame(404);
+        $response = $this->user1Client->request('GET', '/messages/'.$message->getId());
+        self::assertSame(404, $response->getStatusCode());
     }
 
     /**
@@ -555,11 +615,14 @@ class ConversationTest extends ApiTestCase
         ]);
 
         // user2 (destinataire) essaie de supprimer
-        static::createClient()->request('DELETE', '/messages/' . $message->getId(), [
-            'auth_bearer' => $this->user2Token,
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user2Client,
+            'DELETE',
+            '/messages/'.$message->getId(),
+            $this->user2CsrfToken
+        );
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
     }
 
     /**
@@ -581,22 +644,25 @@ class ConversationTest extends ApiTestCase
         ]);
 
         // user1 (expéditeur) essaie de marquer son propre message comme lu
-        static::createClient()->request('PATCH', '/messages/' . $message->getId(), [
-            'auth_bearer' => $this->user1Token, // L'expéditeur lui-même
-            'json' => [
-                'read' => true,
-            ],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->user1Client,
+            'PATCH',
+            '/messages/'.$message->getId(),
+            $this->user1CsrfToken,
+            [
+                'json' => [
+                    'read' => true,
+                ],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
 
         // Vérifier que le message est toujours non lu
-        $response = static::createClient()->request('GET', '/messages/' . $message->getId(), [
-            'auth_bearer' => $this->user1Token,
-        ]);
-
+        $response = $this->user1Client->request('GET', '/messages/'.$message->getId());
         $data = $response->toArray();
-        $this->assertFalse($data['read'], 'Le message ne devrait pas être marqué comme lu');
+
+        self::assertFalse($data['read'] ?? true, 'Le message ne devrait pas être marqué comme lu');
     }
 }
