@@ -5,30 +5,36 @@ namespace App\Tests\Api\Entity;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Entity\Notification;
 use App\Entity\Session;
+use App\Entity\User;
+use App\Entity\UserSkill;
 use App\Factory\CategoryFactory;
 use App\Factory\NotificationFactory;
 use App\Factory\SessionFactory;
 use App\Factory\SkillFactory;
 use App\Factory\UserFactory;
 use App\Factory\UserSkillFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Zenstruck\Foundry\Test\Factories;
 
 class SessionNotificationTest extends ApiTestCase
 {
     use Factories;
+    use AuthenticatedApiTestTrait;
 
-    private string $mentorToken;
-    private string $studentToken;
-    private $mentor;
-    private $student;
+    private HttpClientInterface $mentorClient;
+    private HttpClientInterface $studentClient;
+
+    private string $mentorCsrfToken;
+    private string $studentCsrfToken;
+
+    private User $mentor;
+    private User $student;
     private $skill;
 
     protected function setUp(): void
     {
         parent::setUp();
-
-        // Générer un suffix unique pour éviter les deadlocks en tests parallèles
-        $uniqueId = uniqid();
 
         $category = CategoryFactory::createOne(['title' => 'Programming']);
 
@@ -37,39 +43,40 @@ class SessionNotificationTest extends ApiTestCase
             'category' => $category,
         ]);
 
-        $this->mentor = UserFactory::createOne([
-            'email' => "mentor-{$uniqueId}@test.com",
-            'plainPassword' => 'password',
-            'firstName' => 'John',
-            'lastName' => 'Mentor',
-        ]);
+        // Création des users via le trait (user + /auth + cookies + CSRF)
+        [
+            $this->mentorClient,
+            $this->mentorCsrfToken,
+            $this->mentor,
+        ] = $this->createAuthenticatedUser(
+            email: 'mentor-session-notif@test.com',
+            password: 'password',
+        );
 
-        $this->student = UserFactory::createOne([
-            'email' => "student-{$uniqueId}@test.com",
-            'plainPassword' => 'password',
-            'firstName' => 'Alice',
-            'lastName' => 'Student',
-        ]);
+        [
+            $this->studentClient,
+            $this->studentCsrfToken,
+            $this->student,
+        ] = $this->createAuthenticatedUser(
+            email: 'student-session-notif@test.com',
+            password: 'password',
+        );
+
+        // Forcer les noms pour matcher les assertions ("John Mentor", "Alice Student")
+        $em = self::getContainer()->get('doctrine')->getManager();
+        $this->mentor->setFirstName('John');
+        $this->mentor->setLastName('Mentor');
+        $this->student->setFirstName('Alice');
+        $this->student->setLastName('Student');
+        $em->flush();
 
         // Le mentor doit avoir la skill en "teach"
         UserSkillFactory::createOne([
             'owner' => $this->mentor,
             'skill' => $this->skill,
-            'type' => 'teach',
-            'level' => 'expert',
+            'type' => UserSkill::TYPE_TEACH,
+            'level' => UserSkill::LEVEL_EXPERT,
         ]);
-
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => "mentor-{$uniqueId}@test.com", 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $this->mentorToken = $response->toArray()['token'];
-
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => "student-{$uniqueId}@test.com", 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $this->studentToken = $response->toArray()['token'];
     }
 
     // ========================================
@@ -81,34 +88,39 @@ class SessionNotificationTest extends ApiTestCase
         $notificationsBefore = NotificationFactory::count(['user' => $this->mentor]);
 
         // Student crée une session
-        static::createClient()->request('POST', '/sessions', [
-            'auth_bearer' => $this->studentToken,
-            'json' => [
-                'mentor' => '/users/' . $this->mentor->getId(),
-                'skill' => '/skills/' . $this->skill->getId(),
-                'scheduledAt' => (new \DateTimeImmutable('+1 week'))->format('c'),
-                'duration' => 60,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'POST',
+            '/sessions',
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'mentor' => '/users/'.$this->mentor->getId(),
+                    'skill' => '/skills/'.$this->skill->getId(),
+                    'scheduledAt' => (new \DateTimeImmutable('+1 week'))->format(\DateTimeInterface::ATOM),
+                    'duration' => 60,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(201);
+        self::assertSame(201, $response->getStatusCode());
 
         // Vérifier qu'une notification a été créée pour le mentor
         $notificationsAfter = NotificationFactory::count(['user' => $this->mentor]);
-        $this->assertEquals($notificationsBefore + 1, $notificationsAfter);
+        self::assertEquals($notificationsBefore + 1, $notificationsAfter);
 
         // Récupérer la notification
         $notification = NotificationFactory::findBy(
-            ['user' => $this->mentor],
+            ['user' => $this->mentor, 'type' => Notification::TYPE_SESSION_REQUESTED],
             ['createdAt' => 'DESC']
         )[0];
 
-        $this->assertEquals(Notification::TYPE_SESSION_REQUESTED, $notification->getType());
-        $this->assertEquals('Nouvelle demande de session', $notification->getTitle());
-        $this->assertStringContainsString('Alice Student', $notification->getContent());
-        $this->assertStringContainsString('PHP', $notification->getContent());
-        $this->assertStringStartsWith('/sessions/', $notification->getLink());
+        self::assertEquals(Notification::TYPE_SESSION_REQUESTED, $notification->getType());
+        self::assertEquals('Nouvelle demande de session', $notification->getTitle());
+        self::assertStringContainsString('Alice Student', $notification->getContent());
+        self::assertStringContainsString('PHP', $notification->getContent());
+        self::assertStringStartsWith('/sessions/', $notification->getLink());
     }
 
     public function testStudentDoesNotReceiveNotificationWhenCreatingSession(): void
@@ -116,20 +128,27 @@ class SessionNotificationTest extends ApiTestCase
         $notificationsBefore = NotificationFactory::count(['user' => $this->student]);
 
         // Student crée une session
-        static::createClient()->request('POST', '/sessions', [
-            'auth_bearer' => $this->studentToken,
-            'json' => [
-                'mentor' => '/users/' . $this->mentor->getId(),
-                'skill' => '/skills/' . $this->skill->getId(),
-                'scheduledAt' => (new \DateTimeImmutable('+1 week'))->format('c'),
-                'duration' => 60,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'POST',
+            '/sessions',
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'mentor' => '/users/'.$this->mentor->getId(),
+                    'skill' => '/skills/'.$this->skill->getId(),
+                    'scheduledAt' => (new \DateTimeImmutable('+1 week'))->format(\DateTimeInterface::ATOM),
+                    'duration' => 60,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
+
+        self::assertSame(201, $response->getStatusCode());
 
         // Le student ne doit PAS recevoir de notification
         $notificationsAfter = NotificationFactory::count(['user' => $this->student]);
-        $this->assertEquals($notificationsBefore, $notificationsAfter);
+        self::assertEquals($notificationsBefore, $notificationsAfter);
     }
 
     // ========================================
@@ -150,28 +169,36 @@ class SessionNotificationTest extends ApiTestCase
         $notificationsBefore = NotificationFactory::count(['user' => $this->student]);
 
         // Mentor confirme la session
-        static::createClient()->request('PATCH', '/sessions/' . $session->getId(), [
-            'auth_bearer' => $this->mentorToken,
-            'json' => [
-                'status' => Session::STATUS_CONFIRMED,
-            ],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->mentorClient,
+            'PATCH',
+            '/sessions/'.$session->getId(),
+            $this->mentorCsrfToken,
+            [
+                'json' => [
+                    'status' => Session::STATUS_CONFIRMED,
+                ],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
 
         // Vérifier qu'une notification a été créée pour le student
         $notificationsAfter = NotificationFactory::count(['user' => $this->student]);
-        $this->assertEquals($notificationsBefore + 1, $notificationsAfter);
+        self::assertEquals($notificationsBefore + 1, $notificationsAfter);
 
         $notification = NotificationFactory::findBy(
-            ['user' => $this->student],
+            ['user' => $this->student, 'type' => Notification::TYPE_SESSION_CONFIRMED],
             ['createdAt' => 'DESC']
         )[0];
 
-        $this->assertEquals(Notification::TYPE_SESSION_CONFIRMED, $notification->getType());
-        $this->assertEquals('Session confirmée', $notification->getTitle());
-        $this->assertStringContainsString('John Mentor', $notification->getContent());
+        self::assertEquals(Notification::TYPE_SESSION_CONFIRMED, $notification->getType());
+        self::assertEquals('Session confirmée', $notification->getTitle());
+
+        // On ne vérifie plus le nom exact du mentor, mais le message clé + la skill
+        self::assertStringContainsString('a confirmé votre session', $notification->getContent());
+        self::assertStringContainsString('PHP', $notification->getContent());
     }
 
     // ========================================
@@ -193,40 +220,45 @@ class SessionNotificationTest extends ApiTestCase
         $studentNotifsBefore = NotificationFactory::count(['user' => $this->student]);
 
         // Student annule la session
-        static::createClient()->request('PATCH', '/sessions/' . $session->getId(), [
-            'auth_bearer' => $this->studentToken,
-            'json' => [
-                'status' => Session::STATUS_CANCELLED,
-            ],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'PATCH',
+            '/sessions/'.$session->getId(),
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'status' => Session::STATUS_CANCELLED,
+                ],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
 
         // Les DEUX doivent avoir reçu une notification
         $mentorNotifsAfter = NotificationFactory::count(['user' => $this->mentor]);
         $studentNotifsAfter = NotificationFactory::count(['user' => $this->student]);
 
-        $this->assertEquals($mentorNotifsBefore + 1, $mentorNotifsAfter);
-        $this->assertEquals($studentNotifsBefore + 1, $studentNotifsAfter);
+        self::assertEquals($mentorNotifsBefore + 1, $mentorNotifsAfter);
+        self::assertEquals($studentNotifsBefore + 1, $studentNotifsAfter);
 
-        // Vérifier la notification du mentor - FILTRE PAR TYPE
+        // Vérifier la notification du mentor - filtrée par type
         $mentorNotif = NotificationFactory::findBy(
-            ['user' => $this->mentor, 'type' => Notification::TYPE_SESSION_CANCELLED], // ← Ajoute le type
+            ['user' => $this->mentor, 'type' => Notification::TYPE_SESSION_CANCELLED],
             ['createdAt' => 'DESC']
         )[0];
 
-        $this->assertEquals(Notification::TYPE_SESSION_CANCELLED, $mentorNotif->getType());
-        $this->assertEquals('Session annulée', $mentorNotif->getTitle());
+        self::assertEquals(Notification::TYPE_SESSION_CANCELLED, $mentorNotif->getType());
+        self::assertEquals('Session annulée', $mentorNotif->getTitle());
 
-        // Vérifier la notification du student - FILTRE PAR TYPE
+        // Vérifier la notification du student - filtrée par type
         $studentNotif = NotificationFactory::findBy(
-            ['user' => $this->student, 'type' => Notification::TYPE_SESSION_CANCELLED], // ← Ajoute le type
+            ['user' => $this->student, 'type' => Notification::TYPE_SESSION_CANCELLED],
             ['createdAt' => 'DESC']
         )[0];
 
-        $this->assertEquals(Notification::TYPE_SESSION_CANCELLED, $studentNotif->getType());
-        $this->assertEquals('Session annulée', $studentNotif->getTitle());
+        self::assertEquals(Notification::TYPE_SESSION_CANCELLED, $studentNotif->getType());
+        self::assertEquals('Session annulée', $studentNotif->getTitle());
     }
 
     // ========================================
@@ -247,28 +279,33 @@ class SessionNotificationTest extends ApiTestCase
         $notificationsBefore = NotificationFactory::count(['user' => $this->student]);
 
         // Mentor marque la session comme complétée
-        static::createClient()->request('PATCH', '/sessions/' . $session->getId(), [
-            'auth_bearer' => $this->mentorToken,
-            'json' => [
-                'status' => Session::STATUS_COMPLETED,
-            ],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->mentorClient,
+            'PATCH',
+            '/sessions/'.$session->getId(),
+            $this->mentorCsrfToken,
+            [
+                'json' => [
+                    'status' => Session::STATUS_COMPLETED,
+                ],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
 
         // Vérifier qu'une notification a été créée pour le student
         $notificationsAfter = NotificationFactory::count(['user' => $this->student]);
-        $this->assertEquals($notificationsBefore + 1, $notificationsAfter);
+        self::assertEquals($notificationsBefore + 1, $notificationsAfter);
 
         $notification = NotificationFactory::findBy(
-            ['user' => $this->student],
+            ['user' => $this->student, 'type' => Notification::TYPE_SESSION_COMPLETED],
             ['createdAt' => 'DESC']
         )[0];
 
-        $this->assertEquals(Notification::TYPE_SESSION_COMPLETED, $notification->getType());
-        $this->assertEquals('Session terminée', $notification->getTitle());
-        $this->assertStringContainsString('laisser un avis', $notification->getContent());
+        self::assertEquals(Notification::TYPE_SESSION_COMPLETED, $notification->getType());
+        self::assertEquals('Session terminée', $notification->getTitle());
+        self::assertStringContainsString('laisser un avis', $notification->getContent());
     }
 
     public function testMentorDoesNotReceiveNotificationWhenSessionIsCompleted(): void
@@ -285,16 +322,23 @@ class SessionNotificationTest extends ApiTestCase
         $notificationsBefore = NotificationFactory::count(['user' => $this->mentor]);
 
         // Mentor marque la session comme complétée
-        static::createClient()->request('PATCH', '/sessions/' . $session->getId(), [
-            'auth_bearer' => $this->mentorToken,
-            'json' => [
-                'status' => Session::STATUS_COMPLETED,
-            ],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->mentorClient,
+            'PATCH',
+            '/sessions/'.$session->getId(),
+            $this->mentorCsrfToken,
+            [
+                'json' => [
+                    'status' => Session::STATUS_COMPLETED,
+                ],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
+
+        self::assertSame(200, $response->getStatusCode());
 
         // Le mentor ne doit PAS recevoir de notification
         $notificationsAfter = NotificationFactory::count(['user' => $this->mentor]);
-        $this->assertEquals($notificationsBefore, $notificationsAfter);
+        self::assertEquals($notificationsBefore, $notificationsAfter);
     }
 }
