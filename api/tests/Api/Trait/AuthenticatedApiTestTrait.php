@@ -57,6 +57,21 @@ trait AuthenticatedApiTestTrait
         $user = new User();
         $user->setEmail($email);
         $user->setRoles($roles);
+
+        // ✅ Champs obligatoires du domaine utilisateur
+        $user->setFirstName('Test');
+        $user->setLastName('User');
+        // Si ces méthodes existent dans ton User (ce qui semble être le cas) :
+        if (method_exists($user, 'setTimezone')) {
+            $user->setTimezone('Europe/Paris');
+        }
+        if (method_exists($user, 'setLocale')) {
+            $user->setLocale('fr');
+        }
+        if (method_exists($user, 'setIsActive')) {
+            $user->setIsActive(true);
+        }
+
         $user->setPassword($passwordHasher->hashPassword($user, $password));
 
         $em->persist($user);
