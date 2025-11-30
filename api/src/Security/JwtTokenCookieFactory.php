@@ -11,13 +11,15 @@ class JwtTokenCookieFactory
     public const ACCESS_TOKEN_COOKIE = 'access_token';
     public const CSRF_COOKIE = 'XSRF-TOKEN';
 
-    public function __construct(private readonly int $jwtTtl)
-    {
+    public function __construct(
+        private readonly int $jwtTtl,
+        private readonly bool $cookieSecure, // 👈 ajouté
+    ) {
     }
 
     public function createAccessTokenCookie(string $jwt): Cookie
     {
-        $expiration = (new DateTimeImmutable())->add(new DateInterval('PT' . $this->jwtTtl . 'S'));
+        $expiration = (new DateTimeImmutable())->add(new DateInterval('PT'.$this->jwtTtl.'S'));
 
         return Cookie::create(
             name: self::ACCESS_TOKEN_COOKIE,
@@ -25,7 +27,7 @@ class JwtTokenCookieFactory
             expire: $expiration,
             path: '/',
             domain: null,
-            secure: true,
+            secure: $this->cookieSecure, // 👈 ici
             httpOnly: true,
             raw: false,
             sameSite: Cookie::SAMESITE_LAX,
@@ -35,7 +37,7 @@ class JwtTokenCookieFactory
 
     public function createCsrfCookie(string $csrfToken): Cookie
     {
-        $expiration = (new DateTimeImmutable())->add(new DateInterval('PT' . $this->jwtTtl . 'S'));
+        $expiration = (new DateTimeImmutable())->add(new DateInterval('PT'.$this->jwtTtl.'S'));
 
         return Cookie::create(
             name: self::CSRF_COOKIE,
@@ -43,7 +45,7 @@ class JwtTokenCookieFactory
             expire: $expiration,
             path: '/',
             domain: null,
-            secure: true,
+            secure: $this->cookieSecure, // 👈 idem
             httpOnly: false,
             raw: false,
             sameSite: Cookie::SAMESITE_LAX,

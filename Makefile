@@ -136,7 +136,7 @@ else
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
 endif
 
-test-parallel: db-test-reset ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
+test-parallel: db-test-reset cache-clear ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
 	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
 ifdef FILE
 ifdef PROCESSES

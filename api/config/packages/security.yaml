@@ -1,39 +1,44 @@
-security: # https://symfony.com/doc/current/security.html#c-hashing-passwords
+security:
     password_hashers:
         App\Entity\User: 'auto'
-    
-    # https://symfony.com/doc/current/security.html#where-do-users-come-from-user-providers
+
     providers:
-        # used to reload user from session & other features (e.g. switch_user)
         users:
             entity:
                 class: App\Entity\User
                 property: email
-    
+
     firewalls:
         dev:
             pattern: ^/_(profiler|wdt)
             security: false
-        main:
+
+        # 🔐 Firewall dédié à l'authentification (/auth)
+        login:
+            pattern: ^/auth
             stateless: true
             provider: users
-            entry_point: jwt
             json_login:
-                check_path: /auth # The name in routes.yaml is enough for mapping
+                check_path: /auth
                 username_path: email
                 password_path: password
                 success_handler: lexik_jwt_authentication.handler.authentication_success
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
+
+        # 🔐 Firewall principal qui protège toute l'API avec JWT (cookie access_token)
+        main:
+            pattern: ^/
+            stateless: true
+            provider: users
+            entry_point: jwt
             jwt: ~
-            
-            # Configuration du refresh token
             refresh_jwt:
                 check_path: /api/token/refresh
-    
+
     access_control:
-        - { path: ^/$, roles: PUBLIC_ACCESS } # Allows accessing the Swagger UI
-        - { path: ^/docs, roles: PUBLIC_ACCESS } # Allows accessing the Swagger UI docs
-        - { path: ^/contexts, roles: PUBLIC_ACCESS } # Allows accessing the Swagger UI contexts
+        - { path: ^/$, roles: PUBLIC_ACCESS }        # Swagger UI racine
+        - { path: ^/docs, roles: PUBLIC_ACCESS }     # Swagger docs
+        - { path: ^/contexts, roles: PUBLIC_ACCESS } # Hydra / JSON-LD contexts
         - { path: ^/auth, roles: PUBLIC_ACCESS }
         - { path: ^/register, roles: PUBLIC_ACCESS }
         - { path: ^/, roles: IS_AUTHENTICATED_FULLY }
