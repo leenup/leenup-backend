@@ -11,6 +11,8 @@ class JwtAccessTokenCookieListener implements EventSubscriberInterface
 {
     private const TOKEN_KEY = 'token';
     private const TARGET_PATHS = ['/auth', '/api/token/refresh'];
+    private const CSRF_COOKIE = JwtTokenCookieFactory::CSRF_COOKIE;
+    private const CSRF_HEADER = 'X-CSRF-TOKEN';
 
     public function __construct(private readonly JwtTokenCookieFactory $cookieFactory)
     {
@@ -59,5 +61,9 @@ class JwtAccessTokenCookieListener implements EventSubscriberInterface
         }
 
         $response->headers->setCookie($this->cookieFactory->createAccessTokenCookie($token));
+
+        $csrfToken = bin2hex(random_bytes(32));
+        $response->headers->setCookie($this->cookieFactory->createCsrfCookie($csrfToken));
+        $response->headers->set(self::CSRF_HEADER, $csrfToken);
     }
 }
