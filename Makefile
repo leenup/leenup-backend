@@ -30,6 +30,7 @@ start: ## Démarre les conteneurs
 	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
 	@echo "  • API Documentation: https://localhost/docs/"
 	@echo "  • Admin Interface:   https://localhost/admin/"
+	@echo "  . Github Repo:       https://github.com/leenup/leenup-backend/tree/develop"
 
 stop: ## Arrête les conteneurs
 	@echo "$(YELLOW)🛑 Arrêt des conteneurs...$(NC)"
@@ -75,6 +76,15 @@ migration-diff: ## Génère une nouvelle migration
 migration-migrate: ## Applique les migrations
 	@echo "$(YELLOW)🔄 Application des migrations...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:migrate --no-interaction
+
+migration-migrate-drop: ## Vide la base et applique les migrations
+	@echo "$(RED)🗑️ Vidage de la base de données...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists
+	@echo "$(YELLOW)📊 Recréation de la base de données...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:create --if-not-exists
+	@echo "$(YELLOW)🔄 Application des migrations...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:migrate --no-interaction
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
 
 migration-status: ## Affiche le statut des migrations
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:status
@@ -126,6 +136,17 @@ fixtures-load: ## Charge les fixtures
 	@echo "$(YELLOW)📥 Chargement des fixtures...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:fixtures:load --no-interaction
 
+fixtures-load-drop: ## Vide la base et charge les fixtures
+	@echo "$(YELLOW)🗑️ Vidage de la base de données...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists
+	@echo "$(YELLOW)📊 Recréation de la base de données...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:create --if-not-exists
+	@echo "$(YELLOW)🔄 Application des migrations...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:migrate --no-interaction
+	@echo "$(YELLOW)📥 Chargement des fixtures...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:fixtures:load --no-interaction
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations et fixtures$(NC)"
+
 ## —— 🧪 Tests et Qualité ———————————————————————————————————————————
 
 test: db-test-reset ## Lance les tests (usage: make test ou make test FILE=tests/Api/Profile/CurrentUserTest.php)
@@ -136,7 +157,7 @@ else
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
 endif
 
-test-parallel: db-test-reset ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
+test-parallel: db-test-reset cache-clear ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
 	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
 ifdef FILE
 ifdef PROCESSES

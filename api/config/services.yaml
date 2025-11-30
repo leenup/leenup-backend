@@ -21,6 +21,10 @@ services:
     App\State\UserPasswordHasher:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'
+    
+    App\State\Processor\UserSkill\UserSkillProcessor:
+        bind:
+            $processor: '@api_platform.doctrine.orm.state.persist_processor'
 
 # 👇 Bloc spécifique à l'environnement prod (note : au même niveau que "services")
 when@prod:

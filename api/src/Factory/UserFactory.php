@@ -25,18 +25,46 @@ final class UserFactory extends PersistentObjectFactory
     #[\Override]
     protected function defaults(): array|callable
     {
+        $faker = self::faker();
+
+        $lastLoginMutable = $faker->optional(0.8)->dateTimeBetween('-30 days', 'now');
+        $lastLoginAt = $lastLoginMutable !== null
+            ? \DateTimeImmutable::createFromMutable($lastLoginMutable)
+            : null;
+
+        $allLanguages = ['fr', 'en', 'es', 'de', 'it'];
+        $allLearningStyles = [
+            'calm_explanations',      // expliquer calmement
+            'straight_to_the_point',  // aller droit au but
+            'concrete_examples',      // exemples concrets
+            'hands_on',               // pouvoir expérimenter
+            'structured',             // avoir de la structure
+        ];
+
+        // 🐸 Avatars : photos d’animaux chelous/moches via loremflickr (placeholder fait pour ça)
+        $uglyAnimalAvatars = [
+            'https://loremflickr.com/320/320/ugly,animal',
+            'https://loremflickr.com/320/320/weird,animal',
+            'https://loremflickr.com/320/320/funny,animal',
+            'https://loremflickr.com/320/320/strange,animal',
+            'https://loremflickr.com/320/320/creepy,animal',
+        ];
+
         return [
-            'email' => self::faker()->unique()->email(),
+            'email' => $faker->unique()->email(),
             'roles' => ['ROLE_USER'],
             'plainPassword' => 'password',
 
-            // Nouveaux champs MVP
-            'firstName' => self::faker()->firstName(),
-            'lastName' => self::faker()->lastName(),
-            'avatarUrl' => self::faker()->optional(0.7)->imageUrl(200, 200, 'people'),
-            'bio' => self::faker()->optional(0.6)->paragraph(2),
-            'location' => self::faker()->optional(0.8)->city() . ', ' . self::faker()->country(),
-            'timezone' => self::faker()->optional(0.9)->randomElement([
+            // Profil de base
+            'firstName' => $faker->firstName(),
+            'lastName' => $faker->lastName(),
+
+            // 80% de chances d’avoir un avatar d’animal… discutable
+            'avatarUrl' => $faker->optional(0.8)->randomElement($uglyAnimalAvatars),
+
+            'bio' => $faker->optional(0.6)->paragraph(2),
+            'location' => $faker->optional(0.8)->city() . ', ' . $faker->country(),
+            'timezone' => $faker->optional(0.9)->randomElement([
                 'Europe/Paris',
                 'Europe/London',
                 'America/New_York',
@@ -44,11 +72,23 @@ final class UserFactory extends PersistentObjectFactory
                 'Asia/Tokyo',
                 'Australia/Sydney',
             ]),
-            'locale' => self::faker()->optional(0.9)->randomElement(['fr', 'en', 'es', 'de']),
+            'locale' => $faker->optional(0.9)->randomElement(['fr', 'en', 'es', 'de']),
+
+            // Champs onboarding
+            'birthdate' => $faker->optional(0.9)->dateTimeBetween('-50 years', '-18 years'),
+            'languages' => $faker->optional(0.9)->randomElements(
+                $allLanguages,
+                $faker->numberBetween(1, 3)
+            ),
+            'exchangeFormat' => $faker->optional(0.9)->randomElement(['visio', 'chat', 'audio']),
+            'learningStyles' => $faker->optional(0.9)->randomElements(
+                $allLearningStyles,
+                $faker->numberBetween(1, 3)
+            ),
+            'isMentor' => $faker->boolean(40),
+
             'isActive' => true,
-            'lastLoginAt' => self::faker()->optional(0.8)->dateTimeBetween('-30 days', 'now')
-                ? \DateTimeImmutable::createFromMutable(self::faker()->dateTimeBetween('-30 days', 'now'))
-                : null,
+            'lastLoginAt' => $lastLoginAt,
         ];
     }
 
@@ -56,14 +96,12 @@ final class UserFactory extends PersistentObjectFactory
     protected function initialize(): static
     {
         return $this
-            ->afterInstantiate(function(User $user): void {
-                // Hash le plainPassword après l'instantiation
+            ->afterInstantiate(function (User $user): void {
                 if ($user->getPlainPassword()) {
                     $hashedPassword = $this->passwordHasher->hashPassword($user, $user->getPlainPassword());
                     $user->setPassword($hashedPassword);
                     $user->setPlainPassword(null);
                 }
-            })
-            ;
+            });
     }
 }
