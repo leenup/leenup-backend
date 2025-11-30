@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\BooleanFilter;
 use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
@@ -29,9 +30,30 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\HasLifecycleCallbacks]
 #[ORM\UniqueConstraint(name: 'UNIQ_IDENTIFIER_EMAIL', fields: ['email'])]
 #[UniqueEntity(fields: ['email'], message: 'This email is already in use')]
-#[ApiFilter(SearchFilter::class, properties: ['email' => 'partial'])]
-#[ApiFilter(OrderFilter::class, properties: ['id', 'email', 'createdAt', 'updatedAt'])]
-#[ApiFilter(DateFilter::class, properties: ['createdAt', 'updatedAt'])]
+#[ApiFilter(SearchFilter::class, properties: [
+    'email'     => 'partial',
+    'firstName' => 'partial',
+    'lastName'  => 'partial',
+])]
+#[ApiFilter(BooleanFilter::class, properties: [
+    'isMentor',
+    'isActive',
+])]
+#[ApiFilter(OrderFilter::class, properties: [
+    'id',
+    'email',
+    'firstName',
+    'lastName',
+    'createdAt',
+    'updatedAt',
+    'averageRating',
+    'isMentor',
+])]
+#[ApiFilter(DateFilter::class, properties: [
+    'createdAt',
+    'updatedAt',
+    'birthdate',
+])]
 #[ApiResource(
     operations: [
         new GetCollection(
@@ -44,7 +66,7 @@ use Symfony\Component\Validator\Constraints as Assert;
         ),
         new Patch(
             security: "is_granted('ROLE_ADMIN')",
-            securityMessage: "Only admins can update users.",
+            securityMessage: 'Only admins can update users.',
             securityPostDenormalize: "!('ROLE_ADMIN' in previous_object.getRoles())",
             securityPostDenormalizeMessage: "Admins cannot modify admin users (including themselves).",
             processor: UserPasswordHasher::class
@@ -122,7 +144,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['user:read', 'user:create', 'user:update'])]
     private ?string $avatarUrl = null;
 
-    #[ORM\Column(type: 'text', nullable: true)]
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Assert\Length(
         max: 500,
         maxMessage: 'Bio cannot be longer than {{ limit }} characters'
@@ -141,6 +163,39 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 5, nullable: true)]
     #[Groups(['user:read', 'user:create', 'user:update'])]
     private ?string $locale = 'fr';
+
+    #[ORM\Column(type: Types::DATE_IMMUTABLE, nullable: true)]
+    #[Assert\LessThan('today', message: 'Birthdate must be in the past.')]
+    #[Groups(['user:read', 'user:create', 'user:update'])]
+    private ?\DateTimeImmutable $birthdate = null;
+
+    /**
+     * @var string[]|null
+     */
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Assert\Type('array')]
+    #[Groups(['user:read', 'user:create', 'user:update'])]
+    private ?array $languages = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Assert\Choice(
+        choices: ['visio', 'chat', 'audio'],
+        message: 'Invalid exchange format.'
+    )]
+    #[Groups(['user:read', 'user:create', 'user:update'])]
+    private ?string $exchangeFormat = null;
+
+    /**
+     * @var string[]|null
+     */
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Assert\Type('array')]
+    #[Groups(['user:read', 'user:create', 'user:update'])]
+    private ?array $learningStyles = null;
+
+    #[ORM\Column(type: 'boolean')]
+    #[Groups(['user:read', 'user:create', 'user:update'])]
+    private bool $isMentor = false;
 
     #[ORM\Column(type: 'boolean')]
     #[Groups(['user:read'])]
@@ -196,6 +251,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->sessionsAsMentor = new ArrayCollection();
         $this->sessionsAsStudent = new ArrayCollection();
         $this->reviews = new ArrayCollection();
+        $this->isMentor = false;
+        $this->isActive = true;
     }
 
     // === Lifecycle Callbacks ===
@@ -227,6 +284,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setEmail(string $email): static
     {
         $this->email = $email;
+
         return $this;
     }
 
@@ -239,12 +297,14 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
         $roles = $this->roles;
         $roles[] = 'ROLE_USER';
+
         return array_unique($roles);
     }
 
     public function setRoles(array $roles): static
     {
         $this->roles = $roles;
+
         return $this;
     }
 
@@ -256,6 +316,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setPassword(string $password): static
     {
         $this->password = $password;
+
         return $this;
     }
 
@@ -267,6 +328,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setPlainPassword(?string $plainPassword): self
     {
         $this->plainPassword = $plainPassword;
+
         return $this;
     }
 
@@ -299,6 +361,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setFirstName(string $firstName): static
     {
         $this->firstName = $firstName;
+
         return $this;
     }
 
@@ -310,6 +373,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setLastName(string $lastName): static
     {
         $this->lastName = $lastName;
+
         return $this;
     }
 
@@ -321,6 +385,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setAvatarUrl(?string $avatarUrl): static
     {
         $this->avatarUrl = $avatarUrl;
+
         return $this;
     }
 
@@ -332,6 +397,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setBio(?string $bio): static
     {
         $this->bio = $bio;
+
         return $this;
     }
 
@@ -343,6 +409,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setLocation(?string $location): static
     {
         $this->location = $location;
+
         return $this;
     }
 
@@ -354,6 +421,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setTimezone(?string $timezone): static
     {
         $this->timezone = $timezone;
+
         return $this;
     }
 
@@ -365,10 +433,83 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setLocale(?string $locale): static
     {
         $this->locale = $locale;
+
         return $this;
     }
 
-    public function isActive(): bool
+    public function getBirthdate(): ?\DateTimeImmutable
+    {
+        return $this->birthdate;
+    }
+
+    public function setBirthdate(?\DateTimeImmutable $birthdate): static
+    {
+        $this->birthdate = $birthdate;
+
+        return $this;
+    }
+
+    /**
+     * @return string[]|null
+     */
+    public function getLanguages(): ?array
+    {
+        return $this->languages;
+    }
+
+    /**
+     * @param string[]|null $languages
+     */
+    public function setLanguages(?array $languages): static
+    {
+        $this->languages = $languages;
+
+        return $this;
+    }
+
+    public function getExchangeFormat(): ?string
+    {
+        return $this->exchangeFormat;
+    }
+
+    public function setExchangeFormat(?string $exchangeFormat): static
+    {
+        $this->exchangeFormat = $exchangeFormat;
+
+        return $this;
+    }
+
+    /**
+     * @return string[]|null
+     */
+    public function getLearningStyles(): ?array
+    {
+        return $this->learningStyles;
+    }
+
+    /**
+     * @param string[]|null $learningStyles
+     */
+    public function setLearningStyles(?array $learningStyles): static
+    {
+        $this->learningStyles = $learningStyles;
+
+        return $this;
+    }
+
+    public function getIsMentor(): bool
+    {
+        return $this->isMentor;
+    }
+
+    public function setIsMentor(bool $isMentor): static
+    {
+        $this->isMentor = $isMentor;
+
+        return $this;
+    }
+
+    public function getIsActive(): bool
     {
         return $this->isActive;
     }
@@ -376,6 +517,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setIsActive(bool $isActive): static
     {
         $this->isActive = $isActive;
+
         return $this;
     }
 
@@ -387,6 +529,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setLastLoginAt(?\DateTimeImmutable $lastLoginAt): static
     {
         $this->lastLoginAt = $lastLoginAt;
+
         return $this;
     }
 
@@ -411,7 +554,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function removeUserSkill(UserSkill $userSkill): static
     {
         if ($this->userSkills->removeElement($userSkill)) {
-            // set the owning side to null (unless already changed)
             if ($userSkill->getOwner() === $this) {
                 $userSkill->setOwner(null);
             }
@@ -441,7 +583,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function removeSessionAsMentor(Session $session): static
     {
         if ($this->sessionsAsMentor->removeElement($session)) {
-            // set the owning side to null (unless already changed)
             if ($session->getMentor() === $this) {
                 $session->setMentor(null);
             }
@@ -471,7 +612,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function removeSessionAsStudent(Session $session): static
     {
         if ($this->sessionsAsStudent->removeElement($session)) {
-            // set the owning side to null (unless already changed)
             if ($session->getStudent() === $this) {
                 $session->setStudent(null);
             }
@@ -501,7 +641,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function removeReview(Review $review): static
     {
         if ($this->reviews->removeElement($review)) {
-            // set the owning side to null (unless already changed)
             if ($review->getReviewer() === $this) {
                 $review->setReviewer(null);
             }

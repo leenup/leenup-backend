@@ -12,9 +12,6 @@ use App\State\Provider\Profile\CurrentUserProvider;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
-/**
- * Ressource API pour le profil de l'utilisateur connecté (/me)
- */
 #[ApiResource(
     shortName: 'User',
     operations: [
@@ -79,6 +76,27 @@ class CurrentUser
 
     #[Groups(['user:read', 'user:update'])]
     public ?string $locale = null;
+
+    #[Groups(['user:read', 'user:update'])]
+    public ?\DateTimeInterface $birthdate = null;
+
+    /**
+     * @var string[]|null
+     */
+    #[Groups(['user:read', 'user:update'])]
+    public ?array $languages = null;
+
+    #[Groups(['user:read', 'user:update'])]
+    public ?string $exchangeFormat = null;
+
+    /**
+     * @var string[]|null
+     */
+    #[Groups(['user:read', 'user:update'])]
+    public ?array $learningStyles = null;
+
+    #[Groups(['user:read', 'user:update'])]
+    public ?bool $isMentor = null;
 
     #[Groups(['my_skill:read'])]
     public array $userSkills = [];

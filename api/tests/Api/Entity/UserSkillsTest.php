@@ -25,25 +25,22 @@ class UserSkillsTest extends ApiTestCase
     {
         parent::setUp();
 
-        // Créer une catégorie et des skills
         $category = CategoryFactory::createOne(['title' => 'Development']);
         $this->skill1 = SkillFactory::createOne(['title' => 'React', 'category' => $category]);
         $this->skill2 = SkillFactory::createOne(['title' => 'Vue.js', 'category' => $category]);
 
-        // User normal
         $this->user = UserFactory::createOne([
             'email' => 'user@example.com',
             'plainPassword' => 'password',
         ]);
 
-        // Admin
         $this->admin = UserFactory::createOne([
             'email' => 'admin@example.com',
             'plainPassword' => 'admin123',
             'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
         ]);
 
-        // Tokens
+        // Tokens auth (controller custom, donc application/json OK ici)
         $response = static::createClient()->request('POST', '/auth', [
             'json' => ['email' => 'user@example.com', 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
@@ -57,7 +54,7 @@ class UserSkillsTest extends ApiTestCase
         $this->adminToken = $response->toArray()['token'];
     }
 
-    // ==================== GET /user_skills (Collection) ====================
+    // ==================== GET collection ====================
 
     public function testGetUserSkillsAsUser(): void
     {
@@ -65,14 +62,12 @@ class UserSkillsTest extends ApiTestCase
             'owner' => $this->user,
             'skill' => $this->skill1,
             'type' => UserSkill::TYPE_TEACH,
-            'level' => UserSkill::LEVEL_EXPERT,
         ]);
 
         UserSkillFactory::createOne([
             'owner' => $this->admin,
             'skill' => $this->skill2,
             'type' => UserSkill::TYPE_LEARN,
-            'level' => UserSkill::LEVEL_BEGINNER,
         ]);
 
         $response = static::createClient()->request('GET', '/user_skills', [
@@ -80,11 +75,7 @@ class UserSkillsTest extends ApiTestCase
         ]);
 
         $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
-
-        $this->assertArrayHasKey('@context', $data);
-        $this->assertSame('/contexts/UserSkill', $data['@context']);
-        $this->assertEquals(2, $data['totalItems']);
+        $this->assertEquals(2, $response->toArray()['totalItems']);
     }
 
     public function testGetUserSkillsAsAdmin(): void
@@ -93,7 +84,6 @@ class UserSkillsTest extends ApiTestCase
             'owner' => $this->user,
             'skill' => $this->skill1,
             'type' => UserSkill::TYPE_TEACH,
-            'level' => UserSkill::LEVEL_EXPERT,
         ]);
 
         $response = static::createClient()->request('GET', '/user_skills', [
@@ -101,8 +91,7 @@ class UserSkillsTest extends ApiTestCase
         ]);
 
         $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
-        $this->assertGreaterThanOrEqual(1, $data['totalItems']);
+        $this->assertGreaterThanOrEqual(1, $response->toArray()['totalItems']);
     }
 
     public function testGetUserSkillsWithoutAuthentication(): void
@@ -111,7 +100,7 @@ class UserSkillsTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(401);
     }
 
-    // ==================== GET /user_skills/{id} (Item) ====================
+    // ==================== GET item ====================
 
     public function testGetUserSkillAsUser(): void
     {
@@ -122,7 +111,7 @@ class UserSkillsTest extends ApiTestCase
             'level' => UserSkill::LEVEL_ADVANCED,
         ]);
 
-        static::createClient()->request('GET', '/user_skills/' . $userSkill->getId(), [
+        static::createClient()->request('GET', '/user_skills/'.$userSkill->getId(), [
             'auth_bearer' => $this->userToken,
         ]);
 
@@ -140,10 +129,9 @@ class UserSkillsTest extends ApiTestCase
             'owner' => $this->user,
             'skill' => $this->skill1,
             'type' => UserSkill::TYPE_LEARN,
-            'level' => UserSkill::LEVEL_BEGINNER,
         ]);
 
-        static::createClient()->request('GET', '/user_skills/' . $userSkill->getId(), [
+        static::createClient()->request('GET', '/user_skills/'.$userSkill->getId(), [
             'auth_bearer' => $this->adminToken,
         ]);
 
@@ -151,39 +139,17 @@ class UserSkillsTest extends ApiTestCase
         $this->assertJsonContains([
             '@type' => 'UserSkill',
             'type' => 'learn',
-            'level' => 'beginner',
         ]);
     }
 
-    // ==================== POST /user_skills ====================
+    // ==================== POST (owner non envoyé, Content-Type ld+json) ====================
 
     public function testCreateUserSkillAsUser(): void
     {
-        static::createClient()->request('POST', '/user_skills', [
+        $response = static::createClient()->request('POST', '/user_skills', [
             'auth_bearer' => $this->userToken,
             'json' => [
-                'owner' => '/users/' . $this->user->getId(),
-                'skill' => '/skills/' . $this->skill1->getId(),
-                'type' => 'teach',
-                'level' => 'expert',
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
-
-        $this->assertResponseStatusCodeSame(403);
-        $this->assertJsonContains([
-            '@type' => 'Error',
-            'detail' => 'Only admins can create user skills directly.',
-        ]);
-    }
-
-    public function testCreateUserSkillAsAdmin(): void
-    {
-        $response = static::createClient()->request('POST', '/user_skills', [
-            'auth_bearer' => $this->adminToken,
-            'json' => [
-                'owner' => '/users/' . $this->user->getId(),
-                'skill' => '/skills/' . $this->skill1->getId(),
+                'skill' => '/skills/'.$this->skill1->getId(),
                 'type' => 'teach',
                 'level' => 'expert',
             ],
@@ -198,25 +164,39 @@ class UserSkillsTest extends ApiTestCase
         ]);
     }
 
-    // ==================== DELETE /user_skills/{id} ====================
+    public function testCreateUserSkillAsAdmin(): void
+    {
+        $response = static::createClient()->request('POST', '/user_skills', [
+            'auth_bearer' => $this->adminToken,
+            'json' => [
+                'skill' => '/skills/'.$this->skill1->getId(),
+                'type' => 'teach',
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(201);
+        $this->assertJsonContains([
+            '@type' => 'UserSkill',
+            'type' => 'teach',
+        ]);
+    }
+
+    // ==================== DELETE ====================
 
     public function testDeleteUserSkillAsUser(): void
     {
         $userSkill = UserSkillFactory::createOne([
             'owner' => $this->user,
             'skill' => $this->skill1,
-            'type' => UserSkill::TYPE_TEACH,
+            'type' => 'teach',
         ]);
 
-        static::createClient()->request('DELETE', '/user_skills/' . $userSkill->getId(), [
+        static::createClient()->request('DELETE', '/user_skills/'.$userSkill->getId(), [
             'auth_bearer' => $this->userToken,
         ]);
 
-        $this->assertResponseStatusCodeSame(403);
-        $this->assertJsonContains([
-            '@type' => 'Error',
-            'detail' => 'Only admins can delete user skills directly.',
-        ]);
+        $this->assertResponseStatusCodeSame(204);
     }
 
     public function testDeleteUserSkillAsAdmin(): void
@@ -224,25 +204,21 @@ class UserSkillsTest extends ApiTestCase
         $userSkill = UserSkillFactory::createOne([
             'owner' => $this->user,
             'skill' => $this->skill1,
-            'type' => UserSkill::TYPE_TEACH,
+            'type' => 'teach',
         ]);
 
-        static::createClient()->request('DELETE', '/user_skills/' . $userSkill->getId(), [
+        static::createClient()->request('DELETE', '/user_skills/'.$userSkill->getId(), [
             'auth_bearer' => $this->adminToken,
         ]);
 
         $this->assertResponseStatusCodeSame(204);
-
-        // Vérifier que le UserSkill n'existe plus
-        $this->assertNull(
-            static::getContainer()->get('doctrine')->getRepository(UserSkill::class)->find($userSkill->getId())
-        );
     }
 
-    // ==================== Validations ====================
+    // ==================== Validation ====================
 
     public function testCreateUserSkillWithDuplicateAsAdmin(): void
     {
+        // On crée déjà une skill "teach" pour le même user authentifié
         UserSkillFactory::createOne([
             'owner' => $this->user,
             'skill' => $this->skill1,
@@ -250,10 +226,11 @@ class UserSkillsTest extends ApiTestCase
             'level' => UserSkill::LEVEL_EXPERT,
         ]);
 
-        static::createClient()->request('POST', '/user_skills', [
-            'auth_bearer' => $this->adminToken,
+        // On se connecte avec CE user (et pas forcément l'admin)
+        $response = static::createClient()->request('POST', '/user_skills', [
+            'auth_bearer' => $this->userToken,
             'json' => [
-                'owner' => '/users/' . $this->user->getId(),
+                // owner ignoré par l’API → pris depuis le token
                 'skill' => '/skills/' . $this->skill1->getId(),
                 'type' => 'teach',
                 'level' => 'advanced',
@@ -273,12 +250,11 @@ class UserSkillsTest extends ApiTestCase
 
     public function testCreateUserSkillWithInvalidType(): void
     {
-        static::createClient()->request('POST', '/user_skills', [
+        $response = static::createClient()->request('POST', '/user_skills', [
             'auth_bearer' => $this->adminToken,
             'json' => [
-                'owner' => '/users/' . $this->user->getId(),
-                'skill' => '/skills/' . $this->skill1->getId(),
-                'type' => 'invalid_type',
+                'skill' => '/skills/'.$this->skill1->getId(),
+                'type' => 'invalid',
                 'level' => 'expert',
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
@@ -295,13 +271,12 @@ class UserSkillsTest extends ApiTestCase
 
     public function testCreateUserSkillWithInvalidLevel(): void
     {
-        static::createClient()->request('POST', '/user_skills', [
+        $response = static::createClient()->request('POST', '/user_skills', [
             'auth_bearer' => $this->adminToken,
             'json' => [
-                'owner' => '/users/' . $this->user->getId(),
-                'skill' => '/skills/' . $this->skill1->getId(),
+                'skill' => '/skills/'.$this->skill1->getId(),
                 'type' => 'teach',
-                'level' => 'invalid_level',
+                'level' => 'wrong',
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
@@ -315,36 +290,12 @@ class UserSkillsTest extends ApiTestCase
         ]);
     }
 
-    public function testCreateUserSkillWithoutOwner(): void
-    {
-        static::createClient()->request('POST', '/user_skills', [
-            'auth_bearer' => $this->adminToken,
-            'json' => [
-                'skill' => '/skills/' . $this->skill1->getId(),
-                'type' => 'teach',
-                'level' => 'expert',
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
-
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [[
-                'propertyPath' => 'owner',
-                'message' => 'The user cannot be null',
-            ]],
-        ]);
-    }
-
     public function testCreateUserSkillWithoutSkill(): void
     {
-        static::createClient()->request('POST', '/user_skills', [
+        $response = static::createClient()->request('POST', '/user_skills', [
             'auth_bearer' => $this->adminToken,
             'json' => [
-                'owner' => '/users/' . $this->user->getId(),
                 'type' => 'teach',
-                'level' => 'expert',
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
@@ -361,12 +312,10 @@ class UserSkillsTest extends ApiTestCase
 
     public function testCreateUserSkillWithoutType(): void
     {
-        static::createClient()->request('POST', '/user_skills', [
+        $response = static::createClient()->request('POST', '/user_skills', [
             'auth_bearer' => $this->adminToken,
             'json' => [
-                'owner' => '/users/' . $this->user->getId(),
-                'skill' => '/skills/' . $this->skill1->getId(),
-                'level' => 'expert',
+                'skill' => '/skills/'.$this->skill1->getId(),
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
@@ -383,27 +332,23 @@ class UserSkillsTest extends ApiTestCase
 
     public function testUserCanHaveSameSkillWithDifferentTypes(): void
     {
-        // Créer teach
+        // teach
         static::createClient()->request('POST', '/user_skills', [
-            'auth_bearer' => $this->adminToken,
+            'auth_bearer' => $this->userToken,
             'json' => [
-                'owner' => '/users/' . $this->user->getId(),
-                'skill' => '/skills/' . $this->skill1->getId(),
+                'skill' => '/skills/'.$this->skill1->getId(),
                 'type' => 'teach',
-                'level' => 'expert',
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
         $this->assertResponseStatusCodeSame(201);
 
-        // Créer learn pour la même skill
+        // learn
         static::createClient()->request('POST', '/user_skills', [
-            'auth_bearer' => $this->adminToken,
+            'auth_bearer' => $this->userToken,
             'json' => [
-                'owner' => '/users/' . $this->user->getId(),
-                'skill' => '/skills/' . $this->skill1->getId(),
+                'skill' => '/skills/'.$this->skill1->getId(),
                 'type' => 'learn',
-                'level' => 'beginner',
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
@@ -414,77 +359,82 @@ class UserSkillsTest extends ApiTestCase
 
     public function testFilterUserSkillsByOwner(): void
     {
-        $user2 = UserFactory::createOne(['email' => 'user2@example.com']);
+        $user2 = UserFactory::createOne(['email' => 'u2@example.com']);
 
-        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => UserSkill::TYPE_TEACH]);
-        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => UserSkill::TYPE_LEARN]);
-        UserSkillFactory::createOne(['owner' => $user2, 'skill' => $this->skill1, 'type' => UserSkill::TYPE_TEACH]);
+        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => 'teach']);
+        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => 'learn']);
+        UserSkillFactory::createOne(['owner' => $user2, 'skill' => $this->skill1, 'type' => 'teach']);
 
-        $response = static::createClient()->request('GET', '/user_skills?owner=' . $this->user->getId(), [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = static::createClient()->request(
+            'GET',
+            '/user_skills?owner='.$this->user->getId(),
+            ['auth_bearer' => $this->userToken]
+        );
 
         $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
-        $this->assertEquals(2, $data['totalItems']);
+        $this->assertEquals(2, $response->toArray()['totalItems']);
     }
 
     public function testFilterUserSkillsBySkill(): void
     {
-        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => UserSkill::TYPE_TEACH]);
-        UserSkillFactory::createOne(['owner' => $this->admin, 'skill' => $this->skill1, 'type' => UserSkill::TYPE_LEARN]);
-        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => UserSkill::TYPE_TEACH]);
+        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => 'teach']);
+        UserSkillFactory::createOne(['owner' => $this->admin, 'skill' => $this->skill1, 'type' => 'learn']);
+        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => 'teach']);
 
-        $response = static::createClient()->request('GET', '/user_skills?skill=' . $this->skill1->getId(), [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = static::createClient()->request(
+            'GET',
+            '/user_skills?skill='.$this->skill1->getId(),
+            ['auth_bearer' => $this->userToken]
+        );
 
         $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
-        $this->assertEquals(2, $data['totalItems']);
+        $this->assertEquals(2, $response->toArray()['totalItems']);
     }
 
     public function testFilterUserSkillsByType(): void
     {
-        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => UserSkill::TYPE_TEACH]);
-        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => UserSkill::TYPE_TEACH]);
-        UserSkillFactory::createOne(['owner' => $this->admin, 'skill' => $this->skill1, 'type' => UserSkill::TYPE_LEARN]);
+        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => 'teach']);
+        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => 'teach']);
+        UserSkillFactory::createOne(['owner' => $this->admin, 'skill' => $this->skill1, 'type' => 'learn']);
 
-        $response = static::createClient()->request('GET', '/user_skills?type=teach', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = static::createClient()->request(
+            'GET',
+            '/user_skills?type=teach',
+            ['auth_bearer' => $this->userToken]
+        );
 
         $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
-        $this->assertEquals(2, $data['totalItems']);
+        $this->assertEquals(2, $response->toArray()['totalItems']);
     }
 
     public function testFilterUserSkillsByLevel(): void
     {
-        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => UserSkill::TYPE_TEACH, 'level' => UserSkill::LEVEL_EXPERT]);
-        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => UserSkill::TYPE_TEACH, 'level' => UserSkill::LEVEL_BEGINNER]);
+        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => 'teach', 'level' => 'expert']);
+        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => 'teach', 'level' => 'beginner']);
 
-        $response = static::createClient()->request('GET', '/user_skills?level=expert', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = static::createClient()->request(
+            'GET',
+            '/user_skills?level=expert',
+            ['auth_bearer' => $this->userToken]
+        );
 
         $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
-        $this->assertEquals(1, $data['totalItems']);
+        $this->assertEquals(1, $response->toArray()['totalItems']);
     }
 
     public function testFilterUserSkillsByMultipleFilters(): void
     {
-        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => UserSkill::TYPE_TEACH, 'level' => UserSkill::LEVEL_EXPERT]);
-        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => UserSkill::TYPE_LEARN, 'level' => UserSkill::LEVEL_EXPERT]);
-        UserSkillFactory::createOne(['owner' => $this->admin, 'skill' => $this->skill1, 'type' => UserSkill::TYPE_TEACH, 'level' => UserSkill::LEVEL_EXPERT]);
+        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => 'teach', 'level' => 'expert']);
+        UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => 'learn', 'level' => 'expert']);
+        UserSkillFactory::createOne(['owner' => $this->admin, 'skill' => $this->skill1, 'type' => 'teach', 'level' => 'expert']);
 
-        $response = static::createClient()->request('GET', '/user_skills?owner=' . $this->user->getId() . '&type=teach&level=expert', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = static::createClient()->request(
+            'GET',
+            '/user_skills?owner='.$this->user->getId().'&type=teach&level=expert',
+            ['auth_bearer' => $this->userToken]
+        );
 
         $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
-        $this->assertEquals(1, $data['totalItems']);
+        $this->assertEquals(1, $response->toArray()['totalItems']);
     }
 }

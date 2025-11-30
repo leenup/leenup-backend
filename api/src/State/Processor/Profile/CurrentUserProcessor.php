@@ -15,8 +15,6 @@ use Symfony\Component\Validator\ConstraintViolationList;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
- * Processor pour modifier le profil de l'utilisateur connecté
- *
  * @implements ProcessorInterface<CurrentUser, CurrentUser>
  */
 final class CurrentUserProcessor implements ProcessorInterface
@@ -39,7 +37,6 @@ final class CurrentUserProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
-        // Bloquer la modification du plainPassword
         if ($data->plainPassword !== null) {
             throw new \InvalidArgumentException(
                 'Changing password via /me is not allowed. Use /me/change-password instead.'
@@ -50,14 +47,12 @@ final class CurrentUserProcessor implements ProcessorInterface
 
         // Email
         if ($data->email !== null && $data->email !== $user->getEmail()) {
-            // Vérifier que l'email n'est pas vide
             if (empty($data->email)) {
                 throw new ValidationException($this->validator->validate($data->email, [
                     new Assert\NotBlank(message: 'The email cannot be empty'),
                 ]));
             }
 
-            // Vérifier l'unicité de l'email
             $existingUser = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $data->email]);
             if ($existingUser && $existingUser->getId() !== $user->getId()) {
                 $violations = new ConstraintViolationList([
@@ -119,7 +114,30 @@ final class CurrentUserProcessor implements ProcessorInterface
             $hasChanges = true;
         }
 
-        // Valider l'entité User avant de persister
+        // Birthdate
+        if ($data->birthdate !== null && $data->birthdate != $user->getBirthdate()) {
+            $user->setBirthdate($data->birthdate);
+            $hasChanges = true;
+        }
+
+        // Languages
+        if ($data->languages !== null && $data->languages !== $user->getLanguages()) {
+            $user->setLanguages($data->languages);
+            $hasChanges = true;
+        }
+
+        // Exchange format
+        if ($data->exchangeFormat !== null && $data->exchangeFormat !== $user->getExchangeFormat()) {
+            $user->setExchangeFormat($data->exchangeFormat);
+            $hasChanges = true;
+        }
+
+        // Learning styles
+        if ($data->learningStyles !== null && $data->learningStyles !== $user->getLearningStyles()) {
+            $user->setLearningStyles($data->learningStyles);
+            $hasChanges = true;
+        }
+
         if ($hasChanges) {
             $violations = $this->validator->validate($user);
             if (count($violations) > 0) {
@@ -130,7 +148,7 @@ final class CurrentUserProcessor implements ProcessorInterface
             $this->entityManager->flush();
         }
 
-        // Retourner le DTO mis à jour
+        // Remapper l'entité vers le DTO retourné
         $data->id = $user->getId();
         $data->email = $user->getEmail();
         $data->roles = $user->getRoles();
@@ -141,6 +159,10 @@ final class CurrentUserProcessor implements ProcessorInterface
         $data->location = $user->getLocation();
         $data->timezone = $user->getTimezone();
         $data->locale = $user->getLocale();
+        $data->birthdate = $user->getBirthdate();
+        $data->languages = $user->getLanguages();
+        $data->exchangeFormat = $user->getExchangeFormat();
+        $data->learningStyles = $user->getLearningStyles();
         $data->lastLoginAt = $user->getLastLoginAt();
         $data->createdAt = $user->getCreatedAt();
         $data->updatedAt = $user->getUpdatedAt();

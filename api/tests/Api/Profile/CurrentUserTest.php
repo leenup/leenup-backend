@@ -39,6 +39,12 @@ class CurrentUserTest extends ApiTestCase
             'location' => 'Paris, France',
             'timezone' => 'Europe/Paris',
             'locale' => 'fr',
+            // nouveaux champs
+            'birthdate' => new \DateTimeImmutable('1990-01-15'),
+            'languages' => ['fr', 'en'],
+            'exchangeFormat' => 'visio',
+            'learningStyles' => ['calm_explanations', 'hands_on'],
+            'isMentor' => true,
         ]);
 
         // Ajouter des skills au user
@@ -91,6 +97,10 @@ class CurrentUserTest extends ApiTestCase
         $this->assertArrayHasKey('createdAt', $data);
         $this->assertArrayHasKey('userSkills', $data);
         $this->assertCount(2, $data['userSkills']);
+        $this->assertArrayHasKey('birthdate', $data);
+        $this->assertArrayHasKey('languages', $data);
+        $this->assertArrayHasKey('exchangeFormat', $data);
+        $this->assertArrayHasKey('learningStyles', $data);
     }
 
     public function testGetCurrentUserProfileIncludesUserSkills(): void
@@ -106,14 +116,12 @@ class CurrentUserTest extends ApiTestCase
         $this->assertIsArray($data['userSkills']);
         $this->assertCount(2, $data['userSkills']);
 
-        // Vérifier la structure d'un UserSkill
         $firstSkill = $data['userSkills'][0];
         $this->assertArrayHasKey('@id', $firstSkill);
         $this->assertArrayHasKey('@type', $firstSkill);
         $this->assertEquals('UserSkill', $firstSkill['@type']);
         $this->assertArrayHasKey('skill', $firstSkill);
 
-        // Vérifier que le skill contient category
         $this->assertArrayHasKey('category', $firstSkill['skill']);
         $this->assertArrayHasKey('title', $firstSkill['skill']['category']);
     }
@@ -127,7 +135,6 @@ class CurrentUserTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $data = $response->toArray();
 
-        // Extraire les titres des skills
         $skillTitles = array_map(fn($us) => $us['skill']['title'], $data['userSkills']);
 
         $this->assertContains('React', $skillTitles);
@@ -162,7 +169,6 @@ class CurrentUserTest extends ApiTestCase
             'lastName' => 'Smith',
         ]);
 
-        // Ajouter une skill différente à user2
         UserSkillFactory::createOne([
             'owner' => $user2,
             'skill' => $skill3,
@@ -170,14 +176,12 @@ class CurrentUserTest extends ApiTestCase
             'level' => UserSkill::LEVEL_ADVANCED,
         ]);
 
-        // Token user2
         $response2 = static::createClient()->request('POST', '/auth', [
             'json' => ['email' => 'user2@example.com', 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         $token2 = $response2->toArray()['token'];
 
-        // User1 récupère son profil
         $profile1 = static::createClient()->request('GET', '/me', ['auth_bearer' => $this->userToken]);
         $this->assertResponseIsSuccessful();
         $data1 = $profile1->toArray();
@@ -185,7 +189,6 @@ class CurrentUserTest extends ApiTestCase
         $this->assertEquals('John', $data1['firstName']);
         $this->assertCount(2, $data1['userSkills']);
 
-        // User2 récupère son profil
         $profile2 = static::createClient()->request('GET', '/me', ['auth_bearer' => $token2]);
         $this->assertResponseIsSuccessful();
         $data2 = $profile2->toArray();
@@ -195,7 +198,6 @@ class CurrentUserTest extends ApiTestCase
 
         $this->assertNotEquals($data1['id'], $data2['id']);
 
-        // Vérifier que les skills sont différentes
         $skillTitles1 = array_map(fn($us) => $us['skill']['title'], $data1['userSkills']);
         $skillTitles2 = array_map(fn($us) => $us['skill']['title'], $data2['userSkills']);
 
@@ -212,7 +214,6 @@ class CurrentUserTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $data = $response->toArray();
 
-        // Champs obligatoires
         $this->assertArrayHasKey('@context', $data);
         $this->assertArrayHasKey('@id', $data);
         $this->assertArrayHasKey('@type', $data);
@@ -223,8 +224,11 @@ class CurrentUserTest extends ApiTestCase
         $this->assertArrayHasKey('lastName', $data);
         $this->assertArrayHasKey('createdAt', $data);
         $this->assertArrayHasKey('userSkills', $data);
-
-        // Types
+        $this->assertArrayHasKey('birthdate', $data);
+        $this->assertArrayHasKey('languages', $data);
+        $this->assertArrayHasKey('exchangeFormat', $data);
+        $this->assertArrayHasKey('learningStyles', $data);
+        $this->assertArrayHasKey('isMentor', $data);
         $this->assertIsInt($data['id']);
         $this->assertIsString($data['email']);
         $this->assertIsArray($data['roles']);
@@ -236,7 +240,6 @@ class CurrentUserTest extends ApiTestCase
 
     public function testCurrentUserWithNoSkills(): void
     {
-        // Créer un user sans skills
         $userNoSkills = UserFactory::createOne([
             'email' => 'noskills@example.com',
             'plainPassword' => 'password',
@@ -272,7 +275,6 @@ class CurrentUserTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains(['email' => 'newemail@example.com']);
 
-        // Vérifier avec le nouveau login
         $newAuthResponse = static::createClient()->request('POST', '/auth', [
             'json' => ['email' => 'newemail@example.com', 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
@@ -394,6 +396,68 @@ class CurrentUserTest extends ApiTestCase
         ]);
     }
 
+    public function testUpdateCurrentUserBirthdate(): void
+    {
+        static::createClient()->request('PATCH', '/me', [
+            'auth_bearer' => $this->userToken,
+            'json' => ['birthdate' => '1992-03-10'],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $response = static::createClient()->request('GET', '/me', [
+            'auth_bearer' => $this->userToken,
+        ]);
+        $data = $response->toArray();
+
+        $this->assertEquals('1992-03-10', substr($data['birthdate'], 0, 10));
+    }
+
+    public function testUpdateCurrentUserLanguagesAndLearningStyles(): void
+    {
+        static::createClient()->request('PATCH', '/me', [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'languages' => ['en', 'es'],
+                'learningStyles' => ['concrete_examples', 'structured'],
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $response = static::createClient()->request('GET', '/me', [
+            'auth_bearer' => $this->userToken,
+        ]);
+        $data = $response->toArray();
+
+        $this->assertEquals(['en', 'es'], $data['languages']);
+        $this->assertEquals(['concrete_examples', 'structured'], $data['learningStyles']);
+    }
+
+    public function testUpdateCurrentUserExchangeFormatAndIsMentor(): void
+    {
+        static::createClient()->request('PATCH', '/me', [
+            'auth_bearer' => $this->userToken,
+            'json' => [
+                'exchangeFormat' => 'chat',
+                'isMentor' => false,
+            ],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $response = static::createClient()->request('GET', '/me', [
+            'auth_bearer' => $this->userToken,
+        ]);
+        $data = $response->toArray();
+
+        $this->assertEquals('chat', $data['exchangeFormat']);
+        $this->assertTrue($data['isMentor']);
+    }
+
     public function testUpdateCurrentUserWithoutAuthentication(): void
     {
         static::createClient()->request('PATCH', '/me', [
@@ -458,7 +522,7 @@ class CurrentUserTest extends ApiTestCase
     {
         static::createClient()->request('PATCH', '/me', [
             'auth_bearer' => $this->userToken,
-            'json' => ['bio' => str_repeat('a', 501)], // 501 caractères (max 500)
+            'json' => ['bio' => str_repeat('a', 501)],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
@@ -469,7 +533,7 @@ class CurrentUserTest extends ApiTestCase
     {
         static::createClient()->request('PATCH', '/me', [
             'auth_bearer' => $this->userToken,
-            'json' => ['firstName' => 'A'], // 1 caractère (min 2)
+            'json' => ['firstName' => 'A'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
@@ -484,7 +548,6 @@ class CurrentUserTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
-        // isActive n'est pas dans user:update donc ignoré
         $this->assertResponseIsSuccessful();
     }
 
@@ -496,7 +559,6 @@ class CurrentUserTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
-        // lastLoginAt n'est pas dans user:update donc ignoré
         $this->assertResponseIsSuccessful();
     }
 
@@ -560,21 +622,17 @@ class CurrentUserTest extends ApiTestCase
 
     public function testDeleteCurrentUserAccountAlsoDeletesUserSkills(): void
     {
-        // Récupérer les IDs des UserSkills avant suppression
         $em = self::getContainer()->get('doctrine')->getManager();
         $userSkills = $em->getRepository(UserSkill::class)->findBy(['owner' => $this->user]);
         $userSkillIds = array_map(fn($us) => $us->getId(), $userSkills);
 
         $this->assertCount(2, $userSkillIds);
 
-        // Supprimer le compte
         static::createClient()->request('DELETE', '/me', ['auth_bearer' => $this->userToken]);
         $this->assertResponseStatusCodeSame(204);
 
-        // Vider le cache Doctrine
         $em->clear();
 
-        // Vérifier que les UserSkills sont supprimés (CASCADE)
         foreach ($userSkillIds as $id) {
             $this->assertNull($em->getRepository(UserSkill::class)->find($id));
         }

@@ -10,6 +10,8 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Repository\UserSkillRepository;
+use App\Security\Voter\UserSkillVoter;
+use App\State\Processor\UserSkill\UserSkillProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Serializer\Annotation\Groups;
@@ -17,7 +19,6 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: UserSkillRepository::class)]
 #[ORM\Table(name: 'user_skill')]
-#[ORM\HasLifecycleCallbacks]
 #[ORM\UniqueConstraint(
     name: 'unique_user_skill_type',
     columns: ['owner_id', 'skill_id', 'type']
@@ -32,15 +33,16 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
         ),
         new Get(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            security: "is_granted('" . UserSkillVoter::VIEW . "', object)",
         ),
         new Post(
-            security: "is_granted('ROLE_ADMIN')",
-            securityMessage: "Only admins can create user skills directly."
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityPostDenormalize: "is_granted('IS_AUTHENTICATED_FULLY') and object.setOwner(user) == object",
+            processor: UserSkillProcessor::class
         ),
         new Delete(
-            security: "is_granted('ROLE_ADMIN')",
-            securityMessage: "Only admins can delete user skills directly."
+            security: "is_granted('" . UserSkillVoter::DELETE . "', object)",
+            securityMessage: "You can only delete your own skills.",
         ),
     ],
     normalizationContext: ['groups' => ['user_skill:read']],
@@ -56,7 +58,6 @@ class UserSkill
 {
     public const TYPE_TEACH = 'teach';
     public const TYPE_LEARN = 'learn';
-
     public const LEVEL_BEGINNER = 'beginner';
     public const LEVEL_INTERMEDIATE = 'intermediate';
     public const LEVEL_ADVANCED = 'advanced';
@@ -71,7 +72,7 @@ class UserSkill
     #[ORM\ManyToOne(inversedBy: 'userSkills')]
     #[ORM\JoinColumn(nullable: false)]
     #[Assert\NotNull(message: 'The user cannot be null')]
-    #[Groups(['user_skill:read', 'user_skill:write'])]
+    #[Groups(['user_skill:read'])]
     private ?User $owner = null;
 
     #[ORM\ManyToOne(inversedBy: 'userSkills')]
@@ -106,10 +107,7 @@ class UserSkill
     #[Groups(['user_skill:read'])]
     private ?\DateTimeImmutable $createdAt = null;
 
-    // === Lifecycle Callbacks ===
-
-    #[ORM\PrePersist]
-    public function onPrePersist(): void
+    public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
     }
@@ -129,6 +127,7 @@ class UserSkill
     public function setOwner(?User $owner): static
     {
         $this->owner = $owner;
+
         return $this;
     }
 
@@ -140,6 +139,7 @@ class UserSkill
     public function setSkill(?Skill $skill): static
     {
         $this->skill = $skill;
+
         return $this;
     }
 
@@ -151,6 +151,7 @@ class UserSkill
     public function setType(string $type): static
     {
         $this->type = $type;
+
         return $this;
     }
 
@@ -162,6 +163,7 @@ class UserSkill
     public function setLevel(?string $level): static
     {
         $this->level = $level;
+
         return $this;
     }
 
@@ -173,6 +175,7 @@ class UserSkill
     public function setCreatedAt(\DateTimeImmutable $createdAt): static
     {
         $this->createdAt = $createdAt;
+
         return $this;
     }
 }
