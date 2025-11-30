@@ -65,5 +65,8 @@ class JwtAccessTokenCookieListener implements EventSubscriberInterface
         $csrfToken = bin2hex(random_bytes(32));
         $response->headers->setCookie($this->cookieFactory->createCsrfCookie($csrfToken));
         $response->headers->set(self::CSRF_HEADER, $csrfToken);
+
+        unset($payload[self::TOKEN_KEY]);
+        $response->setContent(json_encode($payload));
     }
 }
