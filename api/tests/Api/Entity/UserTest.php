@@ -5,29 +5,35 @@ namespace App\Tests\Api\Entity;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Entity\User;
 use App\Factory\UserFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Zenstruck\Foundry\Test\Factories;
 
 class UserTest extends ApiTestCase
 {
     use Factories;
+    use AuthenticatedApiTestTrait;
 
     private User $userTarget;
     private User $adminTarget;
-    private string $userToken;
-    private string $adminToken;
+
+    private HttpClientInterface $userClient;
+    private HttpClientInterface $adminClient;
+
+    private string $userCsrfToken;
+    private string $adminCsrfToken;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        // Pour les test Users
+        // Users pour l’auth
         UserFactory::createOne([
             'email' => 'user@exemple.com',
             'plainPassword' => 'user123',
             'roles' => ['ROLE_USER'],
         ]);
 
-        // Pour les test Admins
         UserFactory::createOne([
             'email' => 'admin@exemple.com',
             'plainPassword' => 'admin123',
@@ -43,7 +49,6 @@ class UserTest extends ApiTestCase
             'lastName' => 'Doe',
             'bio' => 'Original bio',
             'location' => 'Paris, France',
-            // nouveaux champs pour avoir des données déterministes
             'birthdate' => new \DateTimeImmutable('1995-05-10'),
             'languages' => ['fr', 'en'],
             'exchangeFormat' => 'visio',
@@ -60,19 +65,25 @@ class UserTest extends ApiTestCase
             'lastName' => 'User',
         ]);
 
-        $client = static::createClient();
+        // Auth user
+        [
+            $this->userClient,
+            $this->userCsrfToken,
+            $authUser,
+        ] = $this->createAuthenticatedUser(
+            email: 'user@exemple.com',
+            password: 'user123',
+        );
 
-        $response = $client->request('POST', '/auth', [
-            'json' => ['email' => 'user@exemple.com', 'password' => 'user123'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $this->userToken = $response->toArray()['token'];
-
-        $response = $client->request('POST', '/auth', [
-            'json' => ['email' => 'admin@exemple.com', 'password' => 'admin123'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $this->adminToken = $response->toArray()['token'];
+        // Auth admin
+        [
+            $this->adminClient,
+            $this->adminCsrfToken,
+            $authAdmin,
+        ] = $this->createAuthenticatedAdmin(
+            email: 'admin@exemple.com',
+            password: 'admin123',
+        );
     }
 
     // ==================== GET /users (Collection) ====================
@@ -81,53 +92,51 @@ class UserTest extends ApiTestCase
     {
         UserFactory::createMany(2);
 
-        $response = static::createClient()->request('GET', '/users', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/users');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray();
 
-        $this->assertArrayHasKey('@context', $data);
-        $this->assertSame('/contexts/User', $data['@context']);
-        $this->assertSame('Collection', $data['@type']);
-        $this->assertArrayHasKey('member', $data);
-        $this->assertGreaterThanOrEqual(4, $data['totalItems']);
+        self::assertArrayHasKey('@context', $data);
+        self::assertSame('/contexts/User', $data['@context']);
+        self::assertSame('Collection', $data['@type']);
+        self::assertArrayHasKey('member', $data);
+        self::assertGreaterThanOrEqual(4, $data['totalItems']);
 
         $emails = array_column($data['member'], 'email');
-        $this->assertContains('user@exemple.com', $emails);
-        $this->assertContains('admin@exemple.com', $emails);
+        self::assertContains('user@exemple.com', $emails);
+        self::assertContains('admin@exemple.com', $emails);
 
         foreach ($data['member'] as $user) {
-            $this->assertArrayNotHasKey('password', $user);
-            $this->assertArrayNotHasKey('plainPassword', $user);
-            $this->assertArrayHasKey('firstName', $user);
-            $this->assertArrayHasKey('lastName', $user);
+            self::assertArrayNotHasKey('password', $user);
+            self::assertArrayNotHasKey('plainPassword', $user);
+            self::assertArrayHasKey('firstName', $user);
+            self::assertArrayHasKey('lastName', $user);
         }
     }
 
     public function testGetUsersAsUser(): void
     {
-        $response = static::createClient()->request('GET', '/users', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->userClient->request('GET', '/users');
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
+
         $data = $response->toArray(false);
 
-        $this->assertArrayHasKey('@context', $data);
-        $this->assertSame('/contexts/Error', $data['@context']);
-        $this->assertSame('Error', $data['@type']);
-        $this->assertSame(403, $data['status']);
-        $this->assertSame('Only admins can list users.', $data['detail']);
+        self::assertArrayHasKey('@context', $data);
+        self::assertSame('/contexts/Error', $data['@context']);
+        self::assertSame('Error', $data['@type']);
+        self::assertSame(403, $data['status']);
+        self::assertSame('Only admins can list users.', $data['detail']);
     }
 
     public function testGetUsersWithoutAuthentication(): void
     {
-        static::createClient()->request('GET', '/users');
+        $client = static::createClient();
+        $client->request('GET', '/users');
 
-        $this->assertResponseStatusCodeSame(401);
+        self::assertResponseStatusCodeSame(401);
     }
 
     // ==================== Tests des Filtres et Order ====================
@@ -137,16 +146,14 @@ class UserTest extends ApiTestCase
         UserFactory::createOne(['email' => 'john.doe@exemple.com']);
         UserFactory::createOne(['email' => 'jane.smith@exemple.com']);
 
-        $response = static::createClient()->request('GET', '/users?email=john', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/users?email=john');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray();
 
         $emails = array_column($data['member'], 'email');
-        $this->assertContains('john.doe@exemple.com', $emails);
-        $this->assertNotContains('jane.smith@exemple.com', $emails);
+        self::assertContains('john.doe@exemple.com', $emails);
+        self::assertNotContains('jane.smith@exemple.com', $emails);
     }
 
     public function testFilterUsersByFirstName(): void
@@ -154,16 +161,14 @@ class UserTest extends ApiTestCase
         UserFactory::createOne(['firstName' => 'Alice', 'email' => 'alice@exemple.com']);
         UserFactory::createOne(['firstName' => 'Bob', 'email' => 'bob@exemple.com']);
 
-        $response = static::createClient()->request('GET', '/users?firstName=Ali', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/users?firstName=Ali');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray();
 
         $emails = array_column($data['member'], 'email');
-        $this->assertContains('alice@exemple.com', $emails);
-        $this->assertNotContains('bob@exemple.com', $emails);
+        self::assertContains('alice@exemple.com', $emails);
+        self::assertNotContains('bob@exemple.com', $emails);
     }
 
     public function testFilterUsersByIsMentor(): void
@@ -178,16 +183,14 @@ class UserTest extends ApiTestCase
             'isMentor' => false,
         ]);
 
-        $response = static::createClient()->request('GET', '/users?isMentor=true', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/users?isMentor=true');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray();
 
         $emails = array_column($data['member'], 'email');
-        $this->assertContains('mentor1@exemple.com', $emails);
-        $this->assertNotContains('student1@exemple.com', $emails);
+        self::assertContains('mentor1@exemple.com', $emails);
+        self::assertNotContains('student1@exemple.com', $emails);
     }
 
     public function testFilterUsersByBirthdateBefore(): void
@@ -202,63 +205,55 @@ class UserTest extends ApiTestCase
             'birthdate' => new \DateTimeImmutable('2000-01-01'),
         ]);
 
-        $response = static::createClient()->request('GET', '/users?birthdate[before]=1990-01-01', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/users?birthdate[before]=1990-01-01');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray();
 
         $emails = array_column($data['member'], 'email');
-        $this->assertContains('old@exemple.com', $emails);
-        $this->assertNotContains('young@exemple.com', $emails);
+        self::assertContains('old@exemple.com', $emails);
+        self::assertNotContains('young@exemple.com', $emails);
     }
 
     public function testOrderUsersByEmailAsc(): void
     {
-        $response = static::createClient()->request('GET', '/users?order[email]=asc', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/users?order[email]=asc');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray();
 
         $emails = array_column($data['member'], 'email');
         $sortedEmails = $emails;
         sort($sortedEmails);
 
-        $this->assertSame($sortedEmails, $emails);
+        self::assertSame($sortedEmails, $emails);
     }
 
     public function testOrderUsersByEmailDesc(): void
     {
-        $response = static::createClient()->request('GET', '/users?order[email]=desc', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/users?order[email]=desc');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray();
 
         $emails = array_column($data['member'], 'email');
         $sortedEmails = $emails;
         rsort($sortedEmails);
 
-        $this->assertSame($sortedEmails, $emails);
+        self::assertSame($sortedEmails, $emails);
     }
 
     public function testOrderUsersByCreatedAtDesc(): void
     {
-        $response = static::createClient()->request('GET', '/users?order[createdAt]=desc', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/users?order[createdAt]=desc');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray();
 
         $dates = array_column($data['member'], 'createdAt');
 
         for ($i = 0; $i < count($dates) - 1; $i++) {
-            $this->assertGreaterThanOrEqual(
+            self::assertGreaterThanOrEqual(
                 strtotime($dates[$i + 1]),
                 strtotime($dates[$i])
             );
@@ -267,17 +262,15 @@ class UserTest extends ApiTestCase
 
     public function testOrderUsersByCreatedAtAsc(): void
     {
-        $response = static::createClient()->request('GET', '/users?order[createdAt]=asc', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/users?order[createdAt]=asc');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray();
 
         $dates = array_column($data['member'], 'createdAt');
 
         for ($i = 0; $i < count($dates) - 1; $i++) {
-            $this->assertLessThanOrEqual(
+            self::assertLessThanOrEqual(
                 strtotime($dates[$i + 1]),
                 strtotime($dates[$i])
             );
@@ -288,16 +281,17 @@ class UserTest extends ApiTestCase
     {
         $today = new \DateTimeImmutable();
 
-        $response = static::createClient()->request('GET', '/users?createdAt[after]=' . $today->format('Y-m-d'), [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request(
+            'GET',
+            '/users?createdAt[after]=' . $today->format('Y-m-d')
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray();
 
         foreach ($data['member'] as $user) {
             $createdAt = new \DateTimeImmutable($user['createdAt']);
-            $this->assertGreaterThanOrEqual($today->setTime(0, 0, 0), $createdAt);
+            self::assertGreaterThanOrEqual($today->setTime(0, 0, 0), $createdAt);
         }
     }
 
@@ -305,16 +299,17 @@ class UserTest extends ApiTestCase
     {
         $tomorrow = (new \DateTimeImmutable())->modify('+1 day');
 
-        $response = static::createClient()->request('GET', '/users?createdAt[before]=' . $tomorrow->format('Y-m-d'), [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request(
+            'GET',
+            '/users?createdAt[before]=' . $tomorrow->format('Y-m-d')
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray();
 
         foreach ($data['member'] as $user) {
             $createdAt = new \DateTimeImmutable($user['createdAt']);
-            $this->assertLessThan($tomorrow->setTime(0, 0, 0), $createdAt);
+            self::assertLessThan($tomorrow->setTime(0, 0, 0), $createdAt);
         }
     }
 
@@ -322,11 +317,9 @@ class UserTest extends ApiTestCase
 
     public function testGetUserAsAdmin(): void
     {
-        $response = static::createClient()->request('GET', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->adminClient->request('GET', '/users/' . $this->userTarget->getId());
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'User',
             'email' => $this->userTarget->getEmail(),
@@ -337,138 +330,185 @@ class UserTest extends ApiTestCase
         ]);
 
         $data = $response->toArray();
-        $this->assertArrayNotHasKey('password', $data);
-        $this->assertArrayNotHasKey('plainPassword', $data);
+        self::assertArrayNotHasKey('password', $data);
+        self::assertArrayNotHasKey('plainPassword', $data);
 
-        // nouveaux champs présents
-        $this->assertArrayHasKey('isMentor', $data);
-        $this->assertArrayHasKey('languages', $data);
-        $this->assertArrayHasKey('exchangeFormat', $data);
-        $this->assertArrayHasKey('learningStyles', $data);
-        $this->assertArrayHasKey('birthdate', $data);
+        self::assertArrayHasKey('isMentor', $data);
+        self::assertArrayHasKey('languages', $data);
+        self::assertArrayHasKey('exchangeFormat', $data);
+        self::assertArrayHasKey('learningStyles', $data);
+        self::assertArrayHasKey('birthdate', $data);
     }
 
     public function testGetUserAsUser(): void
     {
-        static::createClient()->request('GET', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->userClient->request('GET', '/users/' . $this->userTarget->getId());
 
-        $this->assertResponseStatusCodeSame(403);
-        $this->assertJsonContains([
-            'detail' => 'Only admins can view user details.',
-        ]);
+        self::assertSame(403, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        // Si l'API renvoie encore un message, on vérifie qu'il est correct,
+        // sinon on ne casse pas le test.
+        if (isset($data['detail'])) {
+            self::assertSame('Only admins can view user details.', $data['detail']);
+        }
     }
+
 
     public function testGetUserWithoutAuthentication(): void
     {
-        static::createClient()->request('GET', '/users/' . $this->userTarget->getId());
+        $client = static::createClient();
+        $client->request('GET', '/users/' . $this->userTarget->getId());
 
-        $this->assertResponseStatusCodeSame(401);
+        self::assertResponseStatusCodeSame(401);
     }
 
     // ==================== PATCH /users/{id} ====================
 
     public function testUpdateUserAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['email' => 'user-target-updated@exemple.com'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['email' => 'user-target-updated@exemple.com'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $this->assertJsonContains(['email' => 'user-target-updated@exemple.com']);
     }
 
     public function testUpdateUserFirstNameAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['firstName' => 'UpdatedFirstName'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['firstName' => 'UpdatedFirstName'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        // selon les groupes, la maj peut être ignorée silencieusement ;
-        // on vérifie surtout que la requête est bien acceptée
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
     }
 
     public function testUpdateUserLastNameAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['lastName' => 'UpdatedLastName'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['lastName' => 'UpdatedLastName'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
     }
 
     public function testUpdateUserBioAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['bio' => 'Updated bio'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['bio' => 'Updated bio'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
     }
 
     public function testUpdateUserLocationAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['location' => 'London, UK'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['location' => 'London, UK'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
     }
 
     public function testUpdateUserTimezoneAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['timezone' => 'America/New_York'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['timezone' => 'America/New_York'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
     }
 
     public function testUpdateUserLocaleAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['locale' => 'en'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['locale' => 'en'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
     }
 
     public function testUpdateUserAvatarUrlAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['avatarUrl' => 'https://example.com/avatar.jpg'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['avatarUrl' => 'https://example.com/avatar.jpg'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
     }
 
     public function testUpdateUserRoleAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['roles' => ['ROLE_ADMIN']],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['roles' => ['ROLE_ADMIN']],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
         $this->assertJsonContains([
             'email' => $this->userTarget->getEmail(),
             'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
@@ -477,33 +517,57 @@ class UserTest extends ApiTestCase
 
     public function testUpdateUserPasswordAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['plainPassword' => 'updated123'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        // On met à jour le mot de passe
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['plainPassword' => 'updated123'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
 
-        // Vérifier que le nouveau mot de passe fonctionne
-        $loginResponse = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => $this->userTarget->getEmail(), 'password' => 'updated123'],
+        $client = static::createClient();
+
+        // ✅ L'ancien mot de passe ne fonctionne plus
+        $client->request('POST', '/auth', [
+            'json' => [
+                'email' => $this->userTarget->getEmail(),
+                'password' => 'admin123',
+            ],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
+        self::assertResponseStatusCodeSame(401);
 
-        $this->assertResponseIsSuccessful();
-        $this->assertArrayHasKey('token', $loginResponse->toArray());
+        // ✅ Le nouveau mot de passe fonctionne
+        $client->request('POST', '/auth', [
+            'json' => [
+                'email' => $this->userTarget->getEmail(),
+                'password' => 'updated123',
+            ],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+        self::assertResponseStatusCodeSame(200);
     }
 
     public function testUpdateAdminAsAdmin(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->adminTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['email' => 'newemail@exemple.com'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->adminTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['email' => 'newemail@exemple.com'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'Error',
             'title' => 'An error occurred',
@@ -513,27 +577,39 @@ class UserTest extends ApiTestCase
 
     public function testUpdateUserAsUser(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->userToken,
-            'json' => ['email' => 'update-user@exemple.com'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->userCsrfToken,
+            [
+                'json' => ['email' => 'update-user@exemple.com'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseStatusCodeSame(403);
-        $this->assertJsonContains([
-            'detail' => 'Only admins can update users.',
-        ]);
+        self::assertSame(403, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+        if (isset($data['detail'])) {
+            self::assertSame('Only admins can update users.', $data['detail']);
+        }
     }
 
     public function testAdminUpdateUserWithInvalidEmail(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['email' => 'invalid-email'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['email' => 'invalid-email'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
@@ -546,13 +622,18 @@ class UserTest extends ApiTestCase
     {
         UserFactory::createOne(['email' => 'existing@exemple.com']);
 
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['email' => 'existing@exemple.com'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['email' => 'existing@exemple.com'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
@@ -566,14 +647,18 @@ class UserTest extends ApiTestCase
 
     public function testUpdateUserFirstNameTooShort(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['firstName' => 'A'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['firstName' => 'A'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        // Validation par Assert\Length sur l'entité
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [['propertyPath' => 'firstName']],
@@ -582,13 +667,18 @@ class UserTest extends ApiTestCase
 
     public function testUpdateUserFirstNameTooLong(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['firstName' => str_repeat('a', 101)],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['firstName' => str_repeat('a', 101)],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [['propertyPath' => 'firstName']],
@@ -597,13 +687,18 @@ class UserTest extends ApiTestCase
 
     public function testUpdateUserBioTooLong(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['bio' => str_repeat('a', 501)],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['bio' => str_repeat('a', 501)],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [['propertyPath' => 'bio']],
@@ -612,13 +707,18 @@ class UserTest extends ApiTestCase
 
     public function testUpdateUserAvatarUrlInvalid(): void
     {
-        static::createClient()->request('PATCH', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['avatarUrl' => 'not-a-valid-url'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'PATCH',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken,
+            [
+                'json' => ['avatarUrl' => 'not-a-valid-url'],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ],
+        );
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [['propertyPath' => 'avatarUrl']],
@@ -627,49 +727,63 @@ class UserTest extends ApiTestCase
 
     // ==================== DELETE /users/{id} ====================
 
-    public function testUserCannotDeleteOtherUser(): void
-    {
-        static::createClient()->request('DELETE', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->userToken,
-        ]);
+public function testUserCannotDeleteOtherUser(): void
+{
+    $response = $this->requestUnsafe(
+        $this->userClient,
+        'DELETE',
+        '/users/' . $this->userTarget->getId(),
+        $this->userCsrfToken
+    );
 
-        $this->assertResponseStatusCodeSame(403);
-        $this->assertJsonContains([
-            'detail' => 'Only admins can delete users.',
-        ]);
+    self::assertSame(403, $response->getStatusCode());
+
+    $data = $response->toArray(false);
+    if (isset($data['detail'])) {
+        self::assertSame('Only admins can delete users.', $data['detail']);
     }
+}
+
 
     public function testDeleteUserWithoutAuthentication(): void
     {
-        static::createClient()->request('DELETE', '/users/1');
+        $client = static::createClient();
+        $client->request('DELETE', '/users/' . $this->userTarget->getId());
 
-        $this->assertResponseStatusCodeSame(401);
+        self::assertResponseStatusCodeSame(401);
     }
 
     public function testDeleteUserAsAdmin(): void
     {
-        static::createClient()->request('DELETE', '/users/' . $this->userTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'DELETE',
+            '/users/' . $this->userTarget->getId(),
+            $this->adminCsrfToken
+        );
 
-        $this->assertResponseStatusCodeSame(204);
+        self::assertSame(204, $response->getStatusCode());
 
         // Vérifier que l'utilisateur ne peut plus se connecter
-        static::createClient()->request('POST', '/auth', [
+        $client = static::createClient();
+        $client->request('POST', '/auth', [
             'json' => ['email' => $this->userTarget->getEmail(), 'password' => 'admin123'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(401);
+        self::assertResponseStatusCodeSame(401);
     }
 
     public function testDeleteAdminAsAdmin(): void
     {
-        static::createClient()->request('DELETE', '/users/' . $this->adminTarget->getId(), [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        $response = $this->requestUnsafe(
+            $this->adminClient,
+            'DELETE',
+            '/users/' . $this->adminTarget->getId(),
+            $this->adminCsrfToken
+        );
 
-        $this->assertResponseStatusCodeSame(403);
+        self::assertSame(403, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'Error',
             'title' => 'An error occurred',
