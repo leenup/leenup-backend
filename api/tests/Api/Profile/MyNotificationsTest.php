@@ -3,103 +3,53 @@
 namespace App\Tests\Api\Profile;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
-use ApiPlatform\Symfony\Bundle\Test\Client;
 use App\Entity\Notification;
+use App\Entity\User;
 use App\Factory\NotificationFactory;
 use App\Factory\UserFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Zenstruck\Foundry\Test\Factories;
 
 class MyNotificationsTest extends ApiTestCase
 {
     use Factories;
+    use AuthenticatedApiTestTrait;
 
-    private string $user1Token;
-    private string $user2Token;
-    private $user1;
-    private $user2;
+    private HttpClientInterface $user1Client;
+    private HttpClientInterface $user2Client;
 
-    private Client $client1;
-    private Client $client2;
+    private string $user1CsrfToken;
+    private string $user2CsrfToken;
+
+    private User $user1;
+    private User $user2;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->client1 = static::createClient();
-        $this->client2 = static::createClient();
-
         $uniqueId = uniqid();
 
-        $this->user1 = UserFactory::createOne([
-            'email' => "user1-{$uniqueId}@test.com",
-            'plainPassword' => 'password',
-            'firstName' => 'Alice',
-            'lastName' => 'User',
-        ]);
-
-        $this->user2 = UserFactory::createOne([
-            'email' => "user2-{$uniqueId}@test.com",
-            'plainPassword' => 'password',
-            'firstName' => 'Bob',
-            'lastName' => 'User',
-        ]);
-
-        // Auth user1 avec client1
-        $this->user1Token = $this->loginAndGetToken(
-            $this->client1,
-            "user1-{$uniqueId}@test.com",
-            'password'
+        // User 1
+        [
+            $this->user1Client,
+            $this->user1CsrfToken,
+            $this->user1,
+        ] = $this->createAuthenticatedUser(
+            email: "user1-{$uniqueId}@test.com",
+            password: 'password',
         );
 
-        // Auth user2 avec client2
-        $this->user2Token = $this->loginAndGetToken(
-            $this->client2,
-            "user2-{$uniqueId}@test.com",
-            'password'
+        // User 2
+        [
+            $this->user2Client,
+            $this->user2CsrfToken,
+            $this->user2,
+        ] = $this->createAuthenticatedUser(
+            email: "user2-{$uniqueId}@test.com",
+            password: 'password',
         );
-    }
-
-    /**
-     * Helper : login qui gère le cas où la première réponse ne contient
-     * que {"refresh_token_expiration": ...} à cause du refresh auto.
-     */
-    private function loginAndGetToken(Client $client, string $email, string $password): string
-    {
-        $options = [
-            'json' => ['email' => $email, 'password' => $password],
-            'headers' => ['Content-Type' => 'application/json'],
-        ];
-
-        $response = $client->request('POST', '/auth', $options);
-        $data = $response->toArray(false);
-
-        if (is_array($data) && isset($data['refresh_token_expiration']) && count($data) === 1) {
-            $response = $client->request('POST', '/auth', $options);
-            $data = $response->toArray(false);
-        }
-
-        // Sécurise : si jamais il n'y a toujours pas de token, on verra un échec clair
-        $this->assertIsArray($data);
-        $this->assertArrayHasKey('token', $data);
-
-        return $data['token'];
-    }
-
-    /**
-     * Helper : rejoue la requête si la première réponse ne contient que
-     * {"refresh_token_expiration": ...} (cas de refresh automatique).
-     */
-    private function requestWithRefresh(Client $client, string $method, string $uri, array $options = []): array
-    {
-        $response = $client->request($method, $uri, $options);
-        $data = $response->toArray(false);
-
-        if (is_array($data) && isset($data['refresh_token_expiration']) && count($data) === 1) {
-            $response = $client->request($method, $uri, $options);
-            $data = $response->toArray(false);
-        }
-
-        return $data;
     }
 
     // ========================================
@@ -131,41 +81,42 @@ class MyNotificationsTest extends ApiTestCase
             'title' => 'User2 notification',
         ]);
 
-        $data = $this->requestWithRefresh($this->client1, 'GET', '/me/notifications', [
-            'auth_bearer' => $this->user1Token,
-        ]);
+        $response = $this->user1Client->request('GET', '/me/notifications');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
 
-        $this->assertArrayHasKey('totalItems', $data);
-        $this->assertArrayHasKey('member', $data);
+        $data = $response->toArray(false);
+
+        self::assertSame('/contexts/MyNotification', $data['@context'] ?? null);
+        self::assertSame('Collection', $data['@type'] ?? null);
 
         // User1 doit avoir exactement 2 notifications
-        $this->assertEquals(2, $data['totalItems']);
-        $this->assertCount(2, $data['member']);
+        self::assertEquals(2, $data['totalItems']);
+        self::assertCount(2, $data['member']);
 
         $titles = array_column($data['member'], 'title');
-        $this->assertContains('Notification 1', $titles);
-        $this->assertContains('Notification 2', $titles);
-        $this->assertNotContains('User2 notification', $titles);
+        self::assertContains('Notification 1', $titles);
+        self::assertContains('Notification 2', $titles);
+        self::assertNotContains('User2 notification', $titles);
     }
 
     public function testGetMyNotificationsWhenEmpty(): void
     {
-        $data = $this->requestWithRefresh($this->client1, 'GET', '/me/notifications', [
-            'auth_bearer' => $this->user1Token,
-        ]);
+        $response = $this->user1Client->request('GET', '/me/notifications');
 
-        $this->assertResponseIsSuccessful();
-        $this->assertEquals(0, $data['totalItems']);
-        $this->assertCount(0, $data['member']);
+        self::assertSame(200, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        self::assertEquals(0, $data['totalItems']);
+        self::assertCount(0, $data['member']);
     }
 
     public function testGetMyNotificationsWithoutAuth(): void
     {
-        static::createClient()->request('GET', '/me/notifications');
+        $response = static::createClient()->request('GET', '/me/notifications');
 
-        $this->assertResponseStatusCodeSame(401);
+        self::assertSame(401, $response->getStatusCode());
     }
 
     // ========================================
@@ -182,23 +133,21 @@ class MyNotificationsTest extends ApiTestCase
             'link' => '/conversations/1',
         ]);
 
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->user1Client->request(
             'GET',
-            '/me/notifications/' . $notification->getId(),
-            [
-                'auth_bearer' => $this->user1Token,
-            ]
+            '/me/notifications/'.$notification->getId()
         );
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
 
-        $this->assertEquals($notification->getId(), $data['id']);
-        $this->assertEquals('My notification', $data['title']);
-        $this->assertEquals('Some content', $data['content']);
-        $this->assertEquals('/conversations/1', $data['link']);
-        $this->assertEquals(Notification::TYPE_NEW_MESSAGE, $data['type']);
-        $this->assertFalse($data['isRead']);
+        $data = $response->toArray(false);
+
+        self::assertEquals($notification->getId(), $data['id'] ?? null);
+        self::assertEquals('My notification', $data['title'] ?? null);
+        self::assertEquals('Some content', $data['content'] ?? null);
+        self::assertEquals('/conversations/1', $data['link'] ?? null);
+        self::assertEquals(Notification::TYPE_NEW_MESSAGE, $data['type'] ?? null);
+        self::assertFalse($data['isRead'] ?? true);
     }
 
     public function testCannotGetOthersNotification(): void
@@ -209,30 +158,22 @@ class MyNotificationsTest extends ApiTestCase
             'title' => 'User2 notification',
         ]);
 
-        $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->user1Client->request(
             'GET',
-            '/me/notifications/' . $notification->getId(),
-            [
-                'auth_bearer' => $this->user1Token,
-            ]
+            '/me/notifications/'.$notification->getId()
         );
 
-        $this->assertResponseStatusCodeSame(404);
+        self::assertSame(404, $response->getStatusCode());
     }
 
     public function testGetNonExistentNotification(): void
     {
-        $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->user1Client->request(
             'GET',
-            '/me/notifications/99999',
-            [
-                'auth_bearer' => $this->user1Token,
-            ]
+            '/me/notifications/99999'
         );
 
-        $this->assertResponseStatusCodeSame(404);
+        self::assertSame(404, $response->getStatusCode());
     }
 
     // ========================================
@@ -247,30 +188,33 @@ class MyNotificationsTest extends ApiTestCase
             'title' => 'Test notification',
         ]);
 
-        $this->assertFalse($notification->isRead());
-        $this->assertNull($notification->getReadAt());
+        self::assertFalse($notification->isRead());
+        self::assertNull($notification->getReadAt());
 
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->requestUnsafe(
+            $this->user1Client,
             'PATCH',
-            '/me/notifications/' . $notification->getId(),
+            '/me/notifications/'.$notification->getId(),
+            $this->user1CsrfToken,
             [
-                'auth_bearer' => $this->user1Token,
                 'json' => [
                     'isRead' => true,
                 ],
-                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+                'headers' => [
+                    'Content-Type' => 'application/merge-patch+json',
+                ],
             ]
         );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertTrue($data['isRead']);
-        $this->assertNotNull($data['readAt']);
+        self::assertSame(200, $response->getStatusCode());
 
-        // Vérifier en base de données
+        $data = $response->toArray(false);
+        self::assertTrue($data['isRead'] ?? false);
+        self::assertNotNull($data['readAt'] ?? null);
+
         $updatedNotification = NotificationFactory::find(['id' => $notification->getId()]);
-        $this->assertTrue($updatedNotification->isRead());
-        $this->assertNotNull($updatedNotification->getReadAt());
+        self::assertTrue($updatedNotification->isRead());
+        self::assertNotNull($updatedNotification->getReadAt());
     }
 
     public function testMarkNotificationAsUnread(): void
@@ -282,23 +226,27 @@ class MyNotificationsTest extends ApiTestCase
             'isRead' => true,
         ]);
 
-        $this->assertTrue($notification->isRead());
+        self::assertTrue($notification->isRead());
 
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->requestUnsafe(
+            $this->user1Client,
             'PATCH',
-            '/me/notifications/' . $notification->getId(),
+            '/me/notifications/'.$notification->getId(),
+            $this->user1CsrfToken,
             [
-                'auth_bearer' => $this->user1Token,
                 'json' => [
                     'isRead' => false,
                 ],
-                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+                'headers' => [
+                    'Content-Type' => 'application/merge-patch+json',
+                ],
             ]
         );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertFalse($data['isRead']);
+        self::assertSame(200, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+        self::assertFalse($data['isRead'] ?? true);
     }
 
     public function testCannotUpdateOthersNotification(): void
@@ -309,47 +257,49 @@ class MyNotificationsTest extends ApiTestCase
             'title' => 'User2 notification',
         ]);
 
-        $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->requestUnsafe(
+            $this->user1Client,
             'PATCH',
-            '/me/notifications/' . $notification->getId(),
+            '/me/notifications/'.$notification->getId(),
+            $this->user1CsrfToken,
             [
-                'auth_bearer' => $this->user1Token,
                 'json' => [
                     'isRead' => true,
                 ],
-                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+                'headers' => [
+                    'Content-Type' => 'application/merge-patch+json',
+                ],
             ]
         );
 
-        $this->assertResponseStatusCodeSame(404);
+        self::assertSame(404, $response->getStatusCode());
 
-        // Vérifier que la notification de user2 n'a pas été modifiée
         $unchangedNotification = NotificationFactory::find(['id' => $notification->getId()]);
-        $this->assertFalse($unchangedNotification->isRead());
+        self::assertFalse($unchangedNotification->isRead());
     }
 
     public function testPatchNonExistentNotification(): void
     {
-        $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->requestUnsafe(
+            $this->user1Client,
             'PATCH',
             '/me/notifications/99999',
+            $this->user1CsrfToken,
             [
-                'auth_bearer' => $this->user1Token,
                 'json' => [
                     'isRead' => true,
                 ],
-                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+                'headers' => [
+                    'Content-Type' => 'application/merge-patch+json',
+                ],
             ]
         );
 
-        $this->assertResponseStatusCodeSame(404);
+        self::assertSame(404, $response->getStatusCode());
     }
 
     public function testMarkAllNotificationsAsRead(): void
     {
-        // Créer plusieurs notifications non lues pour user1
         NotificationFactory::createOne([
             'user' => $this->user1,
             'type' => Notification::TYPE_NEW_MESSAGE,
@@ -368,7 +318,6 @@ class MyNotificationsTest extends ApiTestCase
             'title' => 'Notification 3',
         ]);
 
-        // Créer une notification déjà lue (ne doit pas être comptée)
         NotificationFactory::createOne([
             'user' => $this->user1,
             'type' => Notification::TYPE_NEW_MESSAGE,
@@ -376,56 +325,54 @@ class MyNotificationsTest extends ApiTestCase
             'isRead' => true,
         ]);
 
-        // Créer une notification pour user2 (ne doit pas être affectée)
         NotificationFactory::createOne([
             'user' => $this->user2,
             'type' => Notification::TYPE_NEW_MESSAGE,
             'title' => 'User2 notification',
         ]);
 
-        // Vérifier qu'il y a 3 notifications non lues pour user1
         $unreadCount = NotificationFactory::count([
             'user' => $this->user1,
             'isRead' => false,
         ]);
-        $this->assertEquals(3, $unreadCount);
+        self::assertEquals(3, $unreadCount);
 
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->requestUnsafe(
+            $this->user1Client,
             'POST',
             '/me/notifications/mark-all-read',
+            $this->user1CsrfToken,
             [
-                'auth_bearer' => $this->user1Token,
                 'json' => [],
-                'headers' => ['Content-Type' => 'application/ld+json'],
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
             ]
         );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertEquals(3, $data['count']);
-        $this->assertStringContainsString('3 notification(s) marked as read', $data['message']);
+        self::assertSame(200, $response->getStatusCode());
 
-        // Vérifier qu'il n'y a plus de notifications non lues pour user1
+        $data = $response->toArray(false);
+        self::assertEquals(3, $data['count'] ?? null);
+        self::assertStringContainsString('3 notification(s) marked as read', $data['message'] ?? '');
+
         $unreadCountAfter = NotificationFactory::count([
             'user' => $this->user1,
             'isRead' => false,
         ]);
-        $this->assertEquals(0, $unreadCountAfter);
+        self::assertEquals(0, $unreadCountAfter);
 
-        // Vérifier que toutes les notifications de user1 sont maintenant lues
         $allUser1Notifications = NotificationFactory::findBy(['user' => $this->user1]);
         foreach ($allUser1Notifications as $notif) {
-            $this->assertTrue($notif->isRead());
+            self::assertTrue($notif->isRead());
         }
 
-        // Vérifier que la notification de user2 n'a pas été affectée
         $user2Notification = NotificationFactory::findBy(['user' => $this->user2])[0];
-        $this->assertFalse($user2Notification->isRead());
+        self::assertFalse($user2Notification->isRead());
     }
 
     public function testMarkAllAsReadWhenNoUnreadNotifications(): void
     {
-        // Créer seulement des notifications déjà lues
         NotificationFactory::createOne([
             'user' => $this->user1,
             'type' => Notification::TYPE_NEW_MESSAGE,
@@ -440,30 +387,40 @@ class MyNotificationsTest extends ApiTestCase
             'isRead' => true,
         ]);
 
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->requestUnsafe(
+            $this->user1Client,
             'POST',
             '/me/notifications/mark-all-read',
+            $this->user1CsrfToken,
             [
-                'auth_bearer' => $this->user1Token,
                 'json' => [],
-                'headers' => ['Content-Type' => 'application/ld+json'],
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
             ]
         );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertEquals(0, $data['count']);
-        $this->assertStringContainsString('0 notification(s) marked as read', $data['message']);
+        self::assertSame(200, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+        self::assertEquals(0, $data['count'] ?? null);
+        self::assertStringContainsString('0 notification(s) marked as read', $data['message'] ?? '');
     }
 
     public function testMarkAllAsReadWithoutAuth(): void
     {
-        static::createClient()->request('POST', '/me/notifications/mark-all-read', [
-            'json' => [],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = static::createClient()->request(
+            'POST',
+            '/me/notifications/mark-all-read',
+            [
+                'json' => [],
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(401);
+        self::assertSame(401, $response->getStatusCode());
     }
 
     // ========================================
@@ -472,7 +429,6 @@ class MyNotificationsTest extends ApiTestCase
 
     public function testFilterNotificationsByIsRead(): void
     {
-        // Créer des notifications lues et non lues
         NotificationFactory::createOne([
             'user' => $this->user1,
             'type' => Notification::TYPE_NEW_MESSAGE,
@@ -494,34 +450,29 @@ class MyNotificationsTest extends ApiTestCase
             'isRead' => false,
         ]);
 
-        // Filtrer les non lues
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->user1Client->request(
             'GET',
-            '/me/notifications?isRead=false',
-            [
-                'auth_bearer' => $this->user1Token,
-            ]
+            '/me/notifications?isRead=false'
         );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertEquals(2, $data['totalItems']);
+        self::assertSame(200, $response->getStatusCode());
+        $data = $response->toArray(false);
+
+        self::assertEquals(2, $data['totalItems']);
         foreach ($data['member'] as $notification) {
-            $this->assertFalse($notification['isRead']);
+            self::assertFalse($notification['isRead']);
         }
 
-        // Filtrer les lues
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->user1Client->request(
             'GET',
-            '/me/notifications?isRead=true',
-            [
-                'auth_bearer' => $this->user1Token,
-            ]
+            '/me/notifications?isRead=true'
         );
 
-        $this->assertEquals(1, $data['totalItems']);
-        $this->assertTrue($data['member'][0]['isRead']);
+        self::assertSame(200, $response->getStatusCode());
+        $data = $response->toArray(false);
+
+        self::assertEquals(1, $data['totalItems']);
+        self::assertTrue($data['member'][0]['isRead']);
     }
 
     public function testFilterNotificationsByType(): void
@@ -544,26 +495,22 @@ class MyNotificationsTest extends ApiTestCase
             'title' => 'Another message',
         ]);
 
-        // Filtrer par type
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->user1Client->request(
             'GET',
-            '/me/notifications?type=new_message',
-            [
-                'auth_bearer' => $this->user1Token,
-            ]
+            '/me/notifications?type='.Notification::TYPE_NEW_MESSAGE
         );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertEquals(2, $data['totalItems']);
+        self::assertSame(200, $response->getStatusCode());
+        $data = $response->toArray(false);
+
+        self::assertEquals(2, $data['totalItems']);
         foreach ($data['member'] as $notification) {
-            $this->assertEquals(Notification::TYPE_NEW_MESSAGE, $notification['type']);
+            self::assertEquals(Notification::TYPE_NEW_MESSAGE, $notification['type']);
         }
     }
 
     public function testOrderNotificationsByCreatedAt(): void
     {
-        // Créer des notifications avec des dates différentes
         NotificationFactory::createOne([
             'user' => $this->user1,
             'type' => Notification::TYPE_NEW_MESSAGE,
@@ -586,37 +533,33 @@ class MyNotificationsTest extends ApiTestCase
             'title' => 'Third',
         ]);
 
-        // Ordre décroissant (par défaut)
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->user1Client->request(
             'GET',
-            '/me/notifications',
-            [
-                'auth_bearer' => $this->user1Token,
-            ]
+            '/me/notifications'
         );
+
+        self::assertSame(200, $response->getStatusCode());
+        $data = $response->toArray(false);
 
         $titles = array_column($data['member'], 'title');
 
-        $this->assertEquals('Third', $titles[0]);
-        $this->assertEquals('Second', $titles[1]);
-        $this->assertEquals('First', $titles[2]);
+        self::assertEquals('Third', $titles[0]);
+        self::assertEquals('Second', $titles[1]);
+        self::assertEquals('First', $titles[2]);
 
-        // Ordre croissant
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->user1Client->request(
             'GET',
-            '/me/notifications?order[createdAt]=asc',
-            [
-                'auth_bearer' => $this->user1Token,
-            ]
+            '/me/notifications?order[createdAt]=asc'
         );
+
+        self::assertSame(200, $response->getStatusCode());
+        $data = $response->toArray(false);
 
         $titles = array_column($data['member'], 'title');
 
-        $this->assertEquals('First', $titles[0]);
-        $this->assertEquals('Second', $titles[1]);
-        $this->assertEquals('Third', $titles[2]);
+        self::assertEquals('First', $titles[0]);
+        self::assertEquals('Second', $titles[1]);
+        self::assertEquals('Third', $titles[2]);
     }
 
     public function testCombineFilters(): void
@@ -642,19 +585,17 @@ class MyNotificationsTest extends ApiTestCase
             'isRead' => true,
         ]);
 
-        $data = $this->requestWithRefresh(
-            $this->client1,
+        $response = $this->user1Client->request(
             'GET',
-            '/me/notifications?isRead=false&type=new_message',
-            [
-                'auth_bearer' => $this->user1Token,
-            ]
+            '/me/notifications?isRead=false&type='.Notification::TYPE_NEW_MESSAGE
         );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertEquals(1, $data['totalItems']);
-        $this->assertEquals('Unread message', $data['member'][0]['title']);
-        $this->assertFalse($data['member'][0]['isRead']);
-        $this->assertEquals(Notification::TYPE_NEW_MESSAGE, $data['member'][0]['type']);
+        self::assertSame(200, $response->getStatusCode());
+        $data = $response->toArray(false);
+
+        self::assertEquals(1, $data['totalItems']);
+        self::assertEquals('Unread message', $data['member'][0]['title']);
+        self::assertFalse($data['member'][0]['isRead']);
+        self::assertEquals(Notification::TYPE_NEW_MESSAGE, $data['member'][0]['type']);
     }
 }

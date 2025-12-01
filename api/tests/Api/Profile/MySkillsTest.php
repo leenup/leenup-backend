@@ -8,24 +8,31 @@ use App\Entity\User;
 use App\Entity\UserSkill;
 use App\Factory\CategoryFactory;
 use App\Factory\SkillFactory;
-use App\Factory\UserFactory;
 use App\Factory\UserSkillFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Zenstruck\Foundry\Test\Factories;
-
 
 class MySkillsTest extends ApiTestCase
 {
     use Factories;
+    use AuthenticatedApiTestTrait;
 
     private User $user;
-    private string $userToken;
     private User $anotherUser;
-    private string $anotherUserToken;
+
+    private HttpClientInterface $userClient;
+    private HttpClientInterface $anotherUserClient;
+
+    private string $userCsrfToken;
+    private string $anotherUserCsrfToken;
+
     private Skill $reactSkill;
     private Skill $javascriptSkill;
     private Skill $angularSkill;
     private Skill $csharpSkill;
     private Skill $phpSkill;
+
     private UserSkill $userSkillReact;
     private UserSkill $userSkillJavaScript;
     private UserSkill $anotherUserSkillAngular;
@@ -42,11 +49,27 @@ class MySkillsTest extends ApiTestCase
         $this->csharpSkill = SkillFactory::createOne(['title' => 'C#', 'category' => $category]);
         $this->phpSkill = SkillFactory::createOne(['title' => 'PHP', 'category' => $category]);
 
-        $this->user = UserFactory::createOne([
-            'email' => 'test@example.com',
-            'plainPassword' => 'password',
-        ]);
+        // User authentifié principal
+        [
+            $this->userClient,
+            $this->userCsrfToken,
+            $this->user,
+        ] = $this->createAuthenticatedUser(
+            email: 'test@example.com',
+            password: 'password',
+        );
 
+        // Autre user authentifié
+        [
+            $this->anotherUserClient,
+            $this->anotherUserCsrfToken,
+            $this->anotherUser,
+        ] = $this->createAuthenticatedUser(
+            email: 'anotherUser@example.com',
+            password: 'password',
+        );
+
+        // Skills de user1
         $this->userSkillReact = UserSkillFactory::createOne([
             'owner' => $this->user,
             'skill' => $this->reactSkill,
@@ -61,18 +84,7 @@ class MySkillsTest extends ApiTestCase
             'level' => UserSkill::LEVEL_BEGINNER,
         ]);
 
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'test@example.com', 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-
-        $this->userToken = $response->toArray()['token'];
-
-        $this->anotherUser = UserFactory::createOne([
-            'email' => 'anotherUser@example.com',
-            'plainPassword' => 'password',
-        ]);
-
+        // Skills de anotherUser
         $this->anotherUserSkillAngular = UserSkillFactory::createOne([
             'owner' => $this->anotherUser,
             'skill' => $this->angularSkill,
@@ -86,104 +98,93 @@ class MySkillsTest extends ApiTestCase
             'type' => UserSkill::TYPE_LEARN,
             'level' => UserSkill::LEVEL_BEGINNER,
         ]);
-
-        $responseAnother = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'anotherUser@example.com', 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-
-        $this->anotherUserToken = $responseAnother->toArray()['token'];
     }
 
     // ==================== GET /me/skills ====================
 
     public function testGetMySkills(): void
     {
-        $response = static::createClient()->request('GET', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->userClient->request('GET', '/me/skills');
 
-        $this->assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
 
-        $data = $response->toArray();
+        $data = $response->toArray(false);
 
-        $this->assertArrayHasKey('@context', $data);
-        $this->assertSame('/contexts/MySkill', $data['@context']);
-        $this->assertSame('Collection', $data['@type']);
-        $this->assertArrayHasKey('member', $data);
-        $this->assertArrayHasKey('totalItems', $data);
-        $this->assertSame(2, $data['totalItems']);
-        $this->assertCount(2, $data['member']);
+        self::assertArrayHasKey('@context', $data);
+        self::assertSame('/contexts/MySkill', $data['@context']);
+        self::assertSame('Collection', $data['@type']);
+        self::assertArrayHasKey('member', $data);
+        self::assertArrayHasKey('totalItems', $data);
+        self::assertSame(2, $data['totalItems']);
+        self::assertCount(2, $data['member']);
 
         $skillIris = array_column($data['member'], 'skill');
-        $reactSkillIri = '/skills/' . $this->reactSkill->getId();
-        $javascriptSkillIri = '/skills/' . $this->javascriptSkill->getId();
+        $reactSkillIri = '/skills/'.$this->reactSkill->getId();
+        $javascriptSkillIri = '/skills/'.$this->javascriptSkill->getId();
 
         $actualSkillIris = array_column($skillIris, '@id');
 
-        $this->assertContains($reactSkillIri, $actualSkillIris);
-        $this->assertContains($javascriptSkillIri, $actualSkillIris);
+        self::assertContains($reactSkillIri, $actualSkillIris);
+        self::assertContains($javascriptSkillIri, $actualSkillIris);
     }
 
     public function testGetMySkillsResponseStructure(): void
     {
-        $response = static::createClient()->request('GET', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->userClient->request('GET', '/me/skills');
 
-        $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
+        self::assertSame(200, $response->getStatusCode());
+        $data = $response->toArray(false);
 
-        // Vérifier la structure d'un item
-        $firstSkill = $data['member'][0];
-        $this->assertArrayHasKey('@id', $firstSkill);
-        $this->assertArrayHasKey('@type', $firstSkill);
-        $this->assertEquals('MySkill', $firstSkill['@type']);
-        $this->assertArrayHasKey('id', $firstSkill);
-        $this->assertArrayHasKey('skill', $firstSkill);
-        $this->assertArrayHasKey('type', $firstSkill);
-        $this->assertArrayHasKey('level', $firstSkill);
-        $this->assertArrayHasKey('createdAt', $firstSkill);
+        $firstSkill = $data['member'][0] ?? null;
+        self::assertNotNull($firstSkill);
 
-        // Vérifier les types
-        $this->assertIsInt($firstSkill['id']);
-        $this->assertIsArray($firstSkill['skill']);
-        $this->assertIsString($firstSkill['type']);
-        $this->assertIsString($firstSkill['createdAt']);
+        self::assertArrayHasKey('@id', $firstSkill);
+        self::assertArrayHasKey('@type', $firstSkill);
+        self::assertEquals('MySkill', $firstSkill['@type']);
+        self::assertArrayHasKey('id', $firstSkill);
+        self::assertArrayHasKey('skill', $firstSkill);
+        self::assertArrayHasKey('type', $firstSkill);
+        self::assertArrayHasKey('level', $firstSkill);
+        self::assertArrayHasKey('createdAt', $firstSkill);
+
+        self::assertIsInt($firstSkill['id']);
+        self::assertIsArray($firstSkill['skill']);
+        self::assertIsString($firstSkill['type']);
+        self::assertIsString($firstSkill['createdAt']);
     }
 
     public function testGetMySkillsWithoutAuth(): void
     {
-        static::createClient()->request('GET', '/me/skills');
-        $this->assertResponseStatusCodeSame(401);
-        $this->assertJsonContains([
-            'code' => 401,
-            'message' => 'JWT Token not found',
-        ]);
+        $response = static::createClient()->request('GET', '/me/skills');
+
+        self::assertSame(401, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        self::assertSame(401, $data['code'] ?? null);
+        // On évite de figer le message exact, mais on peut vérifier qu'il mentionne le token
+        self::assertStringContainsString('Token', $data['message'] ?? '');
     }
 
     public function testGetMySkillsWhenEmpty(): void
     {
         // Créer un nouveau user sans skills
-        $newUser = UserFactory::createOne([
-            'email' => 'noskills@example.com',
-            'plainPassword' => 'password',
-        ]);
+        [
+            $newClient,
+            $newCsrfToken,
+            $newUser,
+        ] = $this->createAuthenticatedUser(
+            email: 'noskills@example.com',
+            password: 'password',
+        );
 
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'noskills@example.com', 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $newToken = $response->toArray()['token'];
+        $response = $newClient->request('GET', '/me/skills');
 
-        $response = static::createClient()->request('GET', '/me/skills', [
-            'auth_bearer' => $newToken,
-        ]);
+        self::assertSame(200, $response->getStatusCode());
 
-        $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
-        $this->assertSame(0, $data['totalItems']);
-        $this->assertCount(0, $data['member']);
+        $data = $response->toArray(false);
+        self::assertSame(0, $data['totalItems']);
+        self::assertCount(0, $data['member']);
     }
 
     // ==================== GET /me/skills/:id ====================
@@ -192,248 +193,301 @@ class MySkillsTest extends ApiTestCase
     {
         $userSkillId = $this->userSkillReact->getId();
 
-        $response = static::createClient()->request('GET', '/me/skills/' . $userSkillId, [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->userClient->request('GET', '/me/skills/'.$userSkillId);
 
-        $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
-        $this->assertSame($userSkillId, $data['id']);
-        $this->assertSame('learn', $data['type']);
-        $this->assertSame('beginner', $data['level']);
+        self::assertSame(200, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+        self::assertSame($userSkillId, $data['id']);
+        self::assertSame('learn', $data['type']);
+        self::assertSame('beginner', $data['level']);
     }
 
     public function testGetAnotherUsersSkillByIdFails(): void
     {
-        $response = static::createClient()->request('GET', '/me/skills/' . $this->anotherUserSkillAngular->getId(), [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->userClient->request(
+            'GET',
+            '/me/skills/'.$this->anotherUserSkillAngular->getId()
+        );
 
-        $this->assertResponseStatusCodeSame(404);
-        $this->assertJsonContains([
-            '@type' => 'Error',
-            'detail' => 'UserSkill not found',
-        ]);
+        self::assertSame(404, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        self::assertSame('Error', $data['@type'] ?? null);
+        self::assertSame('UserSkill not found', $data['detail'] ?? null);
     }
 
     public function testGetNonExistentMySkillReturns404(): void
     {
-        static::createClient()->request('GET', '/me/skills/99999', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->userClient->request('GET', '/me/skills/99999');
 
-        $this->assertResponseStatusCodeSame(404);
+        self::assertSame(404, $response->getStatusCode());
     }
 
     public function testGetMySkillByIdWithoutAuth(): void
     {
-        static::createClient()->request('GET', '/me/skills/' . $this->userSkillReact->getId());
-        $this->assertResponseStatusCodeSame(401);
+        $response = static::createClient()->request('GET', '/me/skills/'.$this->userSkillReact->getId());
+
+        self::assertSame(401, $response->getStatusCode());
     }
 
     // ==================== POST /me/skills ====================
 
     public function testPostNewMySkillSuccessfully(): void
     {
-        $phpSkillIri = '/skills/' . $this->phpSkill->getId();
-        $response = static::createClient()->request('POST', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-            'json' => [
-                'skill' => $phpSkillIri,
-                'type' => UserSkill::TYPE_TEACH,
-                'level' => UserSkill::LEVEL_EXPERT,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $phpSkillIri = '/skills/'.$this->phpSkill->getId();
 
-        $this->assertResponseStatusCodeSame(201);
-        $data = $response->toArray();
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'POST',
+            '/me/skills',
+            $this->userCsrfToken,
+            [
+                'json' => [
+                    'skill' => $phpSkillIri,
+                    'type' => UserSkill::TYPE_TEACH,
+                    'level' => UserSkill::LEVEL_EXPERT,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertArrayHasKey('id', $data);
-        $this->assertSame(UserSkill::TYPE_TEACH, $data['type']);
-        $this->assertSame(UserSkill::LEVEL_EXPERT, $data['level']);
+        self::assertSame(201, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        self::assertArrayHasKey('id', $data);
+        self::assertSame(UserSkill::TYPE_TEACH, $data['type']);
+        self::assertSame(UserSkill::LEVEL_EXPERT, $data['level']);
     }
 
     public function testPostSameSkillWithDifferentTypeSuccessfully(): void
     {
-        $reactSkillIri = '/skills/' . $this->reactSkill->getId();
-        $response = static::createClient()->request('POST', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-            'json' => [
-                'skill' => $reactSkillIri,
-                'type' => UserSkill::TYPE_TEACH,
-                'level' => UserSkill::LEVEL_EXPERT,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $reactSkillIri = '/skills/'.$this->reactSkill->getId();
 
-        $this->assertResponseStatusCodeSame(201);
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'POST',
+            '/me/skills',
+            $this->userCsrfToken,
+            [
+                'json' => [
+                    'skill' => $reactSkillIri,
+                    'type' => UserSkill::TYPE_TEACH,
+                    'level' => UserSkill::LEVEL_EXPERT,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $responseGet = static::createClient()->request('GET', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-        ]);
-        $this->assertCount(3, $responseGet->toArray()['member'], 'After POST, the user should have 3 skills.');
+        self::assertSame(201, $response->getStatusCode());
+
+        $responseGet = $this->userClient->request('GET', '/me/skills');
+        $data = $responseGet->toArray(false);
+
+        self::assertCount(3, $data['member'], 'After POST, the user should have 3 skills.');
     }
 
     public function testPostExistingMySkillFails(): void
     {
-        $reactSkillIri = '/skills/' . $this->userSkillReact->getSkill()->getId();
-        $response = static::createClient()->request('POST', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-            'json' => [
-                'skill' => $reactSkillIri,
-                'type' => UserSkill::TYPE_LEARN,
-                'level' => UserSkill::LEVEL_INTERMEDIATE,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $reactSkillIri = '/skills/'.$this->userSkillReact->getSkill()->getId();
 
-        $this->assertResponseStatusCodeSame(422);
-
-        $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [
-                [
-                    'propertyPath' => 'skill',
-                    'message' => 'You already have this skill with this type',
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'POST',
+            '/me/skills',
+            $this->userCsrfToken,
+            [
+                'json' => [
+                    'skill' => $reactSkillIri,
+                    'type' => UserSkill::TYPE_LEARN,
+                    'level' => UserSkill::LEVEL_INTERMEDIATE,
                 ],
-            ],
-        ]);
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
+
+        self::assertSame(422, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        self::assertSame('ConstraintViolation', $data['@type'] ?? null);
+
+        $violations = $data['violations'] ?? [];
+        self::assertNotEmpty($violations);
+        self::assertSame('skill', $violations[0]['propertyPath'] ?? null);
+        self::assertSame('You already have this skill with this type', $violations[0]['message'] ?? null);
     }
 
     public function testPostMySkillWithInvalidTypeFails(): void
     {
-        $response = static::createClient()->request('POST', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-            'json' => [
-                'skill' => '/skills/' . $this->phpSkill->getId(),
-                'type' => 'invalid_type',
-                'level' => UserSkill::LEVEL_BEGINNER,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
-
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [
-                [
-                    'propertyPath' => 'type',
-                    'message' => 'The type must be either "teach" or "learn"',
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'POST',
+            '/me/skills',
+            $this->userCsrfToken,
+            [
+                'json' => [
+                    'skill' => '/skills/'.$this->phpSkill->getId(),
+                    'type' => 'invalid_type',
+                    'level' => UserSkill::LEVEL_BEGINNER,
                 ],
-            ],
-        ]);
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
+
+        self::assertSame(422, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        self::assertSame('ConstraintViolation', $data['@type'] ?? null);
+
+        $violations = $data['violations'] ?? [];
+        self::assertNotEmpty($violations);
+        self::assertSame('type', $violations[0]['propertyPath'] ?? null);
+        self::assertSame('The type must be either "teach" or "learn"', $violations[0]['message'] ?? null);
     }
 
     public function testPostMySkillWithInvalidLevelFails(): void
     {
-        static::createClient()->request('POST', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-            'json' => [
-                'skill' => '/skills/' . $this->phpSkill->getId(),
-                'type' => UserSkill::TYPE_TEACH,
-                'level' => 'invalid_level',
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'POST',
+            '/me/skills',
+            $this->userCsrfToken,
+            [
+                'json' => [
+                    'skill' => '/skills/'.$this->phpSkill->getId(),
+                    'type' => UserSkill::TYPE_TEACH,
+                    'level' => 'invalid_level',
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [[
-                'propertyPath' => 'level',
-            ]],
-        ]);
+        self::assertSame(422, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        self::assertSame('ConstraintViolation', $data['@type'] ?? null);
+
+        $violations = $data['violations'] ?? [];
+        self::assertNotEmpty($violations);
+        self::assertSame('level', $violations[0]['propertyPath'] ?? null);
     }
 
     public function testPostMySkillWithoutSkillFails(): void
     {
-        static::createClient()->request('POST', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-            'json' => [
-                'type' => UserSkill::TYPE_TEACH,
-                'level' => UserSkill::LEVEL_EXPERT,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'POST',
+            '/me/skills',
+            $this->userCsrfToken,
+            [
+                'json' => [
+                    'type' => UserSkill::TYPE_TEACH,
+                    'level' => UserSkill::LEVEL_EXPERT,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [[
-                'propertyPath' => 'skill',
-            ]],
-        ]);
+        self::assertSame(422, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        self::assertSame('ConstraintViolation', $data['@type'] ?? null);
+
+        $violations = $data['violations'] ?? [];
+        self::assertNotEmpty($violations);
+        self::assertSame('skill', $violations[0]['propertyPath'] ?? null);
     }
 
     public function testPostMySkillWithoutTypeFails(): void
     {
-        static::createClient()->request('POST', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-            'json' => [
-                'skill' => '/skills/' . $this->phpSkill->getId(),
-                'level' => UserSkill::LEVEL_EXPERT,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'POST',
+            '/me/skills',
+            $this->userCsrfToken,
+            [
+                'json' => [
+                    'skill' => '/skills/'.$this->phpSkill->getId(),
+                    'level' => UserSkill::LEVEL_EXPERT,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [[
-                'propertyPath' => 'type',
-            ]],
-        ]);
+        self::assertSame(422, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+
+        self::assertSame('ConstraintViolation', $data['@type'] ?? null);
+
+        $violations = $data['violations'] ?? [];
+        self::assertNotEmpty($violations);
+        self::assertSame('type', $violations[0]['propertyPath'] ?? null);
     }
 
     public function testPostMySkillWithNullLevelSucceeds(): void
     {
-        // Le level est optionnel
-        $response = static::createClient()->request('POST', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-            'json' => [
-                'skill' => '/skills/' . $this->phpSkill->getId(),
-                'type' => UserSkill::TYPE_LEARN,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'POST',
+            '/me/skills',
+            $this->userCsrfToken,
+            [
+                'json' => [
+                    'skill' => '/skills/'.$this->phpSkill->getId(),
+                    'type' => UserSkill::TYPE_LEARN,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(201);
-        $data = $response->toArray();
+        self::assertSame(201, $response->getStatusCode());
 
-        // Vérifier que la création a réussi
-        $this->assertArrayHasKey('id', $data);
-        $this->assertArrayHasKey('type', $data);
-        $this->assertSame(UserSkill::TYPE_LEARN, $data['type']);
+        $data = $response->toArray(false);
+
+        self::assertArrayHasKey('id', $data);
+        self::assertArrayHasKey('type', $data);
+        self::assertSame(UserSkill::TYPE_LEARN, $data['type']);
     }
 
     public function testPostMySkillWithoutAuthFails(): void
     {
-        static::createClient()->request('POST', '/me/skills', [
+        $response = static::createClient()->request('POST', '/me/skills', [
             'json' => [
-                'skill' => '/skills/' . $this->phpSkill->getId(),
+                'skill' => '/skills/'.$this->phpSkill->getId(),
                 'type' => UserSkill::TYPE_TEACH,
                 'level' => UserSkill::LEVEL_EXPERT,
             ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(401);
+        self::assertSame(401, $response->getStatusCode());
     }
 
     public function testPostMySkillWithInvalidSkillIriFails(): void
     {
-        static::createClient()->request('POST', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-            'json' => [
-                'skill' => '/skills/99999',
-                'type' => UserSkill::TYPE_TEACH,
-                'level' => UserSkill::LEVEL_EXPERT,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'POST',
+            '/me/skills',
+            $this->userCsrfToken,
+            [
+                'json' => [
+                    'skill' => '/skills/99999',
+                    'type' => UserSkill::TYPE_TEACH,
+                    'level' => UserSkill::LEVEL_EXPERT,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(400);
+        self::assertSame(400, $response->getStatusCode());
     }
 
     // =================== DELETE /me/skills/:id ====================
@@ -442,74 +496,89 @@ class MySkillsTest extends ApiTestCase
     {
         $userSkillIdToDelete = $this->userSkillJavaScript->getId();
 
-        static::createClient()->request('DELETE', '/me/skills/' . $userSkillIdToDelete, [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'DELETE',
+            '/me/skills/'.$userSkillIdToDelete,
+            $this->userCsrfToken
+        );
 
-        $this->assertResponseStatusCodeSame(204);
+        self::assertSame(204, $response->getStatusCode());
 
-        $responseGet = static::createClient()->request('GET', '/me/skills/' . $userSkillIdToDelete, [
-            'auth_bearer' => $this->userToken,
-        ]);
-        $this->assertResponseStatusCodeSame(404, 'The skill should no longer be found after deletion.');
+        $responseGet = $this->userClient->request('GET', '/me/skills/'.$userSkillIdToDelete);
+        self::assertSame(404, $responseGet->getStatusCode(), 'The skill should no longer be found after deletion.');
 
-        $responseList = static::createClient()->request('GET', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-        ]);
-        $this->assertCount(1, $responseList->toArray()['member'], 'Only one skill should remain in the list.');
+        $responseList = $this->userClient->request('GET', '/me/skills');
+        $dataList = $responseList->toArray(false);
+        self::assertCount(1, $dataList['member'], 'Only one skill should remain in the list.');
     }
 
     public function testDeleteAnotherUsersSkillByIdFailsWith404(): void
     {
         $anotherUserSkillId = $this->anotherUserSkillAngular->getId();
 
-        static::createClient()->request('DELETE', '/me/skills/' . $anotherUserSkillId, [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'DELETE',
+            '/me/skills/'.$anotherUserSkillId,
+            $this->userCsrfToken
+        );
 
-        $this->assertResponseStatusCodeSame(404, 'An attempt to delete another user\'s skill must result in a 404.');
+        self::assertSame(404, $response->getStatusCode(), 'An attempt to delete another user\'s skill must result in a 404.');
 
-        $responseGet = static::createClient()->request('GET', '/me/skills/' . $anotherUserSkillId, [
-            'auth_bearer' => $this->anotherUserToken,
-        ]);
-        $this->assertResponseIsSuccessful('The other user\'s skill should still exist.');
+        $responseGet = $this->anotherUserClient->request(
+            'GET',
+            '/me/skills/'.$anotherUserSkillId
+        );
+
+        self::assertSame(200, $responseGet->getStatusCode(), 'The other user\'s skill should still exist.');
     }
 
     public function testDeleteNonExistentMySkillReturns404(): void
     {
-        static::createClient()->request('DELETE', '/me/skills/99999', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'DELETE',
+            '/me/skills/99999',
+            $this->userCsrfToken
+        );
 
-        $this->assertResponseStatusCodeSame(404);
+        self::assertSame(404, $response->getStatusCode());
     }
 
     public function testDeleteMySkillByIdWithoutAuth(): void
     {
-        static::createClient()->request('DELETE', '/me/skills/' . $this->userSkillJavaScript->getId());
-        $this->assertResponseStatusCodeSame(401);
+        $response = static::createClient()->request('DELETE', '/me/skills/'.$this->userSkillJavaScript->getId());
+
+        self::assertSame(401, $response->getStatusCode());
     }
 
     public function testDeleteMySkillAndVerifyCountDecreases(): void
     {
         // Vérifier le count initial
-        $response = static::createClient()->request('GET', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-        ]);
-        $initialCount = $response->toArray()['totalItems'];
+        $response = $this->userClient->request('GET', '/me/skills');
+        self::assertSame(200, $response->getStatusCode());
+
+        $initialData = $response->toArray(false);
+        $initialCount = $initialData['totalItems'];
 
         // Supprimer une skill
-        static::createClient()->request('DELETE', '/me/skills/' . $this->userSkillReact->getId(), [
-            'auth_bearer' => $this->userToken,
-        ]);
-        $this->assertResponseStatusCodeSame(204);
+        $responseDelete = $this->requestUnsafe(
+            $this->userClient,
+            'DELETE',
+            '/me/skills/'.$this->userSkillReact->getId(),
+            $this->userCsrfToken
+        );
+
+        self::assertSame(204, $responseDelete->getStatusCode());
 
         // Vérifier le nouveau count
-        $response = static::createClient()->request('GET', '/me/skills', [
-            'auth_bearer' => $this->userToken,
-        ]);
-        $newCount = $response->toArray()['totalItems'];
+        $responseAfter = $this->userClient->request('GET', '/me/skills');
+        self::assertSame(200, $responseAfter->getStatusCode());
 
-        $this->assertSame($initialCount - 1, $newCount);
+        $afterData = $responseAfter->toArray(false);
+        $newCount = $afterData['totalItems'];
+
+        self::assertSame($initialCount - 1, $newCount);
     }
 }
