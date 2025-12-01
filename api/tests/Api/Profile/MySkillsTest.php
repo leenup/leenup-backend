@@ -12,6 +12,7 @@ use App\Factory\UserFactory;
 use App\Factory\UserSkillFactory;
 use Zenstruck\Foundry\Test\Factories;
 
+
 class MySkillsTest extends ApiTestCase
 {
     use Factories;
@@ -25,7 +26,6 @@ class MySkillsTest extends ApiTestCase
     private Skill $angularSkill;
     private Skill $csharpSkill;
     private Skill $phpSkill;
-
     private UserSkill $userSkillReact;
     private UserSkill $userSkillJavaScript;
     private UserSkill $anotherUserSkillAngular;

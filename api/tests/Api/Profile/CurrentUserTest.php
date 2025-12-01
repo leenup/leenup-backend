@@ -9,13 +9,16 @@ use App\Factory\CategoryFactory;
 use App\Factory\SkillFactory;
 use App\Factory\UserFactory;
 use App\Factory\UserSkillFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
 use Zenstruck\Foundry\Test\Factories;
 
 class CurrentUserTest extends ApiTestCase
 {
     use Factories;
+    use AuthenticatedApiTestTrait;
 
-    private string $userToken;
+    private $client;
+    private string $csrfToken;
     private $user;
     private $skill1;
     private $skill2;
@@ -24,28 +27,32 @@ class CurrentUserTest extends ApiTestCase
     {
         parent::setUp();
 
-        // Créer une catégorie et des skills
+        // Catégorie & skills
         $category = CategoryFactory::createOne(['title' => 'Development']);
         $this->skill1 = SkillFactory::createOne(['title' => 'React', 'category' => $category]);
         $this->skill2 = SkillFactory::createOne(['title' => 'Vue.js', 'category' => $category]);
 
-        // Créer un utilisateur et obtenir son token
-        $this->user = UserFactory::createOne([
-            'email' => 'test@example.com',
-            'plainPassword' => 'password',
-            'firstName' => 'John',
-            'lastName' => 'Doe',
-            'bio' => 'Original bio',
-            'location' => 'Paris, France',
-            'timezone' => 'Europe/Paris',
-            'locale' => 'fr',
-            // nouveaux champs
-            'birthdate' => new \DateTimeImmutable('1990-01-15'),
-            'languages' => ['fr', 'en'],
-            'exchangeFormat' => 'visio',
-            'learningStyles' => ['calm_explanations', 'hands_on'],
-            'isMentor' => true,
-        ]);
+        // User authentifié via /auth (cookie) + CSRF
+        [$this->client, $this->csrfToken, $this->user] = $this->createAuthenticatedUser(
+            'test@example.com',
+            'password'
+        );
+
+        // Enrichir le user avec les mêmes données que ton test initial
+        $this->user->setFirstName('John');
+        $this->user->setLastName('Doe');
+        $this->user->setBio('Original bio');
+        $this->user->setLocation('Paris, France');
+        $this->user->setTimezone('Europe/Paris');
+        $this->user->setLocale('fr');
+        $this->user->setBirthdate(new \DateTimeImmutable('1990-01-15'));
+        $this->user->setLanguages(['fr', 'en']);
+        $this->user->setExchangeFormat('visio');
+        $this->user->setLearningStyles(['calm_explanations', 'hands_on']);
+        $this->user->setIsMentor(true);
+
+        $em = self::getContainer()->get('doctrine')->getManager();
+        $em->flush();
 
         // Ajouter des skills au user
         UserSkillFactory::createOne([
@@ -61,22 +68,13 @@ class CurrentUserTest extends ApiTestCase
             'type' => UserSkill::TYPE_LEARN,
             'level' => UserSkill::LEVEL_BEGINNER,
         ]);
-
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'test@example.com', 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-
-        $this->userToken = $response->toArray()['token'];
     }
 
     // ==================== GET /me ====================
 
     public function testGetCurrentUserProfile(): void
     {
-        $response = static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->client->request('GET', '/me');
 
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains([
@@ -105,9 +103,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testGetCurrentUserProfileIncludesUserSkills(): void
     {
-        $response = static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->client->request('GET', '/me');
 
         $this->assertResponseIsSuccessful();
         $data = $response->toArray();
@@ -128,9 +124,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testGetCurrentUserProfileUserSkillsHaveCorrectData(): void
     {
-        $response = static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->client->request('GET', '/me');
 
         $this->assertResponseIsSuccessful();
         $data = $response->toArray();
@@ -150,6 +144,8 @@ class CurrentUserTest extends ApiTestCase
 
     public function testGetCurrentUserProfileWithInvalidToken(): void
     {
+        // un header Authorization Bearer est ignoré par notre nouvelle auth (cookie),
+        // mais reste équivalent à "non authentifié"
         static::createClient()->request('GET', '/me', [
             'auth_bearer' => 'invalid_token_12345',
         ]);
@@ -162,12 +158,11 @@ class CurrentUserTest extends ApiTestCase
         $category2 = CategoryFactory::createOne(['title' => 'Design']);
         $skill3 = SkillFactory::createOne(['title' => 'Figma', 'category' => $category2]);
 
-        $user2 = UserFactory::createOne([
-            'email' => 'user2@example.com',
-            'plainPassword' => 'password',
-            'firstName' => 'Jane',
-            'lastName' => 'Smith',
-        ]);
+        // Deuxième user authentifié via cookie + CSRF
+        [$client2, $csrfToken2, $user2] = $this->createAuthenticatedUser(
+            'user2@example.com',
+            'password'
+        );
 
         UserSkillFactory::createOne([
             'owner' => $user2,
@@ -176,20 +171,19 @@ class CurrentUserTest extends ApiTestCase
             'level' => UserSkill::LEVEL_ADVANCED,
         ]);
 
-        $response2 = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'user2@example.com', 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $token2 = $response2->toArray()['token'];
+        // Mettre des prénoms/cohérence
+        $user2->setFirstName('Jane');
+        $user2->setLastName('Smith');
+        self::getContainer()->get('doctrine')->getManager()->flush();
 
-        $profile1 = static::createClient()->request('GET', '/me', ['auth_bearer' => $this->userToken]);
+        $profile1 = $this->client->request('GET', '/me');
         $this->assertResponseIsSuccessful();
         $data1 = $profile1->toArray();
         $this->assertEquals('test@example.com', $data1['email']);
         $this->assertEquals('John', $data1['firstName']);
         $this->assertCount(2, $data1['userSkills']);
 
-        $profile2 = static::createClient()->request('GET', '/me', ['auth_bearer' => $token2]);
+        $profile2 = $client2->request('GET', '/me');
         $this->assertResponseIsSuccessful();
         $data2 = $profile2->toArray();
         $this->assertEquals('user2@example.com', $data2['email']);
@@ -209,7 +203,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testCurrentUserProfileResponseStructure(): void
     {
-        $response = static::createClient()->request('GET', '/me', ['auth_bearer' => $this->userToken]);
+        $response = $this->client->request('GET', '/me');
 
         $this->assertResponseIsSuccessful();
         $data = $response->toArray();
@@ -240,20 +234,12 @@ class CurrentUserTest extends ApiTestCase
 
     public function testCurrentUserWithNoSkills(): void
     {
-        $userNoSkills = UserFactory::createOne([
-            'email' => 'noskills@example.com',
-            'plainPassword' => 'password',
-            'firstName' => 'No',
-            'lastName' => 'Skills',
-        ]);
+        [$clientNoSkills, $csrfNoSkills, $userNoSkills] = $this->createAuthenticatedUser(
+            'noskills@example.com',
+            'password'
+        );
 
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'noskills@example.com', 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $tokenNoSkills = $response->toArray()['token'];
-
-        $profile = static::createClient()->request('GET', '/me', ['auth_bearer' => $tokenNoSkills]);
+        $profile = $clientNoSkills->request('GET', '/me');
         $this->assertResponseIsSuccessful();
         $data = $profile->toArray();
 
@@ -266,8 +252,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserEmail(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['email' => 'newemail@example.com'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -275,21 +260,23 @@ class CurrentUserTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains(['email' => 'newemail@example.com']);
 
-        $newAuthResponse = static::createClient()->request('POST', '/auth', [
+        // vérifier qu'on peut se reconnecter avec le nouvel email
+        $client = static::createClient();
+        $loginResponse = $client->request('POST', '/auth', [
             'json' => ['email' => 'newemail@example.com', 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
-        $newToken = $newAuthResponse->toArray()['token'];
+        $this->assertResponseIsSuccessful();
 
-        $profile = static::createClient()->request('GET', '/me', ['auth_bearer' => $newToken]);
+        // et accéder à /me via ce nouveau client
+        $profile = $client->request('GET', '/me');
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains(['email' => 'newemail@example.com']);
     }
 
     public function testUpdateCurrentUserFirstName(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['firstName' => 'UpdatedFirstName'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -300,8 +287,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserLastName(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['lastName' => 'UpdatedLastName'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -312,8 +298,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserBio(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['bio' => 'This is my updated bio'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -324,8 +309,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserLocation(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['location' => 'London, UK'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -336,8 +320,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserTimezone(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['timezone' => 'America/New_York'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -348,8 +331,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserLocale(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['locale' => 'en'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -360,8 +342,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserAvatarUrl(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['avatarUrl' => 'https://example.com/avatar.jpg'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -372,8 +353,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateMultipleFieldsAtOnce(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => [
                 'firstName' => 'NewFirstName',
                 'lastName' => 'NewLastName',
@@ -398,17 +378,14 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserBirthdate(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['birthdate' => '1992-03-10'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
         $this->assertResponseIsSuccessful();
 
-        $response = static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->client->request('GET', '/me');
         $data = $response->toArray();
 
         $this->assertEquals('1992-03-10', substr($data['birthdate'], 0, 10));
@@ -416,8 +393,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserLanguagesAndLearningStyles(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => [
                 'languages' => ['en', 'es'],
                 'learningStyles' => ['concrete_examples', 'structured'],
@@ -427,9 +403,7 @@ class CurrentUserTest extends ApiTestCase
 
         $this->assertResponseIsSuccessful();
 
-        $response = static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->client->request('GET', '/me');
         $data = $response->toArray();
 
         $this->assertEquals(['en', 'es'], $data['languages']);
@@ -438,8 +412,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserExchangeFormatAndIsMentor(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => [
                 'exchangeFormat' => 'chat',
                 'isMentor' => false,
@@ -449,12 +422,11 @@ class CurrentUserTest extends ApiTestCase
 
         $this->assertResponseIsSuccessful();
 
-        $response = static::createClient()->request('GET', '/me', [
-            'auth_bearer' => $this->userToken,
-        ]);
+        $response = $this->client->request('GET', '/me');
         $data = $response->toArray();
 
         $this->assertEquals('chat', $data['exchangeFormat']);
+        // isMentor reste contrôlé côté back (ex: non modifiable via /me)
         $this->assertTrue($data['isMentor']);
     }
 
@@ -470,8 +442,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserEmailWithInvalidEmail(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['email' => 'invalid-email'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -487,8 +458,7 @@ class CurrentUserTest extends ApiTestCase
     {
         UserFactory::createOne(['email' => 'existing@example.com']);
 
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['email' => 'existing@example.com'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -498,8 +468,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserEmailWithEmptyEmail(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['email' => ''],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -509,8 +478,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserAvatarUrlWithInvalidUrl(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['avatarUrl' => 'not-a-valid-url'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -520,8 +488,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserBioTooLong(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['bio' => str_repeat('a', 501)],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -531,8 +498,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserFirstNameTooShort(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['firstName' => 'A'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -542,19 +508,18 @@ class CurrentUserTest extends ApiTestCase
 
     public function testCannotUpdateIsActiveViaMe(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['isActive' => false],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
+        // champ ignoré, mais la requête reste OK
         $this->assertResponseIsSuccessful();
     }
 
     public function testCannotUpdateLastLoginAtViaMe(): void
     {
-        static::createClient()->request('PATCH', '/me', [
-            'auth_bearer' => $this->userToken,
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['lastLoginAt' => '2025-01-01T00:00:00+00:00'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
@@ -566,23 +531,24 @@ class CurrentUserTest extends ApiTestCase
 
     public function testDeleteCurrentUserAccount(): void
     {
-        static::createClient()->request('DELETE', '/me', ['auth_bearer' => $this->userToken]);
+        $this->requestUnsafe($this->client, 'DELETE', '/me', $this->csrfToken);
 
         $this->assertResponseStatusCodeSame(204);
     }
 
     public function testDeleteCurrentUserAccountMakesTokenInvalid(): void
     {
-        static::createClient()->request('DELETE', '/me', ['auth_bearer' => $this->userToken]);
+        $this->requestUnsafe($this->client, 'DELETE', '/me', $this->csrfToken);
         $this->assertResponseStatusCodeSame(204);
 
-        static::createClient()->request('GET', '/me', ['auth_bearer' => $this->userToken]);
+        // même client, mais user supprimé → /me doit renvoyer 401
+        $this->client->request('GET', '/me');
         $this->assertResponseStatusCodeSame(401);
     }
 
     public function testDeleteCurrentUserAccountPreventsLogin(): void
     {
-        static::createClient()->request('DELETE', '/me', ['auth_bearer' => $this->userToken]);
+        $this->requestUnsafe($this->client, 'DELETE', '/me', $this->csrfToken);
         $this->assertResponseStatusCodeSame(204);
 
         static::createClient()->request('POST', '/auth', [
@@ -606,7 +572,7 @@ class CurrentUserTest extends ApiTestCase
 
     public function testDeleteCurrentUserAccountCannotBeUndone(): void
     {
-        static::createClient()->request('DELETE', '/me', ['auth_bearer' => $this->userToken]);
+        $this->requestUnsafe($this->client, 'DELETE', '/me', $this->csrfToken);
         $this->assertResponseStatusCodeSame(204);
 
         $em = self::getContainer()->get('doctrine')->getManager();
@@ -628,7 +594,7 @@ class CurrentUserTest extends ApiTestCase
 
         $this->assertCount(2, $userSkillIds);
 
-        static::createClient()->request('DELETE', '/me', ['auth_bearer' => $this->userToken]);
+        $this->requestUnsafe($this->client, 'DELETE', '/me', $this->csrfToken);
         $this->assertResponseStatusCodeSame(204);
 
         $em->clear();
