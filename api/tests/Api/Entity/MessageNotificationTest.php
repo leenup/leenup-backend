@@ -39,7 +39,7 @@ class MessageNotificationTest extends ApiTestCase
             $this->adminCsrfToken,
             $this->admin
         ] = $this->createAuthenticatedAdmin(
-            email: 'admin@test.com',
+            email: $this->uniqueEmail('admin-message-notif'),
             password: 'password',
         );
 
@@ -49,7 +49,7 @@ class MessageNotificationTest extends ApiTestCase
             $this->user1CsrfToken,
             $this->user1
         ] = $this->createAuthenticatedUser(
-            email: 'user1@test.com',
+            email: $this->uniqueEmail('user1-message-notif'),
             password: 'password',
         );
 
@@ -59,7 +59,7 @@ class MessageNotificationTest extends ApiTestCase
             $this->user2CsrfToken,
             $this->user2
         ] = $this->createAuthenticatedUser(
-            email: 'user2@test.com',
+            email: $this->uniqueEmail('user2-message-notif'),
             password: 'password',
         );
     }
@@ -118,9 +118,8 @@ class MessageNotificationTest extends ApiTestCase
         self::assertEquals(Notification::TYPE_NEW_MESSAGE, $notification->getType());
         self::assertEquals('Nouveau message', $notification->getTitle());
 
-        // 🔥 On ne fige plus "Alice Dupont", on vérifie le format du message
+        // 🔥 On ne fige plus un nom, on vérifie le format
         self::assertStringContainsString('Vous avez reçu un message de', $notification->getContent());
-        // Et on vérifie que le nom de l'expéditeur apparaît (aujourd'hui "Test User")
         self::assertStringContainsString(
             $this->user1->getFirstName().' '.$this->user1->getLastName(),
             $notification->getContent()

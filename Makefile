@@ -295,3 +295,9 @@ dev: start ## Alias pour start (environnement de dev)
 
 full-reset: stop clean-docker build start db-reset db-test-reset fixtures-load ## Reset complet du projet
 	@echo "$(GREEN)🔄 Reset complet terminé !$(NC)"
+
+url: ## Affiche les URLs disponibles
+	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
+	@echo "  • API Documentation: https://localhost/docs/"
+	@echo "  • Admin Interface:   https://localhost/admin/"
+	@echo "  • Github Repo:       https://github.com/leenup/leenup-backend/tree/develop"

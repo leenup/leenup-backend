@@ -4,16 +4,18 @@ namespace App\Tests\Api\Auth;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Factory\UserFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
 use Zenstruck\Foundry\Test\Factories;
 
 class RegisterTest extends ApiTestCase
 {
     use Factories;
+    use AuthenticatedApiTestTrait;
 
     public function testRegister(): void
     {
         $client = self::createClient();
-        $email = 'newuser@example.com';
+        $email = $this->uniqueEmail('newuser');
 
         $response = $client->request('POST', '/register', [
             'json' => [
@@ -37,8 +39,9 @@ class RegisterTest extends ApiTestCase
             'lastName' => 'Doe',
         ]);
 
-        $this->assertArrayNotHasKey('password', $response->toArray());
-        $this->assertArrayNotHasKey('plainPassword', $response->toArray());
+        $data = $response->toArray(false);
+        $this->assertArrayNotHasKey('password', $data);
+        $this->assertArrayNotHasKey('plainPassword', $data);
 
         // Vérifier qu'on peut se connecter avec ce nouvel utilisateur
         $loginResponse = $client->request('POST', '/auth', [
@@ -54,13 +57,13 @@ class RegisterTest extends ApiTestCase
         self::assertResponseIsSuccessful();
 
         // 👉 Plus de token dans le body, on vérifie juste que l'auth fonctionne
-        $loginData = $loginResponse->toArray();
+        $loginData = $loginResponse->toArray(false);
         self::assertArrayNotHasKey('token', $loginData);
     }
 
     public function testRegisterWithDuplicateEmail(): void
     {
-        $email = 'existing@example.com';
+        $email = $this->uniqueEmail('existing');
         UserFactory::createOne(['email' => $email]);
 
         $client = self::createClient();
@@ -191,7 +194,7 @@ class RegisterTest extends ApiTestCase
     public function testRegisterWithOptionalFields(): void
     {
         $client = self::createClient();
-        $email = 'user-with-bio@example.com';
+        $email = $this->uniqueEmail('user-with-bio');
 
         $response = $client->request('POST', '/register', [
             'json' => [
@@ -221,7 +224,7 @@ class RegisterTest extends ApiTestCase
             'locale' => 'fr',
         ]);
 
-        $data = $response->toArray();
+        $data = $response->toArray(false);
         self::assertArrayHasKey('id', $data);
     }
 
@@ -320,7 +323,7 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        // Route publique mais protégée par firewall JWT → 401 si pas de token
+        // Route publique mais protégée par firewall JWT → 401 si pas de token/cookie d'auth
         self::assertResponseStatusCodeSame(401);
         self::assertJsonContains([
             'message' => 'JWT Token not found',
@@ -329,8 +332,11 @@ class RegisterTest extends ApiTestCase
 
     public function testUserCannotCreateAnotherAdmin(): void
     {
+        $userEmail = $this->uniqueEmail('user');
+        $newAdminEmail = $this->uniqueEmail('newadmin');
+
         UserFactory::createOne([
-            'email' => 'user@example.com',
+            'email' => $userEmail,
             'plainPassword' => 'password',
         ]);
 
@@ -339,7 +345,7 @@ class RegisterTest extends ApiTestCase
         // 1. Login
         $loginResponse = $client->request('POST', '/auth', [
             'json' => [
-                'email' => 'user@example.com',
+                'email' => $userEmail,
                 'password' => 'password',
             ],
             'headers' => ['Content-Type' => 'application/json'],
@@ -354,7 +360,7 @@ class RegisterTest extends ApiTestCase
         // 3. Essayer de créer un admin en étant simple user (cookies + CSRF)
         $client->request('POST', '/register', [
             'json' => [
-                'email' => 'newadmin@example.com',
+                'email' => $newAdminEmail,
                 'plainPassword' => 'adminpassword123',
                 'firstName' => 'New',
                 'lastName' => 'Admin',
@@ -374,8 +380,11 @@ class RegisterTest extends ApiTestCase
 
     public function testAdminCanRegisterAdmin(): void
     {
+        $adminEmail = $this->uniqueEmail('admin');
+        $newAdminEmail = $this->uniqueEmail('newadmin');
+
         UserFactory::createOne([
-            'email' => 'admin@example.com',
+            'email' => $adminEmail,
             'plainPassword' => 'password',
             'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
         ]);
@@ -385,7 +394,7 @@ class RegisterTest extends ApiTestCase
         // 1. Login admin
         $loginResponse = $client->request('POST', '/auth', [
             'json' => [
-                'email' => 'admin@example.com',
+                'email' => $adminEmail,
                 'password' => 'password',
             ],
             'headers' => ['Content-Type' => 'application/json'],
@@ -398,7 +407,6 @@ class RegisterTest extends ApiTestCase
         self::assertNotNull($csrfToken, 'Expected X-CSRF-TOKEN header after /auth.');
 
         // 3. Créer un nouvel admin (cookies + CSRF)
-        $newAdminEmail = 'newadmin@example.com';
         $client->request('POST', '/register', [
             'json' => [
                 'email' => $newAdminEmail,

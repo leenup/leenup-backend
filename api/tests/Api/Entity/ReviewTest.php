@@ -53,7 +53,7 @@ class ReviewTest extends ApiTestCase
             $this->studentCsrfToken,
             $this->student,
         ] = $this->createAuthenticatedUser(
-            email: 'student@test.com',
+            email: $this->uniqueEmail('student-review'),
             password: 'password',
         );
 
@@ -62,7 +62,7 @@ class ReviewTest extends ApiTestCase
             $this->mentorCsrfToken,
             $this->mentor,
         ] = $this->createAuthenticatedUser(
-            email: 'mentor@test.com',
+            email: $this->uniqueEmail('mentor-review'),
             password: 'password',
         );
 
@@ -71,7 +71,7 @@ class ReviewTest extends ApiTestCase
             $this->otherCsrfToken,
             $this->otherUser,
         ] = $this->createAuthenticatedUser(
-            email: 'other@test.com',
+            email: $this->uniqueEmail('other-review'),
             password: 'password',
         );
 

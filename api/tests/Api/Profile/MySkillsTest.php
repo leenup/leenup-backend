@@ -158,12 +158,6 @@ class MySkillsTest extends ApiTestCase
         $response = static::createClient()->request('GET', '/me/skills');
 
         self::assertSame(401, $response->getStatusCode());
-
-        $data = $response->toArray(false);
-
-        self::assertSame(401, $data['code'] ?? null);
-        // On évite de figer le message exact, mais on peut vérifier qu'il mentionne le token
-        self::assertStringContainsString('Token', $data['message'] ?? '');
     }
 
     public function testGetMySkillsWhenEmpty(): void

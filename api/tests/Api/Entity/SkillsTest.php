@@ -6,7 +6,6 @@ use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Entity\Skill;
 use App\Factory\CategoryFactory;
 use App\Factory\SkillFactory;
-use App\Factory\UserFactory;
 use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Zenstruck\Foundry\Test\Factories;
@@ -34,7 +33,7 @@ class SkillsTest extends ApiTestCase
             $this->userCsrfToken,
             $user,
         ] = $this->createAuthenticatedUser(
-            email: 'test@example.com',
+            email: $this->uniqueEmail('skill-user'),
             password: 'password',
         );
 
@@ -44,7 +43,7 @@ class SkillsTest extends ApiTestCase
             $this->adminCsrfToken,
             $adminUser,
         ] = $this->createAuthenticatedAdmin(
-            email: 'admin@exemple.com',
+            email: $this->uniqueEmail('skill-admin'),
             password: 'adminpassword',
         );
 

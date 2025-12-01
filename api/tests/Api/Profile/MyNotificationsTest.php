@@ -29,7 +29,7 @@ class MyNotificationsTest extends ApiTestCase
     {
         parent::setUp();
 
-        $uniqueId = uniqid();
+        $uniqueId = uniqid('', true);
 
         // User 1
         [
@@ -53,12 +53,12 @@ class MyNotificationsTest extends ApiTestCase
     }
 
     // ========================================
-    // TESTS GET COLLECTION /me/notifications
+    // GET COLLECTION /me/notifications
     // ========================================
 
     public function testGetMyNotifications(): void
     {
-        // Créer des notifications pour user1
+        // Notifications pour user1
         NotificationFactory::createOne([
             'user' => $this->user1,
             'type' => Notification::TYPE_NEW_MESSAGE,
@@ -74,7 +74,7 @@ class MyNotificationsTest extends ApiTestCase
             'content' => 'Content 2',
         ]);
 
-        // Créer une notification pour user2 (ne doit pas apparaître)
+        // Notification pour user2 (ne doit pas apparaître)
         NotificationFactory::createOne([
             'user' => $this->user2,
             'type' => Notification::TYPE_NEW_MESSAGE,
@@ -90,7 +90,6 @@ class MyNotificationsTest extends ApiTestCase
         self::assertSame('/contexts/MyNotification', $data['@context'] ?? null);
         self::assertSame('Collection', $data['@type'] ?? null);
 
-        // User1 doit avoir exactement 2 notifications
         self::assertEquals(2, $data['totalItems']);
         self::assertCount(2, $data['member']);
 
@@ -120,7 +119,7 @@ class MyNotificationsTest extends ApiTestCase
     }
 
     // ========================================
-    // TESTS GET ITEM /me/notifications/{id}
+    // GET ITEM /me/notifications/{id}
     // ========================================
 
     public function testGetMyNotificationById(): void
@@ -168,16 +167,13 @@ class MyNotificationsTest extends ApiTestCase
 
     public function testGetNonExistentNotification(): void
     {
-        $response = $this->user1Client->request(
-            'GET',
-            '/me/notifications/99999'
-        );
+        $response = $this->user1Client->request('GET', '/me/notifications/99999');
 
         self::assertSame(404, $response->getStatusCode());
     }
 
     // ========================================
-    // TESTS PATCH /me/notifications/{id}
+    // PATCH /me/notifications/{id}
     // ========================================
 
     public function testMarkNotificationAsRead(): void
@@ -197,12 +193,8 @@ class MyNotificationsTest extends ApiTestCase
             '/me/notifications/'.$notification->getId(),
             $this->user1CsrfToken,
             [
-                'json' => [
-                    'isRead' => true,
-                ],
-                'headers' => [
-                    'Content-Type' => 'application/merge-patch+json',
-                ],
+                'json' => ['isRead' => true],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ]
         );
 
@@ -234,12 +226,8 @@ class MyNotificationsTest extends ApiTestCase
             '/me/notifications/'.$notification->getId(),
             $this->user1CsrfToken,
             [
-                'json' => [
-                    'isRead' => false,
-                ],
-                'headers' => [
-                    'Content-Type' => 'application/merge-patch+json',
-                ],
+                'json' => ['isRead' => false],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ]
         );
 
@@ -263,12 +251,8 @@ class MyNotificationsTest extends ApiTestCase
             '/me/notifications/'.$notification->getId(),
             $this->user1CsrfToken,
             [
-                'json' => [
-                    'isRead' => true,
-                ],
-                'headers' => [
-                    'Content-Type' => 'application/merge-patch+json',
-                ],
+                'json' => ['isRead' => true],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ]
         );
 
@@ -286,12 +270,8 @@ class MyNotificationsTest extends ApiTestCase
             '/me/notifications/99999',
             $this->user1CsrfToken,
             [
-                'json' => [
-                    'isRead' => true,
-                ],
-                'headers' => [
-                    'Content-Type' => 'application/merge-patch+json',
-                ],
+                'json' => ['isRead' => true],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ]
         );
 
@@ -344,9 +324,7 @@ class MyNotificationsTest extends ApiTestCase
             $this->user1CsrfToken,
             [
                 'json' => [],
-                'headers' => [
-                    'Content-Type' => 'application/ld+json',
-                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
             ]
         );
 
@@ -394,9 +372,7 @@ class MyNotificationsTest extends ApiTestCase
             $this->user1CsrfToken,
             [
                 'json' => [],
-                'headers' => [
-                    'Content-Type' => 'application/ld+json',
-                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
             ]
         );
 
@@ -414,9 +390,7 @@ class MyNotificationsTest extends ApiTestCase
             '/me/notifications/mark-all-read',
             [
                 'json' => [],
-                'headers' => [
-                    'Content-Type' => 'application/ld+json',
-                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
             ]
         );
 
@@ -424,7 +398,7 @@ class MyNotificationsTest extends ApiTestCase
     }
 
     // ========================================
-    // TESTS FILTRES ET TRI
+    // FILTRES & TRI
     // ========================================
 
     public function testFilterNotificationsByIsRead(): void
@@ -533,10 +507,7 @@ class MyNotificationsTest extends ApiTestCase
             'title' => 'Third',
         ]);
 
-        $response = $this->user1Client->request(
-            'GET',
-            '/me/notifications'
-        );
+        $response = $this->user1Client->request('GET', '/me/notifications');
 
         self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray(false);

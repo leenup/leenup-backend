@@ -4,12 +4,14 @@ namespace App\Tests\Api\Auth;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Factory\UserFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 use Zenstruck\Foundry\Test\Factories;
 
 class RefreshTokenTest extends ApiTestCase
 {
     use Factories;
+    use AuthenticatedApiTestTrait;
 
     private function extractRefreshTokenFromResponse(ResponseInterface $response): ?string
     {
@@ -37,27 +39,29 @@ class RefreshTokenTest extends ApiTestCase
 
     public function testLoginReturnsRefreshTokenCookie(): void
     {
+        $email = $this->uniqueEmail('user');
+
         UserFactory::createOne([
-            'email' => 'test@example.com',
+            'email' => $email,
             'plainPassword' => 'password',
         ]);
 
         $client = static::createClient();
         $response = $client->request('POST', '/auth', [
             'json' => [
-                'email' => 'test@example.com',
+                'email' => $email,
                 'password' => 'password',
             ],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
         self::assertResponseIsSuccessful();
-        $data = $response->toArray();
+        $data = $response->toArray(false);
 
         // 👉 Le body NE doit PLUS contenir le JWT (il est passé en cookie access_token)
         self::assertArrayNotHasKey('token', $data);
 
-        // Le refresh_token ne doit plus être dans le body (déjà vrai avant)
+        // Le refresh_token ne doit plus être dans le body
         self::assertArrayNotHasKey('refresh_token', $data);
 
         // Mais il doit être présent dans un cookie HttpOnly
@@ -68,8 +72,10 @@ class RefreshTokenTest extends ApiTestCase
 
     public function testRefreshToken(): void
     {
+        $email = $this->uniqueEmail('user');
+
         UserFactory::createOne([
-            'email' => 'test@example.com',
+            'email' => $email,
             'plainPassword' => 'password',
         ]);
 
@@ -78,7 +84,7 @@ class RefreshTokenTest extends ApiTestCase
         // 1. Login
         $loginResponse = $client->request('POST', '/auth', [
             'json' => [
-                'email' => 'test@example.com',
+                'email' => $email,
                 'password' => 'password',
             ],
             'headers' => ['Content-Type' => 'application/json'],
@@ -94,7 +100,7 @@ class RefreshTokenTest extends ApiTestCase
         ]);
 
         self::assertResponseIsSuccessful();
-        $refreshData = $refreshResponse->toArray();
+        $refreshData = $refreshResponse->toArray(false);
 
         // 👉 Le body ne contient plus le nouveau JWT, il est en cookie access_token
         self::assertArrayNotHasKey('token', $refreshData);
@@ -147,8 +153,10 @@ class RefreshTokenTest extends ApiTestCase
 
     public function testNewTokenWorksForProtectedRoutes(): void
     {
+        $email = $this->uniqueEmail('user');
+
         UserFactory::createOne([
-            'email' => 'test@example.com',
+            'email' => $email,
             'plainPassword' => 'password',
         ]);
 
@@ -156,7 +164,7 @@ class RefreshTokenTest extends ApiTestCase
 
         // 1. Login
         $loginResponse = $client->request('POST', '/auth', [
-            'json' => ['email' => 'test@example.com', 'password' => 'password'],
+            'json' => ['email' => $email, 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         self::assertResponseIsSuccessful();
@@ -171,13 +179,15 @@ class RefreshTokenTest extends ApiTestCase
         //    -> on réutilise simplement le même client (cookies conservés)
         $client->request('GET', '/me');
         self::assertResponseIsSuccessful();
-        self::assertJsonContains(['email' => 'test@example.com']);
+        self::assertJsonContains(['email' => $email]);
     }
 
     public function testOldTokenStillWorksAfterRefresh(): void
     {
+        $email = $this->uniqueEmail('user');
+
         UserFactory::createOne([
-            'email' => 'test@example.com',
+            'email' => $email,
             'plainPassword' => 'password',
         ]);
 
@@ -185,7 +195,7 @@ class RefreshTokenTest extends ApiTestCase
 
         // 1. Login
         $loginResponse = $client->request('POST', '/auth', [
-            'json' => ['email' => 'test@example.com', 'password' => 'password'],
+            'json' => ['email' => $email, 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         self::assertResponseIsSuccessful();
@@ -199,13 +209,15 @@ class RefreshTokenTest extends ApiTestCase
         // 3. L'utilisateur doit toujours pouvoir appeler /me avec le même client
         $client->request('GET', '/me');
         self::assertResponseIsSuccessful();
-        self::assertJsonContains(['email' => 'test@example.com']);
+        self::assertJsonContains(['email' => $email]);
     }
 
     public function testRefreshTokenCanBeUsedMultipleTimesWithRotation(): void
     {
+        $email = $this->uniqueEmail('user');
+
         UserFactory::createOne([
-            'email' => 'test@example.com',
+            'email' => $email,
             'plainPassword' => 'password',
         ]);
 
@@ -213,7 +225,7 @@ class RefreshTokenTest extends ApiTestCase
 
         // 1. Login -> premier refresh_token en cookie
         $loginResponse = $client->request('POST', '/auth', [
-            'json' => ['email' => 'test@example.com', 'password' => 'password'],
+            'json' => ['email' => $email, 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         self::assertResponseIsSuccessful();
@@ -243,13 +255,16 @@ class RefreshTokenTest extends ApiTestCase
 
     public function testDifferentUsersHaveDifferentRefreshTokens(): void
     {
-        UserFactory::createOne(['email' => 'user1@example.com', 'plainPassword' => 'password']);
-        UserFactory::createOne(['email' => 'user2@example.com', 'plainPassword' => 'password']);
+        $email1 = $this->uniqueEmail('user1');
+        $email2 = $this->uniqueEmail('user2');
+
+        UserFactory::createOne(['email' => $email1, 'plainPassword' => 'password']);
+        UserFactory::createOne(['email' => $email2, 'plainPassword' => 'password']);
 
         // Client 1 : user1
         $client1 = static::createClient();
         $response1 = $client1->request('POST', '/auth', [
-            'json' => ['email' => 'user1@example.com', 'password' => 'password'],
+            'json' => ['email' => $email1, 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         self::assertResponseIsSuccessful();
@@ -259,7 +274,7 @@ class RefreshTokenTest extends ApiTestCase
         // Client 2 : user2
         $client2 = static::createClient();
         $response2 = $client2->request('POST', '/auth', [
-            'json' => ['email' => 'user2@example.com', 'password' => 'password'],
+            'json' => ['email' => $email2, 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         self::assertResponseIsSuccessful();

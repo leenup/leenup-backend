@@ -31,18 +31,17 @@ class AuthenticationTest extends ApiTestCase
         self::assertResponseIsSuccessful();
 
         // Le corps JSON ne doit plus contenir de champ "token"
-        $json = $response->toArray();
+        $json = $response->toArray(false);
         self::assertArrayNotHasKey('token', $json);
 
-        // Vérifier la présence des cookies et du header CSRF
+        // Vérifier la présence des cookies
         $headers = $response->getHeaders(false);
 
-        // On doit avoir au moins un Set-Cookie (access_token + XSRF-TOKEN)
         self::assertArrayHasKey('set-cookie', $headers, 'Expected Set-Cookie headers after /auth.');
         $setCookies = $headers['set-cookie'];
 
         $hasAccessTokenCookie = false;
-        $hasCsrfCookie = false;
+        $hasXsrfCookie = false;
 
         foreach ($setCookies as $cookieHeader) {
             if (str_starts_with($cookieHeader, 'access_token=')) {
@@ -50,12 +49,12 @@ class AuthenticationTest extends ApiTestCase
             }
 
             if (str_starts_with($cookieHeader, 'XSRF-TOKEN=')) {
-                $hasCsrfCookie = true;
+                $hasXsrfCookie = true;
             }
         }
 
         self::assertTrue($hasAccessTokenCookie, 'Expected access_token cookie to be set after /auth.');
-        self::assertTrue($hasCsrfCookie, 'Expected XSRF-TOKEN cookie to be set after /auth.');
+        self::assertTrue($hasXsrfCookie, 'Expected XSRF-TOKEN cookie to be set after /auth.');
 
         // Header X-CSRF-TOKEN présent et non vide
         $csrfHeader = $headers['x-csrf-token'][0] ?? null;

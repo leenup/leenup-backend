@@ -42,7 +42,7 @@ class UserSkillsTest extends ApiTestCase
             $this->userCsrfToken,
             $this->user,
         ] = $this->createAuthenticatedUser(
-            email: 'user@example.com',
+            email: $this->uniqueEmail('user-skill-user'),
             password: 'password',
         );
 
@@ -52,7 +52,7 @@ class UserSkillsTest extends ApiTestCase
             $this->adminCsrfToken,
             $this->admin,
         ] = $this->createAuthenticatedAdmin(
-            email: 'admin@example.com',
+            email: $this->uniqueEmail('user-skill-admin'),
             password: 'admin123',
         );
     }
@@ -78,7 +78,7 @@ class UserSkillsTest extends ApiTestCase
         self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray();
-        self::assertEquals(2, $data['totalItems']);
+        self::assertEquals(2, $data['totalItems'] ?? null);
     }
 
     public function testGetUserSkillsAsAdmin(): void
@@ -94,7 +94,7 @@ class UserSkillsTest extends ApiTestCase
         self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray();
-        self::assertGreaterThanOrEqual(1, $data['totalItems']);
+        self::assertGreaterThanOrEqual(1, $data['totalItems'] ?? 0);
     }
 
     public function testGetUserSkillsWithoutAuthentication(): void
@@ -103,6 +103,10 @@ class UserSkillsTest extends ApiTestCase
         $response = $client->request('GET', '/user_skills');
 
         self::assertSame(401, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+        self::assertSame(401, $data['code'] ?? null);
+        self::assertSame('JWT Token not found', $data['message'] ?? null);
     }
 
     // ==================== GET item ====================
@@ -233,7 +237,7 @@ class UserSkillsTest extends ApiTestCase
 
     // ==================== Validation ====================
 
-    public function testCreateUserSkillWithDuplicateAsAdmin(): void
+    public function testCreateUserSkillWithDuplicateAsUser(): void
     {
         // On crée déjà une skill "teach" pour ce user
         UserSkillFactory::createOne([
@@ -378,7 +382,9 @@ class UserSkillsTest extends ApiTestCase
 
     public function testFilterUserSkillsByOwner(): void
     {
-        $user2 = UserFactory::createOne(['email' => 'u2@example.com']);
+        $user2 = UserFactory::createOne([
+            'email' => $this->uniqueEmail('user-skill-filter-owner'),
+        ]);
 
         UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill1, 'type' => 'teach']);
         UserSkillFactory::createOne(['owner' => $this->user, 'skill' => $this->skill2, 'type' => 'learn']);
@@ -392,7 +398,7 @@ class UserSkillsTest extends ApiTestCase
         self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray();
-        self::assertEquals(2, $data['totalItems']);
+        self::assertEquals(2, $data['totalItems'] ?? null);
     }
 
     public function testFilterUserSkillsBySkill(): void
@@ -409,7 +415,7 @@ class UserSkillsTest extends ApiTestCase
         self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray();
-        self::assertEquals(2, $data['totalItems']);
+        self::assertEquals(2, $data['totalItems'] ?? null);
     }
 
     public function testFilterUserSkillsByType(): void
@@ -426,7 +432,7 @@ class UserSkillsTest extends ApiTestCase
         self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray();
-        self::assertEquals(2, $data['totalItems']);
+        self::assertEquals(2, $data['totalItems'] ?? null);
     }
 
     public function testFilterUserSkillsByLevel(): void
@@ -452,7 +458,7 @@ class UserSkillsTest extends ApiTestCase
         self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray();
-        self::assertEquals(1, $data['totalItems']);
+        self::assertEquals(1, $data['totalItems'] ?? null);
     }
 
     public function testFilterUserSkillsByMultipleFilters(): void
@@ -484,6 +490,6 @@ class UserSkillsTest extends ApiTestCase
         self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray();
-        self::assertEquals(1, $data['totalItems']);
+        self::assertEquals(1, $data['totalItems'] ?? null);
     }
 }

@@ -17,6 +17,9 @@ class UserTest extends ApiTestCase
     private User $userTarget;
     private User $adminTarget;
 
+    private User $authUser;
+    private User $authAdmin;
+
     private HttpClientInterface $userClient;
     private HttpClientInterface $adminClient;
 
@@ -27,18 +30,7 @@ class UserTest extends ApiTestCase
     {
         parent::setUp();
 
-        // Users pour l’auth
-        UserFactory::createOne([
-            'email' => 'user@exemple.com',
-            'plainPassword' => 'user123',
-            'roles' => ['ROLE_USER'],
-        ]);
-
-        UserFactory::createOne([
-            'email' => 'admin@exemple.com',
-            'plainPassword' => 'admin123',
-            'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
-        ]);
+        $uniqueId = uniqid('user_test_', true);
 
         // Cible "user" pour les tests item/patch/delete
         $this->userTarget = UserFactory::createOne([
@@ -65,23 +57,23 @@ class UserTest extends ApiTestCase
             'lastName' => 'User',
         ]);
 
-        // Auth user
+        // Auth user via le trait (CSRF + cookies)
         [
             $this->userClient,
             $this->userCsrfToken,
-            $authUser,
+            $this->authUser,
         ] = $this->createAuthenticatedUser(
-            email: 'user@exemple.com',
+            email: "user-{$uniqueId}@exemple.com",
             password: 'user123',
         );
 
-        // Auth admin
+        // Auth admin via le trait (CSRF + cookies)
         [
             $this->adminClient,
             $this->adminCsrfToken,
-            $authAdmin,
+            $this->authAdmin,
         ] = $this->createAuthenticatedAdmin(
-            email: 'admin@exemple.com',
+            email: "admin-{$uniqueId}@exemple.com",
             password: 'admin123',
         );
     }
@@ -105,8 +97,8 @@ class UserTest extends ApiTestCase
         self::assertGreaterThanOrEqual(4, $data['totalItems']);
 
         $emails = array_column($data['member'], 'email');
-        self::assertContains('user@exemple.com', $emails);
-        self::assertContains('admin@exemple.com', $emails);
+        self::assertContains($this->authUser->getEmail(), $emails);
+        self::assertContains($this->authAdmin->getEmail(), $emails);
 
         foreach ($data['member'] as $user) {
             self::assertArrayNotHasKey('password', $user);
@@ -348,13 +340,10 @@ class UserTest extends ApiTestCase
 
         $data = $response->toArray(false);
 
-        // Si l'API renvoie encore un message, on vérifie qu'il est correct,
-        // sinon on ne casse pas le test.
         if (isset($data['detail'])) {
             self::assertSame('Only admins can view user details.', $data['detail']);
         }
     }
-
 
     public function testGetUserWithoutAuthentication(): void
     {
@@ -517,7 +506,6 @@ class UserTest extends ApiTestCase
 
     public function testUpdateUserPasswordAsAdmin(): void
     {
-        // On met à jour le mot de passe
         $response = $this->requestUnsafe(
             $this->adminClient,
             'PATCH',
@@ -533,7 +521,7 @@ class UserTest extends ApiTestCase
 
         $client = static::createClient();
 
-        // ✅ L'ancien mot de passe ne fonctionne plus
+        // ancien mot de passe KO
         $client->request('POST', '/auth', [
             'json' => [
                 'email' => $this->userTarget->getEmail(),
@@ -543,7 +531,7 @@ class UserTest extends ApiTestCase
         ]);
         self::assertResponseStatusCodeSame(401);
 
-        // ✅ Le nouveau mot de passe fonctionne
+        // nouveau mot de passe OK
         $client->request('POST', '/auth', [
             'json' => [
                 'email' => $this->userTarget->getEmail(),
@@ -727,23 +715,22 @@ class UserTest extends ApiTestCase
 
     // ==================== DELETE /users/{id} ====================
 
-public function testUserCannotDeleteOtherUser(): void
-{
-    $response = $this->requestUnsafe(
-        $this->userClient,
-        'DELETE',
-        '/users/' . $this->userTarget->getId(),
-        $this->userCsrfToken
-    );
+    public function testUserCannotDeleteOtherUser(): void
+    {
+        $response = $this->requestUnsafe(
+            $this->userClient,
+            'DELETE',
+            '/users/' . $this->userTarget->getId(),
+            $this->userCsrfToken
+        );
 
-    self::assertSame(403, $response->getStatusCode());
+        self::assertSame(403, $response->getStatusCode());
 
-    $data = $response->toArray(false);
-    if (isset($data['detail'])) {
-        self::assertSame('Only admins can delete users.', $data['detail']);
+        $data = $response->toArray(false);
+        if (isset($data['detail'])) {
+            self::assertSame('Only admins can delete users.', $data['detail']);
+        }
     }
-}
-
 
     public function testDeleteUserWithoutAuthentication(): void
     {
@@ -764,7 +751,6 @@ public function testUserCannotDeleteOtherUser(): void
 
         self::assertSame(204, $response->getStatusCode());
 
-        // Vérifier que l'utilisateur ne peut plus se connecter
         $client = static::createClient();
         $client->request('POST', '/auth', [
             'json' => ['email' => $this->userTarget->getEmail(), 'password' => 'admin123'],

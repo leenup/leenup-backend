@@ -6,6 +6,7 @@ use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Entity\Notification;
 use App\Entity\Session;
 use App\Entity\User;
+use App\Entity\UserSkill;
 use App\Factory\CategoryFactory;
 use App\Factory\NotificationFactory;
 use App\Factory\SessionFactory;
@@ -35,9 +36,6 @@ class ReviewNotificationTest extends ApiTestCase
     {
         parent::setUp();
 
-        // Suffix unique pour éviter les collisions en parallèle
-        $uniqueId = uniqid();
-
         $category = CategoryFactory::createOne(['title' => 'Programming']);
 
         $this->skill = SkillFactory::createOne([
@@ -51,7 +49,7 @@ class ReviewNotificationTest extends ApiTestCase
             $this->mentorCsrfToken,
             $this->mentor,
         ] = $this->createAuthenticatedUser(
-            email: "mentor-{$uniqueId}@test.com",
+            email: $this->uniqueEmail('mentor-review'),
             password: 'password',
         );
 
@@ -60,7 +58,7 @@ class ReviewNotificationTest extends ApiTestCase
             $this->studentCsrfToken,
             $this->student,
         ] = $this->createAuthenticatedUser(
-            email: "student-{$uniqueId}@test.com",
+            email: $this->uniqueEmail('student-review'),
             password: 'password',
         );
 
@@ -76,8 +74,8 @@ class ReviewNotificationTest extends ApiTestCase
         UserSkillFactory::createOne([
             'owner' => $this->mentor,
             'skill' => $this->skill,
-            'type' => 'teach',
-            'level' => 'expert',
+            'type' => UserSkill::TYPE_TEACH,
+            'level' => UserSkill::LEVEL_EXPERT,
         ]);
     }
 

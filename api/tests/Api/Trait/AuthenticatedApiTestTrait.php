@@ -2,110 +2,99 @@
 
 namespace App\Tests\Api\Trait;
 
-use App\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use App\Factory\UserFactory;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 trait AuthenticatedApiTestTrait
 {
     /**
-     * @return array{0: \Symfony\Contracts\HttpClient\HttpClientInterface, 1: string, 2: User}
+     * Génère un email unique pour éviter les collisions entre tests.
+     *
+     * Exemple : user_App_Tests_Api_Entity_ConversationTest_654f3c1a@test.com
+     */
+    protected function uniqueEmail(string $prefix = 'user'): string
+    {
+        return sprintf(
+            '%s_%s_%s@test.com',
+            $prefix,
+            str_replace('\\', '_', static::class),
+            uniqid()
+        );
+    }
+
+    /**
+     * Crée un utilisateur, se loggue via /auth (cookies + CSRF)
+     * et renvoie [ client HTTP, csrfToken, entité User ].
+     *
+     * @return array{0: HttpClientInterface, 1: string, 2: \App\Entity\User}
      */
     protected function createAuthenticatedUser(
-        string $email = 'test@example.com',
-        string $password = 'password'
-    ): array {
-        return $this->createAuthenticated($email, $password, ['ROLE_USER']);
-    }
-
-    /**
-     * @return array{0: \Symfony\Contracts\HttpClient\HttpClientInterface, 1: string, 2: User}
-     */
-    protected function createAuthenticatedAdmin(
-        string $email = 'admin@example.com',
-        string $password = 'admin123!'
-    ): array {
-        return $this->createAuthenticated($email, $password, ['ROLE_ADMIN']);
-    }
-
-    /**
-     * Crée un user + fait un /auth + renvoie (client, csrfToken, user).
-     *
-     * @return array{0: \Symfony\Contracts\HttpClient\HttpClientInterface, 1: string, 2: User}
-     */
-    private function createAuthenticated(
         string $email,
         string $password,
-        array $roles
+        array $extraData = []
     ): array {
-        $client = self::createClient();
-        $container = self::getContainer();
+        $client = static::createClient();
 
-        /** @var EntityManagerInterface $em */
-        $em = $container->get('doctrine')->getManager();
-        /** @var UserPasswordHasherInterface $passwordHasher */
-        $passwordHasher = $container->get(UserPasswordHasherInterface::class);
+        // Dans ton projet, UserFactory::createOne() renvoie déjà un User, pas un Proxy
+        $user = UserFactory::createOne(array_merge($extraData, [
+            'email' => $email,
+            'plainPassword' => $password,
+        ]));
 
-        // On nettoie un éventuel user existant pour ce mail
-        $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
-        if ($existingUser) {
-            $em->remove($existingUser);
-            $em->flush();
-        }
-
-        $user = new User();
-        $user->setEmail($email);
-        $user->setRoles($roles);
-
-        // ✅ Champs obligatoires du domaine utilisateur
-        $user->setFirstName('Test');
-        $user->setLastName('User');
-        // Si ces méthodes existent dans ton User (ce qui semble être le cas) :
-        if (method_exists($user, 'setTimezone')) {
-            $user->setTimezone('Europe/Paris');
-        }
-        if (method_exists($user, 'setLocale')) {
-            $user->setLocale('fr');
-        }
-        if (method_exists($user, 'setIsActive')) {
-            $user->setIsActive(true);
-        }
-
-        $user->setPassword($passwordHasher->hashPassword($user, $password));
-
-        $em->persist($user);
-        $em->flush();
-
-        /** @var ResponseInterface $response */
+        // Login pour récupérer cookies + header X-CSRF-TOKEN
         $response = $client->request('POST', '/auth', [
             'json' => [
                 'email' => $email,
                 'password' => $password,
             ],
+            'headers' => ['Content-Type' => 'application/json'],
         ]);
 
-        self::assertResponseIsSuccessful();
+        self::assertSame(200, $response->getStatusCode());
 
         $headers = $response->getHeaders(false);
         $csrfToken = $headers['x-csrf-token'][0] ?? null;
-
-        self::assertNotNull($csrfToken, 'CSRF token header "X-CSRF-TOKEN" should be present after /auth.');
+        self::assertNotNull($csrfToken, 'Expected X-CSRF-TOKEN header after /auth.');
 
         return [$client, $csrfToken, $user];
     }
 
     /**
-     * Helper pour requêtes NON sûres (POST/PUT/PATCH/DELETE) avec CSRF.
+     * Version admin : même chose mais avec rôles admin.
+     *
+     * @return array{0: HttpClientInterface, 1: string, 2: \App\Entity\User}
+     */
+    protected function createAuthenticatedAdmin(
+        string $email,
+        string $password,
+        array $extraData = []
+    ): array {
+        // Forcer les rôles admin si non fournis
+        $extraData['roles'] = $extraData['roles'] ?? ['ROLE_ADMIN', 'ROLE_USER'];
+
+        return $this->createAuthenticatedUser(
+            $email,
+            $password,
+            $extraData
+        );
+    }
+
+    /**
+     * Helper pour faire une requête protégée CSRF
+     * sans que le client de test jette une exception sur 4xx.
      */
     protected function requestUnsafe(
-        $client,
+        HttpClientInterface $client,
         string $method,
         string $uri,
         string $csrfToken,
         array $options = []
     ): ResponseInterface {
-        $options['headers']['X-CSRF-TOKEN'] = $csrfToken;
+        $options['headers'] = array_merge(
+            $options['headers'] ?? [],
+            ['X-CSRF-TOKEN' => $csrfToken]
+        );
 
         return $client->request($method, $uri, $options);
     }

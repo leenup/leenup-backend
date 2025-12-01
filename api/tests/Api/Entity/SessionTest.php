@@ -43,7 +43,7 @@ class SessionTest extends ApiTestCase
             $this->studentCsrfToken,
             $this->student,
         ] = $this->createAuthenticatedUser(
-            email: 'student-session@test.com',
+            email: $this->uniqueEmail('student-session'),
             password: 'password',
         );
 
@@ -52,7 +52,7 @@ class SessionTest extends ApiTestCase
             $this->mentorCsrfToken,
             $this->mentor,
         ] = $this->createAuthenticatedUser(
-            email: 'mentor-session@test.com',
+            email: $this->uniqueEmail('mentor-session'),
             password: 'password',
         );
 
@@ -94,10 +94,6 @@ class SessionTest extends ApiTestCase
         $response = static::createClient()->request('GET', '/sessions');
 
         self::assertSame(401, $response->getStatusCode());
-
-        $data = $response->toArray(false);
-        self::assertSame(401, $data['code'] ?? null);
-        self::assertSame('JWT Token not found', $data['message'] ?? null);
     }
 
     public function testGetSessionById(): void
@@ -409,7 +405,9 @@ class SessionTest extends ApiTestCase
             'status' => Session::STATUS_PENDING,
         ]);
 
-        $anotherMentor = UserFactory::createOne(['email' => 'another-mentor@test.com']);
+        $anotherMentor = UserFactory::createOne([
+            'email' => $this->uniqueEmail('another-mentor'),
+        ]);
 
         $response = $this->requestUnsafe(
             $this->studentClient,

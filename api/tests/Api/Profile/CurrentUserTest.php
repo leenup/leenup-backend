@@ -5,11 +5,13 @@ namespace App\Tests\Api\Profile;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Entity\User;
 use App\Entity\UserSkill;
+use App\Entity\Skill;
 use App\Factory\CategoryFactory;
 use App\Factory\SkillFactory;
 use App\Factory\UserFactory;
 use App\Factory\UserSkillFactory;
 use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Zenstruck\Foundry\Test\Factories;
 
 class CurrentUserTest extends ApiTestCase
@@ -17,11 +19,11 @@ class CurrentUserTest extends ApiTestCase
     use Factories;
     use AuthenticatedApiTestTrait;
 
-    private $client;
+    private HttpClientInterface $client;
     private string $csrfToken;
-    private $user;
-    private $skill1;
-    private $skill2;
+    private User $user;
+    private Skill $skill1;
+    private Skill $skill2;
 
     protected function setUp(): void
     {
@@ -38,7 +40,7 @@ class CurrentUserTest extends ApiTestCase
             'password'
         );
 
-        // Enrichir le user avec les mêmes données que ton test initial
+        // Enrichir le user
         $this->user->setFirstName('John');
         $this->user->setLastName('Doe');
         $this->user->setBio('Original bio');
@@ -89,7 +91,7 @@ class CurrentUserTest extends ApiTestCase
             'roles' => ['ROLE_USER'],
         ]);
 
-        $data = $response->toArray();
+        $data = $response->toArray(false);
         $this->assertArrayNotHasKey('password', $data);
         $this->assertArrayNotHasKey('plainPassword', $data);
         $this->assertArrayHasKey('createdAt', $data);
@@ -106,7 +108,7 @@ class CurrentUserTest extends ApiTestCase
         $response = $this->client->request('GET', '/me');
 
         $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
+        $data = $response->toArray(false);
 
         $this->assertArrayHasKey('userSkills', $data);
         $this->assertIsArray($data['userSkills']);
@@ -127,7 +129,7 @@ class CurrentUserTest extends ApiTestCase
         $response = $this->client->request('GET', '/me');
 
         $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
+        $data = $response->toArray(false);
 
         $skillTitles = array_map(fn($us) => $us['skill']['title'], $data['userSkills']);
 
@@ -144,8 +146,6 @@ class CurrentUserTest extends ApiTestCase
 
     public function testGetCurrentUserProfileWithInvalidToken(): void
     {
-        // un header Authorization Bearer est ignoré par notre nouvelle auth (cookie),
-        // mais reste équivalent à "non authentifié"
         static::createClient()->request('GET', '/me', [
             'auth_bearer' => 'invalid_token_12345',
         ]);
@@ -158,7 +158,6 @@ class CurrentUserTest extends ApiTestCase
         $category2 = CategoryFactory::createOne(['title' => 'Design']);
         $skill3 = SkillFactory::createOne(['title' => 'Figma', 'category' => $category2]);
 
-        // Deuxième user authentifié via cookie + CSRF
         [$client2, $csrfToken2, $user2] = $this->createAuthenticatedUser(
             'user2@example.com',
             'password'
@@ -171,21 +170,20 @@ class CurrentUserTest extends ApiTestCase
             'level' => UserSkill::LEVEL_ADVANCED,
         ]);
 
-        // Mettre des prénoms/cohérence
         $user2->setFirstName('Jane');
         $user2->setLastName('Smith');
         self::getContainer()->get('doctrine')->getManager()->flush();
 
         $profile1 = $this->client->request('GET', '/me');
         $this->assertResponseIsSuccessful();
-        $data1 = $profile1->toArray();
+        $data1 = $profile1->toArray(false);
         $this->assertEquals('test@example.com', $data1['email']);
         $this->assertEquals('John', $data1['firstName']);
         $this->assertCount(2, $data1['userSkills']);
 
         $profile2 = $client2->request('GET', '/me');
         $this->assertResponseIsSuccessful();
-        $data2 = $profile2->toArray();
+        $data2 = $profile2->toArray(false);
         $this->assertEquals('user2@example.com', $data2['email']);
         $this->assertEquals('Jane', $data2['firstName']);
         $this->assertCount(1, $data2['userSkills']);
@@ -206,7 +204,7 @@ class CurrentUserTest extends ApiTestCase
         $response = $this->client->request('GET', '/me');
 
         $this->assertResponseIsSuccessful();
-        $data = $response->toArray();
+        $data = $response->toArray(false);
 
         $this->assertArrayHasKey('@context', $data);
         $this->assertArrayHasKey('@id', $data);
@@ -241,7 +239,7 @@ class CurrentUserTest extends ApiTestCase
 
         $profile = $clientNoSkills->request('GET', '/me');
         $this->assertResponseIsSuccessful();
-        $data = $profile->toArray();
+        $data = $profile->toArray(false);
 
         $this->assertArrayHasKey('userSkills', $data);
         $this->assertIsArray($data['userSkills']);
@@ -260,15 +258,13 @@ class CurrentUserTest extends ApiTestCase
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains(['email' => 'newemail@example.com']);
 
-        // vérifier qu'on peut se reconnecter avec le nouvel email
         $client = static::createClient();
-        $loginResponse = $client->request('POST', '/auth', [
+        $client->request('POST', '/auth', [
             'json' => ['email' => 'newemail@example.com', 'password' => 'password'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
         $this->assertResponseIsSuccessful();
 
-        // et accéder à /me via ce nouveau client
         $profile = $client->request('GET', '/me');
         $this->assertResponseIsSuccessful();
         $this->assertJsonContains(['email' => 'newemail@example.com']);

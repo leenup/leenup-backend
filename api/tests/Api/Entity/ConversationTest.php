@@ -38,9 +38,9 @@ class ConversationTest extends ApiTestCase
         [
             $this->adminClient,
             $this->adminCsrfToken,
-            $this->admin
+            $this->admin,
         ] = $this->createAuthenticatedAdmin(
-            email: 'admin@test.com',
+            email: $this->uniqueEmail('admin'),
             password: 'password',
         );
 
@@ -48,9 +48,9 @@ class ConversationTest extends ApiTestCase
         [
             $this->user1Client,
             $this->user1CsrfToken,
-            $this->user1
+            $this->user1,
         ] = $this->createAuthenticatedUser(
-            email: 'user1@test.com',
+            email: $this->uniqueEmail('user1'),
             password: 'password',
         );
 
@@ -58,9 +58,9 @@ class ConversationTest extends ApiTestCase
         [
             $this->user2Client,
             $this->user2CsrfToken,
-            $this->user2
+            $this->user2,
         ] = $this->createAuthenticatedUser(
-            email: 'user2@test.com',
+            email: $this->uniqueEmail('user2'),
             password: 'password',
         );
 
@@ -68,9 +68,9 @@ class ConversationTest extends ApiTestCase
         [
             $this->user3Client,
             $this->user3CsrfToken,
-            $this->user3
+            $this->user3,
         ] = $this->createAuthenticatedUser(
-            email: 'user3@test.com',
+            email: $this->uniqueEmail('user3'),
             password: 'password',
         );
     }
@@ -343,11 +343,6 @@ class ConversationTest extends ApiTestCase
 
         $data = $response->toArray(false);
         self::assertSame('ConstraintViolation', $data['@type'] ?? null);
-
-        // Optionnel : vérifier le détail
-        // $violations = $data['violations'] ?? [];
-        // self::assertNotEmpty($violations);
-        // self::assertSame('content', $violations[0]['propertyPath'] ?? null);
     }
 
     public function testMessageUpdatesLastMessageAt(): void
@@ -376,7 +371,6 @@ class ConversationTest extends ApiTestCase
 
         self::assertSame(201, $response->getStatusCode());
 
-        // Récupérer la conversation depuis la BDD pour avoir la valeur à jour
         $updatedConversation = ConversationFactory::find(['id' => $conversation->getId()]);
         self::assertNotNull($updatedConversation->getLastMessageAt());
     }
@@ -593,7 +587,6 @@ class ConversationTest extends ApiTestCase
 
         self::assertSame(204, $response->getStatusCode());
 
-        // Vérifier que le message a bien été supprimé
         $response = $this->user1Client->request('GET', '/messages/'.$message->getId());
         self::assertSame(404, $response->getStatusCode());
     }
@@ -610,11 +603,10 @@ class ConversationTest extends ApiTestCase
 
         $message = MessageFactory::createOne([
             'conversation' => $conversation,
-            'sender' => $this->user1, // Message envoyé par user1
+            'sender' => $this->user1,
             'content' => 'Message from user1',
         ]);
 
-        // user2 (destinataire) essaie de supprimer
         $response = $this->requestUnsafe(
             $this->user2Client,
             'DELETE',
@@ -638,12 +630,11 @@ class ConversationTest extends ApiTestCase
 
         $message = MessageFactory::createOne([
             'conversation' => $conversation,
-            'sender' => $this->user1, // user1 est l'expéditeur
+            'sender' => $this->user1,
             'content' => 'Message from user1',
             'read' => false,
         ]);
 
-        // user1 (expéditeur) essaie de marquer son propre message comme lu
         $response = $this->requestUnsafe(
             $this->user1Client,
             'PATCH',
@@ -659,7 +650,6 @@ class ConversationTest extends ApiTestCase
 
         self::assertSame(403, $response->getStatusCode());
 
-        // Vérifier que le message est toujours non lu
         $response = $this->user1Client->request('GET', '/messages/'.$message->getId());
         $data = $response->toArray();
 

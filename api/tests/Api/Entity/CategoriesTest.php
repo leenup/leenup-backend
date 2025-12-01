@@ -20,9 +20,8 @@ class CategoriesTest extends ApiTestCase
         CategoryFactory::createOne(['title' => 'Finance']);
         CategoryFactory::createOne(['title' => 'Operations']);
 
-        // Client user authentifié
-        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
-            email: 'user-categories@example.com',
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-categories'),
             password: 'password',
         );
 
@@ -49,8 +48,8 @@ class CategoriesTest extends ApiTestCase
         CategoryFactory::createOne(['title' => 'Finance']);
         CategoryFactory::createOne(['title' => 'Operations']);
 
-        [$client, $csrfToken, $admin] = $this->createAuthenticatedAdmin(
-            email: 'admin-categories@example.com',
+        [$client] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-categories'),
             password: 'adminpassword',
         );
 
@@ -75,8 +74,8 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'Design']);
 
-        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
-            email: 'user-get-category@example.com',
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-get-category'),
             password: 'password',
         );
 
@@ -93,8 +92,8 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'Design']);
 
-        [$client, $csrfToken, $admin] = $this->createAuthenticatedAdmin(
-            email: 'admin-get-category@example.com',
+        [$client] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-get-category'),
             password: 'adminpassword',
         );
 
@@ -111,8 +110,8 @@ class CategoriesTest extends ApiTestCase
 
     public function testCreateCategoryAsUser(): void
     {
-        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
-            email: 'user-create-category@example.com',
+        [$client, $csrfToken] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-create-category'),
             password: 'password',
         );
 
@@ -139,8 +138,8 @@ class CategoriesTest extends ApiTestCase
 
     public function testCreateCategoryAsAdmin(): void
     {
-        [$client, $csrfToken, $admin] = $this->createAuthenticatedAdmin(
-            email: 'admin-create-category@example.com',
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-create-category'),
             password: 'adminpassword',
         );
 
@@ -173,8 +172,8 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'Marketing']);
 
-        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
-            email: 'user-update-category@example.com',
+        [$client, $csrfToken] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-update-category'),
             password: 'password',
         );
 
@@ -203,8 +202,8 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'Marketing']);
 
-        [$client, $csrfToken, $admin] = $this->createAuthenticatedAdmin(
-            email: 'admin-update-category@example.com',
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-update-category'),
             password: 'adminpassword',
         );
 
@@ -231,8 +230,8 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'HR']);
 
-        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
-            email: 'user-delete-category@example.com',
+        [$client, $csrfToken] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-delete-category'),
             password: 'password',
         );
 
@@ -255,8 +254,8 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'HR']);
 
-        [$client, $csrfToken, $admin] = $this->createAuthenticatedAdmin(
-            email: 'admin-delete-category@example.com',
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-delete-category'),
             password: 'adminpassword',
         );
 
@@ -278,8 +277,8 @@ class CategoriesTest extends ApiTestCase
 
     public function testCreateCategoryWithBlankTitleAsAdmin(): void
     {
-        [$client, $csrfToken, $admin] = $this->createAuthenticatedAdmin(
-            email: 'admin-blank-title@example.com',
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-blank-title'),
             password: 'adminpassword',
         );
 
@@ -307,8 +306,8 @@ class CategoriesTest extends ApiTestCase
 
     public function testCreateCategoryWithTitleTooShortAsAdmin(): void
     {
-        [$client, $csrfToken, $admin] = $this->createAuthenticatedAdmin(
-            email: 'admin-short-title@example.com',
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-short-title'),
             password: 'adminpassword',
         );
 
@@ -338,8 +337,8 @@ class CategoriesTest extends ApiTestCase
     {
         CategoryFactory::createOne(['title' => 'Sales']);
 
-        [$client, $csrfToken, $admin] = $this->createAuthenticatedAdmin(
-            email: 'admin-duplicate-title@example.com',
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-duplicate-title'),
             password: 'adminpassword',
         );
 
@@ -373,8 +372,8 @@ class CategoriesTest extends ApiTestCase
         CategoryFactory::createOne(['title' => 'Design']);
         CategoryFactory::createOne(['title' => 'DevOps']);
 
-        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
-            email: 'user-filter-title@example.com',
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-filter-title'),
             password: 'password',
         );
 
@@ -393,8 +392,8 @@ class CategoriesTest extends ApiTestCase
         CategoryFactory::createOne(['title' => 'Mobile Development']);
         CategoryFactory::createOne(['title' => 'Design']);
 
-        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
-            email: 'user-filter-partial@example.com',
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-filter-partial'),
             password: 'password',
         );
 
@@ -416,8 +415,8 @@ class CategoriesTest extends ApiTestCase
         CategoryFactory::createOne(['title' => 'Apple']);
         CategoryFactory::createOne(['title' => 'Mango']);
 
-        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
-            email: 'user-order-asc@example.com',
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-order-asc'),
             password: 'password',
         );
 
@@ -437,8 +436,8 @@ class CategoriesTest extends ApiTestCase
         CategoryFactory::createOne(['title' => 'Apple']);
         CategoryFactory::createOne(['title' => 'Mango']);
 
-        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
-            email: 'user-order-desc@example.com',
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-order-desc'),
             password: 'password',
         );
 

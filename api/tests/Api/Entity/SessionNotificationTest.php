@@ -49,7 +49,7 @@ class SessionNotificationTest extends ApiTestCase
             $this->mentorCsrfToken,
             $this->mentor,
         ] = $this->createAuthenticatedUser(
-            email: 'mentor-session-notif@test.com',
+            email: $this->uniqueEmail('mentor-session-notif'),
             password: 'password',
         );
 
@@ -58,7 +58,7 @@ class SessionNotificationTest extends ApiTestCase
             $this->studentCsrfToken,
             $this->student,
         ] = $this->createAuthenticatedUser(
-            email: 'student-session-notif@test.com',
+            email: $this->uniqueEmail('student-session-notif'),
             password: 'password',
         );
 
