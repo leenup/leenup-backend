@@ -7,19 +7,28 @@
          failOnWarning="true"
 >
     <php>
+        <!-- Debug & erreurs -->
         <ini name="display_errors" value="1" />
         <ini name="error_reporting" value="-1" />
-        <ini name="memory_limit" value="512M" />
+
+        <!-- 🔥 Augmenter la mémoire pour Symfony/API Platform + Foundry -->
+        <ini name="memory_limit" value="1024M" />
+
+        <!-- 🔥 Toujours exécuter les tests en environnement test -->
         <server name="APP_ENV" value="test" force="true" />
+
+        <!-- 🔥 Désactiver le mode debug pendant les tests (économie mémoire x2) -->
+        <env name="APP_DEBUG" value="0" />
+
         <server name="KERNEL_CLASS" value="App\Kernel" force="true" />
         <server name="SHELL_VERBOSITY" value="-1" />
         <server name="SYMFONY_PHPUNIT_REMOVE" value="" />
         <server name="SYMFONY_PHPUNIT_VERSION" value="9.6" />
 
-        <!-- ✅ Base de données de test séparée -->
+        <!-- 🔥 Base de données test dédiée -->
         <server name="DATABASE_URL" value="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&amp;charset=utf8" force="true" />
 
-        <!-- ✅ Masquer tous les deprecation warnings -->
+        <!-- 🔥 Désactiver tous les warnings de dépréciation pour éviter le bruit -->
         <env name="SYMFONY_DEPRECATIONS_HELPER" value="disabled" />
     </php>
 
@@ -29,18 +38,19 @@
         </testsuite>
     </testsuites>
 
+    <!-- Couverture de code -->
     <coverage processUncoveredFiles="true">
         <include>
             <directory suffix=".php">src</directory>
         </include>
     </coverage>
 
-    <!-- Listener Symfony (optionnel mais recommandé) -->
+    <!-- Listener Symfony (recommandé) -->
     <listeners>
         <listener class="Symfony\Bridge\PhpUnit\SymfonyTestsListener" />
     </listeners>
 
-    <!-- Extension DAMA pour gérer les transactions automatiquement -->
+    <!-- Extension DAMA pour transactions automatiques -->
     <extensions>
         <extension class="DAMA\DoctrineTestBundle\PHPUnit\PHPUnitExtension"/>
     </extensions>
