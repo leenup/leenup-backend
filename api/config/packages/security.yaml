@@ -13,7 +13,7 @@ security:
             pattern: ^/_(profiler|wdt)
             security: false
 
-        # 🔐 Firewall dédié à l'authentification (/auth)
+        # 🔐 Firewall dédié au login JSON (/auth)
         login:
             pattern: ^/auth
             stateless: true
@@ -25,7 +25,7 @@ security:
                 success_handler: lexik_jwt_authentication.handler.authentication_success
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
 
-        # 🔐 Firewall principal qui protège toute l'API avec JWT (cookie access_token)
+        # 🔐 Firewall principal JWT + refresh
         main:
             pattern: ^/
             stateless: true
@@ -36,9 +36,9 @@ security:
                 check_path: /api/token/refresh
 
     access_control:
-        - { path: ^/$, roles: PUBLIC_ACCESS }        # Swagger UI racine
-        - { path: ^/docs, roles: PUBLIC_ACCESS }     # Swagger docs
-        - { path: ^/contexts, roles: PUBLIC_ACCESS } # Hydra / JSON-LD contexts
+        - { path: ^/$, roles: PUBLIC_ACCESS }
+        - { path: ^/docs, roles: PUBLIC_ACCESS }
+        - { path: ^/contexts, roles: PUBLIC_ACCESS }
         - { path: ^/auth, roles: PUBLIC_ACCESS }
         - { path: ^/register, roles: PUBLIC_ACCESS }
         - { path: ^/, roles: IS_AUTHENTICATED_FULLY }

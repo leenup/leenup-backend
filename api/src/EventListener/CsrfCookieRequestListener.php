@@ -29,14 +29,18 @@ class CsrfCookieRequestListener implements EventSubscriberInterface
         }
 
         $request = $event->getRequest();
+
+        // GET / HEAD / OPTIONS → pas de CSRF
         if ($request->isMethodSafe()) {
             return;
         }
 
+        // Login + refresh → pas de CSRF (token pas encore là / rotation)
         if (\in_array($request->getPathInfo(), self::EXCLUDED_PATHS, true)) {
             return;
         }
 
+        // Si pas de cookie access_token → pas connecté, pas besoin de CSRF
         $accessTokenCookie = $request->cookies->get(self::ACCESS_TOKEN_COOKIE);
         if ($accessTokenCookie === null) {
             return;
