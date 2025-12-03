@@ -2,7 +2,8 @@
 # Files in the packages/ subdirectory configure your dependencies.
 
 parameters:
-
+    app.jwt_cookie_secure: '%env(bool:JWT_COOKIE_SECURE)%'
+    
 services:
     # default configuration for services in *this* file
     _defaults:
@@ -22,6 +23,11 @@ services:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'
     
+    App\Security\JwtTokenCookieFactory:
+        arguments:
+            $jwtTtl: '%lexik_jwt_authentication.token_ttl%'
+            $cookieSecure: '%app.jwt_cookie_secure%'
+
     App\State\Processor\UserSkill\UserSkillProcessor:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'

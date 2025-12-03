@@ -4,30 +4,24 @@ namespace App\Tests\Api\Profile;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Factory\UserFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
 use Zenstruck\Foundry\Test\Factories;
 
 class ChangePasswordTest extends ApiTestCase
 {
     use Factories;
-
-    private function getToken(string $email, string $password): string
-    {
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => $email, 'password' => $password],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        return $response->toArray()['token'];
-    }
+    use AuthenticatedApiTestTrait;
 
     // ==================== POST /me/change-password ====================
 
     public function testChangePasswordSuccessfully(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'oldpass123']);
-        $token = $this->getToken('test@example.com', 'oldpass123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-success@example.com',
+            password: 'oldpass123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => [
                 'currentPassword' => 'oldpass123',
                 'newPassword' => 'newpass123',
@@ -35,16 +29,17 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(204);
+        self::assertSame(204, $response->getStatusCode());
     }
 
     public function testChangePasswordAndLoginWithNewPassword(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'oldpass123']);
-        $token = $this->getToken('test@example.com', 'oldpass123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-login@example.com',
+            password: 'oldpass123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => [
                 'currentPassword' => 'oldpass123',
                 'newPassword' => 'newpass123',
@@ -52,25 +47,27 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(204);
+        self::assertSame(204, $response->getStatusCode());
 
         // Se connecter avec le nouveau mot de passe
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'test@example.com', 'password' => 'newpass123'],
+        $authResponse = static::createClient()->request('POST', '/auth', [
+            'json' => ['email' => 'test-change-login@example.com', 'password' => 'newpass123'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
-        $this->assertResponseIsSuccessful();
-        $this->assertArrayHasKey('token', $response->toArray());
+        // On ne vérifie plus la présence de "token" dans le body,
+        // on vérifie juste que l'auth fonctionne (200).
+        self::assertSame(200, $authResponse->getStatusCode());
     }
 
     public function testChangePasswordMakesOldPasswordInvalid(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'oldpass123']);
-        $token = $this->getToken('test@example.com', 'oldpass123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-old-invalid@example.com',
+            password: 'oldpass123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => [
                 'currentPassword' => 'oldpass123',
                 'newPassword' => 'newpass123',
@@ -78,24 +75,26 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(204);
+        self::assertSame(204, $response->getStatusCode());
 
         // Essayer de se connecter avec l'ancien mot de passe
-        static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'test@example.com', 'password' => 'oldpass123'],
+        $authClient = static::createClient();
+        $authClient->request('POST', '/auth', [
+            'json' => ['email' => 'test-change-old-invalid@example.com', 'password' => 'oldpass123'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(401);
+        self::assertResponseStatusCodeSame(401);
     }
 
     public function testChangePasswordKeepsTokenValid(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'oldpass123']);
-        $token = $this->getToken('test@example.com', 'oldpass123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-keep-session@example.com',
+            password: 'oldpass123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => [
                 'currentPassword' => 'oldpass123',
                 'newPassword' => 'newpass123',
@@ -103,24 +102,25 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(204);
+        self::assertSame(204, $response->getStatusCode());
 
-        // Le token reste valide
-        static::createClient()->request('GET', '/me', ['auth_bearer' => $token]);
+        // Le même client (mêmes cookies) doit toujours pouvoir appeler /me
+        $meResponse = $client->request('GET', '/me');
 
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains(['email' => 'test@example.com']);
+        self::assertSame(200, $meResponse->getStatusCode());
+        $this->assertJsonContains(['email' => 'test-change-keep-session@example.com']);
     }
 
     // ==================== Validations ====================
 
     public function testChangePasswordWithIncorrectCurrentPassword(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'correctpass123']);
-        $token = $this->getToken('test@example.com', 'correctpass123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-wrong-current@example.com',
+            password: 'correctpass123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => [
                 'currentPassword' => 'wrongpass123',
                 'newPassword' => 'newpass123',
@@ -128,7 +128,7 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [[
@@ -140,11 +140,12 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordWithSamePassword(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'samepass123']);
-        $token = $this->getToken('test@example.com', 'samepass123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-same@example.com',
+            password: 'samepass123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => [
                 'currentPassword' => 'samepass123',
                 'newPassword' => 'samepass123',
@@ -152,7 +153,7 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [[
@@ -164,11 +165,12 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordWithTooShortPassword(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'oldpass123']);
-        $token = $this->getToken('test@example.com', 'oldpass123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-short@example.com',
+            password: 'oldpass123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => [
                 'currentPassword' => 'oldpass123',
                 'newPassword' => '123',
@@ -176,7 +178,7 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [['propertyPath' => 'newPassword']],
@@ -185,11 +187,12 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordWithEmptyCurrentPassword(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'password123']);
-        $token = $this->getToken('test@example.com', 'password123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-empty-current@example.com',
+            password: 'password123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => [
                 'currentPassword' => '',
                 'newPassword' => 'newpass123',
@@ -197,7 +200,7 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [[
@@ -209,11 +212,12 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordWithEmptyNewPassword(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'password123']);
-        $token = $this->getToken('test@example.com', 'password123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-empty-new@example.com',
+            password: 'password123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => [
                 'currentPassword' => 'password123',
                 'newPassword' => '',
@@ -221,7 +225,7 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
         $this->assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [[
@@ -233,37 +237,41 @@ class ChangePasswordTest extends ApiTestCase
 
     public function testChangePasswordWithMissingCurrentPassword(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'password123']);
-        $token = $this->getToken('test@example.com', 'password123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-missing-current@example.com',
+            password: 'password123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => ['newPassword' => 'newpass123'],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
     }
 
     public function testChangePasswordWithMissingNewPassword(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'password123']);
-        $token = $this->getToken('test@example.com', 'password123');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-missing-new@example.com',
+            password: 'password123',
+        );
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
+        $response = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
             'json' => ['currentPassword' => 'password123'],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
+        self::assertSame(422, $response->getStatusCode());
     }
 
     // ==================== Sécurité ====================
 
     public function testChangePasswordWithoutAuthentication(): void
     {
-        static::createClient()->request('POST', '/me/change-password', [
+        $client = static::createClient();
+
+        $client->request('POST', '/me/change-password', [
             'json' => [
                 'currentPassword' => 'pass1234',
                 'newPassword' => 'newpass123',
@@ -271,12 +279,15 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(401);
+        self::assertResponseStatusCodeSame(401);
     }
 
     public function testChangePasswordWithInvalidToken(): void
     {
-        static::createClient()->request('POST', '/me/change-password', [
+        // Dans le nouveau modèle, un "invalid token" = une requête sans vraie session
+        $client = static::createClient();
+
+        $client->request('POST', '/me/change-password', [
             'auth_bearer' => 'invalid_token',
             'json' => [
                 'currentPassword' => 'pass1234',
@@ -285,18 +296,24 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(401);
+        self::assertResponseStatusCodeSame(401);
     }
 
     public function testChangePasswordDoesNotAffectOtherUsers(): void
     {
-        UserFactory::createOne(['email' => 'user1@example.com', 'plainPassword' => 'pass1234']);
-        UserFactory::createOne(['email' => 'user2@example.com', 'plainPassword' => 'pass5678']);
+        // user1: celui qui change son mot de passe
+        [$client1, $csrfToken1, $user1] = $this->createAuthenticatedUser(
+            email: 'user1-change-pass@example.com',
+            password: 'pass1234',
+        );
 
-        $token1 = $this->getToken('user1@example.com', 'pass1234');
+        // user2: simple user créé via factory, on le testera ensuite
+        UserFactory::createOne([
+            'email' => 'user2-change-pass@example.com',
+            'plainPassword' => 'pass5678',
+        ]);
 
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token1,
+        $response = $this->requestUnsafe($client1, 'POST', '/me/change-password', $csrfToken1, [
             'json' => [
                 'currentPassword' => 'pass1234',
                 'newPassword' => 'newpass123',
@@ -304,59 +321,64 @@ class ChangePasswordTest extends ApiTestCase
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(204);
+        self::assertSame(204, $response->getStatusCode());
 
         // User2 peut toujours se connecter avec son ancien mot de passe
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'user2@example.com', 'password' => 'pass5678'],
+        $authResponse = static::createClient()->request('POST', '/auth', [
+            'json' => ['email' => 'user2-change-pass@example.com', 'password' => 'pass5678'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
 
-        $this->assertResponseIsSuccessful();
-        $this->assertArrayHasKey('token', $response->toArray());
+        self::assertSame(200, $authResponse->getStatusCode());
     }
 
     public function testChangePasswordMultipleTimes(): void
     {
-        UserFactory::createOne(['email' => 'test@example.com', 'plainPassword' => 'version1pass']);
-        $token = $this->getToken('test@example.com', 'version1pass');
+        [$client, $csrfToken, $user] = $this->createAuthenticatedUser(
+            email: 'test-change-multiple@example.com',
+            password: 'version1pass',
+        );
 
         // Changement 1
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
-            'json' => ['currentPassword' => 'version1pass', 'newPassword' => 'version2pass'],
+        $response1 = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
+            'json' => [
+                'currentPassword' => 'version1pass',
+                'newPassword' => 'version2pass',
+            ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
-        $this->assertResponseStatusCodeSame(204);
+        self::assertSame(204, $response1->getStatusCode());
 
         // Changement 2
-        static::createClient()->request('POST', '/me/change-password', [
-            'auth_bearer' => $token,
-            'json' => ['currentPassword' => 'version2pass', 'newPassword' => 'version3pass'],
+        $response2 = $this->requestUnsafe($client, 'POST', '/me/change-password', $csrfToken, [
+            'json' => [
+                'currentPassword' => 'version2pass',
+                'newPassword' => 'version3pass',
+            ],
             'headers' => ['Content-Type' => 'application/ld+json'],
         ]);
-        $this->assertResponseStatusCodeSame(204);
+        self::assertSame(204, $response2->getStatusCode());
 
         // Se connecter avec v3
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'test@example.com', 'password' => 'version3pass'],
+        $clientAuth = static::createClient();
+        $authV3 = $clientAuth->request('POST', '/auth', [
+            'json' => ['email' => 'test-change-multiple@example.com', 'password' => 'version3pass'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
-        $this->assertResponseIsSuccessful();
-        $this->assertArrayHasKey('token', $response->toArray());
+        self::assertSame(200, $authV3->getStatusCode());
 
         // v1 ne fonctionne plus
-        static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'test@example.com', 'password' => 'version1pass'],
+        $clientAuth->request('POST', '/auth', [
+            'json' => ['email' => 'test-change-multiple@example.com', 'password' => 'version1pass'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
-        $this->assertResponseStatusCodeSame(401);
+        self::assertResponseStatusCodeSame(401);
 
         // v2 ne fonctionne plus
-        static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => 'test@example.com', 'password' => 'version2pass'],
+        $clientAuth->request('POST', '/auth', [
+            'json' => ['email' => 'test-change-multiple@example.com', 'password' => 'version2pass'],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
-        $this->assertResponseStatusCodeSame(401);
+        self::assertResponseStatusCodeSame(401);
     }
 }

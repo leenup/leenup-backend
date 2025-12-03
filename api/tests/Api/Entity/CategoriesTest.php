@@ -4,68 +4,31 @@ namespace App\Tests\Api\Entity;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Factory\CategoryFactory;
-use App\Factory\UserFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
 use Zenstruck\Foundry\Test\Factories;
 
 class CategoriesTest extends ApiTestCase
 {
     use Factories;
-
-    private string $token;
-    private string $adminToken;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        // Pour les tests User
-        $user = UserFactory::createOne([
-            'email' => 'test@example.com',
-            'plainPassword' => 'password',
-        ]);
-
-        // Pour les tests Admin
-        $adminUser = UserFactory::createOne([
-            'email' => 'admin@exemple.com',
-            'plainPassword' => 'adminpassword',
-            'roles' => ['ROLE_ADMIN'],
-        ]);
-
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => [
-                'email' => 'test@example.com',
-                'password' => 'password',
-            ],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-
-        $adminResponse = static::createClient()->request('POST', '/auth', [
-            'json' => [
-                'email' => 'admin@exemple.com',
-                'password' => 'adminpassword',
-            ],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-
-        $this->token = $response->toArray()['token'];
-        $this->adminToken = $adminResponse->toArray()['token'];
-    }
+    use AuthenticatedApiTestTrait;
 
     // ==================== GET Operations ====================
 
     public function testGetCategoriesAsUser(): void
     {
-        // Créer des catégories avec Foundry
         CategoryFactory::createOne(['title' => 'IT']);
         CategoryFactory::createOne(['title' => 'Finance']);
         CategoryFactory::createOne(['title' => 'Operations']);
 
-        $response = static::createClient()->request('GET', '/categories', [
-            'auth_bearer' => $this->token,
-        ]);
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-categories'),
+            password: 'password',
+        );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
+        $response = $client->request('GET', '/categories');
+
+        self::assertResponseIsSuccessful();
+        self::assertJsonContains([
             '@context' => '/contexts/Category',
             '@type' => 'Collection',
             'totalItems' => 3,
@@ -74,24 +37,26 @@ class CategoriesTest extends ApiTestCase
         $data = $response->toArray();
         $titles = array_column($data['member'], 'title');
 
-        $this->assertContains('IT', $titles);
-        $this->assertContains('Finance', $titles);
-        $this->assertContains('Operations', $titles);
+        self::assertContains('IT', $titles);
+        self::assertContains('Finance', $titles);
+        self::assertContains('Operations', $titles);
     }
 
     public function testGetCategoriesAsAdmin(): void
     {
-        // Créer des catégories avec Foundry
         CategoryFactory::createOne(['title' => 'IT']);
         CategoryFactory::createOne(['title' => 'Finance']);
         CategoryFactory::createOne(['title' => 'Operations']);
 
-        $response = static::createClient()->request('GET', '/categories', [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        [$client] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-categories'),
+            password: 'adminpassword',
+        );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
+        $response = $client->request('GET', '/categories');
+
+        self::assertResponseIsSuccessful();
+        self::assertJsonContains([
             '@context' => '/contexts/Category',
             '@type' => 'Collection',
             'totalItems' => 3,
@@ -100,21 +65,24 @@ class CategoriesTest extends ApiTestCase
         $data = $response->toArray();
         $titles = array_column($data['member'], 'title');
 
-        $this->assertContains('IT', $titles);
-        $this->assertContains('Finance', $titles);
-        $this->assertContains('Operations', $titles);
+        self::assertContains('IT', $titles);
+        self::assertContains('Finance', $titles);
+        self::assertContains('Operations', $titles);
     }
 
     public function testGetCategoryAsUser(): void
     {
         $category = CategoryFactory::createOne(['title' => 'Design']);
 
-        $response = static::createClient()->request('GET', '/categories/' . $category->getId(), [
-            'auth_bearer' => $this->token,
-        ]);
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-get-category'),
+            password: 'password',
+        );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
+        $response = $client->request('GET', '/categories/'.$category->getId());
+
+        self::assertResponseIsSuccessful();
+        self::assertJsonContains([
             '@type' => 'Category',
             'title' => 'Design',
         ]);
@@ -124,12 +92,15 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'Design']);
 
-        $response = static::createClient()->request('GET', '/categories/' . $category->getId(), [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        [$client] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-get-category'),
+            password: 'adminpassword',
+        );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains([
+        $response = $client->request('GET', '/categories/'.$category->getId());
+
+        self::assertResponseIsSuccessful();
+        self::assertJsonContains([
             '@type' => 'Category',
             'title' => 'Design',
         ]);
@@ -139,14 +110,26 @@ class CategoriesTest extends ApiTestCase
 
     public function testCreateCategoryAsUser(): void
     {
-        static::createClient()->request('POST', '/categories', [
-            'auth_bearer' => $this->token,
-            'json' => ['title' => 'Development'],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        [$client, $csrfToken] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-create-category'),
+            password: 'password',
+        );
 
-        $this->assertResponseStatusCodeSame(403);
-        $this->assertJsonContains([
+        $this->requestUnsafe(
+            $client,
+            'POST',
+            '/categories',
+            $csrfToken,
+            [
+                'json' => ['title' => 'Development'],
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
+            ]
+        );
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertJsonContains([
             '@type' => 'Error',
             'title' => 'An error occurred',
             'detail' => 'Only admins can access this resource.',
@@ -155,20 +138,32 @@ class CategoriesTest extends ApiTestCase
 
     public function testCreateCategoryAsAdmin(): void
     {
-        $response = static::createClient()->request('POST', '/categories', [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['title' => 'Development'],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-create-category'),
+            password: 'adminpassword',
+        );
 
-        $this->assertResponseStatusCodeSame(201);
-        $this->assertResponseHeaderSame('content-type', 'application/ld+json; charset=utf-8');
-        $this->assertJsonContains([
+        $response = $this->requestUnsafe(
+            $client,
+            'POST',
+            '/categories',
+            $csrfToken,
+            [
+                'json' => ['title' => 'Development'],
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
+            ]
+        );
+
+        self::assertResponseStatusCodeSame(201);
+        self::assertResponseHeaderSame('content-type', 'application/ld+json; charset=utf-8');
+        self::assertJsonContains([
             '@context' => '/contexts/Category',
             '@type' => 'Category',
             'title' => 'Development',
         ]);
-        $this->assertMatchesRegularExpression('~^/categories/\d+$~', $response->toArray()['@id']);
+        self::assertMatchesRegularExpression('~^/categories/\d+$~', $response->toArray()['@id']);
     }
 
     // ==================== PATCH Operations ====================
@@ -177,14 +172,26 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'Marketing']);
 
-        static::createClient()->request('PATCH', '/categories/' . $category->getId(), [
-            'auth_bearer' => $this->token,
-            'json' => ['title' => 'Digital Marketing'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        [$client, $csrfToken] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-update-category'),
+            password: 'password',
+        );
 
-        $this->assertResponseStatusCodeSame(403);
-        $this->assertJsonContains([
+        $this->requestUnsafe(
+            $client,
+            'PATCH',
+            '/categories/'.$category->getId(),
+            $csrfToken,
+            [
+                'json' => ['title' => 'Digital Marketing'],
+                'headers' => [
+                    'Content-Type' => 'application/merge-patch+json',
+                ],
+            ]
+        );
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertJsonContains([
             '@type' => 'Error',
             'title' => 'An error occurred',
             'detail' => 'Only admins can access this resource.',
@@ -195,14 +202,26 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'Marketing']);
 
-        static::createClient()->request('PATCH', '/categories/' . $category->getId(), [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['title' => 'Digital Marketing'],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-update-category'),
+            password: 'adminpassword',
+        );
 
-        $this->assertResponseIsSuccessful();
-        $this->assertJsonContains(['title' => 'Digital Marketing']);
+        $this->requestUnsafe(
+            $client,
+            'PATCH',
+            '/categories/'.$category->getId(),
+            $csrfToken,
+            [
+                'json' => ['title' => 'Digital Marketing'],
+                'headers' => [
+                    'Content-Type' => 'application/merge-patch+json',
+                ],
+            ]
+        );
+
+        self::assertResponseIsSuccessful();
+        self::assertJsonContains(['title' => 'Digital Marketing']);
     }
 
     // ==================== DELETE Operations ====================
@@ -211,12 +230,20 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'HR']);
 
-        static::createClient()->request('DELETE', '/categories/' . $category->getId(), [
-            'auth_bearer' => $this->token,
-        ]);
+        [$client, $csrfToken] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-delete-category'),
+            password: 'password',
+        );
 
-        $this->assertResponseStatusCodeSame(403);
-        $this->assertJsonContains([
+        $this->requestUnsafe(
+            $client,
+            'DELETE',
+            '/categories/'.$category->getId(),
+            $csrfToken
+        );
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertJsonContains([
             '@type' => 'Error',
             'title' => 'An error occurred',
             'detail' => 'Only admins can access this resource.',
@@ -227,14 +254,21 @@ class CategoriesTest extends ApiTestCase
     {
         $category = CategoryFactory::createOne(['title' => 'HR']);
 
-        static::createClient()->request('DELETE', '/categories/' . $category->getId(), [
-            'auth_bearer' => $this->adminToken,
-        ]);
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-delete-category'),
+            password: 'adminpassword',
+        );
 
-        $this->assertResponseStatusCodeSame(204);
+        $this->requestUnsafe(
+            $client,
+            'DELETE',
+            '/categories/'.$category->getId(),
+            $csrfToken
+        );
 
-        // Vérifier que la catégorie n'existe plus
-        $this->assertNull(
+        self::assertResponseStatusCodeSame(204);
+
+        self::assertNull(
             static::getContainer()->get('doctrine')->getRepository(\App\Entity\Category::class)->findOneBy(['title' => 'HR'])
         );
     }
@@ -243,14 +277,26 @@ class CategoriesTest extends ApiTestCase
 
     public function testCreateCategoryWithBlankTitleAsAdmin(): void
     {
-        static::createClient()->request('POST', '/categories', [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['title' => ''],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-blank-title'),
+            password: 'adminpassword',
+        );
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        $this->requestUnsafe(
+            $client,
+            'POST',
+            '/categories',
+            $csrfToken,
+            [
+                'json' => ['title' => ''],
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
+            ]
+        );
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 ['propertyPath' => 'title', 'message' => 'The title cannot be blank'],
@@ -260,14 +306,26 @@ class CategoriesTest extends ApiTestCase
 
     public function testCreateCategoryWithTitleTooShortAsAdmin(): void
     {
-        static::createClient()->request('POST', '/categories', [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['title' => 'A'],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-short-title'),
+            password: 'adminpassword',
+        );
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        $this->requestUnsafe(
+            $client,
+            'POST',
+            '/categories',
+            $csrfToken,
+            [
+                'json' => ['title' => 'A'],
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
+            ]
+        );
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 ['propertyPath' => 'title'],
@@ -279,14 +337,26 @@ class CategoriesTest extends ApiTestCase
     {
         CategoryFactory::createOne(['title' => 'Sales']);
 
-        static::createClient()->request('POST', '/categories', [
-            'auth_bearer' => $this->adminToken,
-            'json' => ['title' => 'Sales'],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        [$client, $csrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-duplicate-title'),
+            password: 'adminpassword',
+        );
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        $this->requestUnsafe(
+            $client,
+            'POST',
+            '/categories',
+            $csrfToken,
+            [
+                'json' => ['title' => 'Sales'],
+                'headers' => [
+                    'Content-Type' => 'application/ld+json',
+                ],
+            ]
+        );
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 ['propertyPath' => 'title', 'message' => 'This category already exists'],
@@ -302,15 +372,18 @@ class CategoriesTest extends ApiTestCase
         CategoryFactory::createOne(['title' => 'Design']);
         CategoryFactory::createOne(['title' => 'DevOps']);
 
-        $response = static::createClient()->request('GET', '/categories?title=Development', [
-            'auth_bearer' => $this->token,
-        ]);
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-filter-title'),
+            password: 'password',
+        );
 
-        $this->assertResponseIsSuccessful();
+        $response = $client->request('GET', '/categories?title=Development');
+
+        self::assertResponseIsSuccessful();
         $data = $response->toArray();
 
-        $this->assertCount(1, $data['member']);
-        $this->assertEquals('Development', $data['member'][0]['title']);
+        self::assertCount(1, $data['member']);
+        self::assertEquals('Development', $data['member'][0]['title']);
     }
 
     public function testFilterCategoriesByTitlePartial(): void
@@ -319,18 +392,21 @@ class CategoriesTest extends ApiTestCase
         CategoryFactory::createOne(['title' => 'Mobile Development']);
         CategoryFactory::createOne(['title' => 'Design']);
 
-        $response = static::createClient()->request('GET', '/categories?title=Development', [
-            'auth_bearer' => $this->token,
-        ]);
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-filter-partial'),
+            password: 'password',
+        );
 
-        $this->assertResponseIsSuccessful();
+        $response = $client->request('GET', '/categories?title=Development');
+
+        self::assertResponseIsSuccessful();
         $data = $response->toArray();
 
-        $this->assertEquals(2, $data['totalItems']);
+        self::assertEquals(2, $data['totalItems']);
 
         $titles = array_column($data['member'], 'title');
-        $this->assertContains('Web Development', $titles);
-        $this->assertContains('Mobile Development', $titles);
+        self::assertContains('Web Development', $titles);
+        self::assertContains('Mobile Development', $titles);
     }
 
     public function testOrderCategoriesByTitle(): void
@@ -339,17 +415,19 @@ class CategoriesTest extends ApiTestCase
         CategoryFactory::createOne(['title' => 'Apple']);
         CategoryFactory::createOne(['title' => 'Mango']);
 
-        $response = static::createClient()->request('GET', '/categories?order[title]=asc', [
-            'auth_bearer' => $this->token,
-        ]);
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-order-asc'),
+            password: 'password',
+        );
 
-        $this->assertResponseIsSuccessful();
+        $response = $client->request('GET', '/categories?order[title]=asc');
+
+        self::assertResponseIsSuccessful();
         $data = $response->toArray();
 
         $titles = array_column($data['member'], 'title');
 
-        // Vérifier l'ordre alphabétique
-        $this->assertEquals(['Apple', 'Mango', 'Zebra'], $titles);
+        self::assertEquals(['Apple', 'Mango', 'Zebra'], $titles);
     }
 
     public function testOrderCategoriesByTitleDesc(): void
@@ -358,16 +436,18 @@ class CategoriesTest extends ApiTestCase
         CategoryFactory::createOne(['title' => 'Apple']);
         CategoryFactory::createOne(['title' => 'Mango']);
 
-        $response = static::createClient()->request('GET', '/categories?order[title]=desc', [
-            'auth_bearer' => $this->token,
-        ]);
+        [$client] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('user-order-desc'),
+            password: 'password',
+        );
 
-        $this->assertResponseIsSuccessful();
+        $response = $client->request('GET', '/categories?order[title]=desc');
+
+        self::assertResponseIsSuccessful();
         $data = $response->toArray();
 
         $titles = array_column($data['member'], 'title');
 
-        // Vérifier l'ordre inverse
-        $this->assertEquals(['Zebra', 'Mango', 'Apple'], $titles);
+        self::assertEquals(['Zebra', 'Mango', 'Apple'], $titles);
     }
 }

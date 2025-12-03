@@ -4,16 +4,18 @@ namespace App\Tests\Api\Auth;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Factory\UserFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
 use Zenstruck\Foundry\Test\Factories;
 
 class RegisterTest extends ApiTestCase
 {
     use Factories;
+    use AuthenticatedApiTestTrait;
 
     public function testRegister(): void
     {
         $client = self::createClient();
-        $email = 'newuser@example.com';
+        $email = $this->uniqueEmail('newuser');
 
         $response = $client->request('POST', '/register', [
             'json' => [
@@ -27,9 +29,9 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(201);
-        $this->assertResponseHeaderSame('content-type', 'application/ld+json; charset=utf-8');
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(201);
+        self::assertResponseHeaderSame('content-type', 'application/ld+json; charset=utf-8');
+        self::assertJsonContains([
             '@context' => '/contexts/User',
             '@type' => 'User',
             'email' => $email,
@@ -37,8 +39,9 @@ class RegisterTest extends ApiTestCase
             'lastName' => 'Doe',
         ]);
 
-        $this->assertArrayNotHasKey('password', $response->toArray());
-        $this->assertArrayNotHasKey('plainPassword', $response->toArray());
+        $data = $response->toArray(false);
+        $this->assertArrayNotHasKey('password', $data);
+        $this->assertArrayNotHasKey('plainPassword', $data);
 
         // Vérifier qu'on peut se connecter avec ce nouvel utilisateur
         $loginResponse = $client->request('POST', '/auth', [
@@ -51,17 +54,18 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseIsSuccessful();
-        $this->assertArrayHasKey('token', $loginResponse->toArray());
+        self::assertResponseIsSuccessful();
+
+        // 👉 Plus de token dans le body, on vérifie juste que l'auth fonctionne
+        $loginData = $loginResponse->toArray(false);
+        self::assertArrayNotHasKey('token', $loginData);
     }
 
     public function testRegisterWithDuplicateEmail(): void
     {
-        // Créer un utilisateur existant avec Foundry
-        $email = 'existing@example.com';
+        $email = $this->uniqueEmail('existing');
         UserFactory::createOne(['email' => $email]);
 
-        // Essayer de créer un utilisateur avec le même email
         $client = self::createClient();
         $client->request('POST', '/register', [
             'json' => [
@@ -75,8 +79,8 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 [
@@ -100,8 +104,8 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 [
@@ -125,8 +129,8 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 [
@@ -150,8 +154,8 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 [
@@ -175,8 +179,8 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 [
@@ -190,7 +194,7 @@ class RegisterTest extends ApiTestCase
     public function testRegisterWithOptionalFields(): void
     {
         $client = self::createClient();
-        $email = 'user-with-bio@example.com';
+        $email = $this->uniqueEmail('user-with-bio');
 
         $response = $client->request('POST', '/register', [
             'json' => [
@@ -208,8 +212,8 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(201);
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(201);
+        self::assertJsonContains([
             '@type' => 'User',
             'email' => $email,
             'firstName' => 'Alice',
@@ -220,8 +224,8 @@ class RegisterTest extends ApiTestCase
             'locale' => 'fr',
         ]);
 
-        $data = $response->toArray();
-        $this->assertArrayHasKey('id', $data);
+        $data = $response->toArray(false);
+        self::assertArrayHasKey('id', $data);
     }
 
     public function testRegisterWithInvalidAvatarUrl(): void
@@ -239,8 +243,8 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 [
@@ -265,8 +269,8 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 [
@@ -292,8 +296,8 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonContains([
             '@type' => 'ConstraintViolation',
             'violations' => [
                 [
@@ -319,74 +323,42 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(401);
-        $this->assertJsonContains([
+        // Route publique mais protégée par firewall JWT → 401 si pas de token/cookie d'auth
+        self::assertResponseStatusCodeSame(401);
+        self::assertJsonContains([
             'message' => 'JWT Token not found',
         ]);
     }
 
     public function testUserCannotCreateAnotherAdmin(): void
     {
-        // Créer un utilisateur normal et obtenir son token
-        $user = UserFactory::createOne([
-            'email' => 'user@example.com',
+        $userEmail = $this->uniqueEmail('user');
+        $newAdminEmail = $this->uniqueEmail('newadmin');
+
+        UserFactory::createOne([
+            'email' => $userEmail,
             'plainPassword' => 'password',
         ]);
 
-        $client = static::createClient();
+        $client = self::createClient();
+
+        // 1. Login
         $loginResponse = $client->request('POST', '/auth', [
             'json' => [
-                'email' => 'user@example.com',
+                'email' => $userEmail,
                 'password' => 'password',
             ],
             'headers' => ['Content-Type' => 'application/json'],
         ]);
-        $token = $loginResponse->toArray()['token'];
+        self::assertResponseIsSuccessful();
 
-        // Essayer de créer un admin
+        // 2. Récupérer le CSRF à partir de la réponse de login
+        $headers = $loginResponse->getHeaders(false);
+        $csrfToken = $headers['x-csrf-token'][0] ?? null;
+        self::assertNotNull($csrfToken, 'Expected X-CSRF-TOKEN header after /auth.');
+
+        // 3. Essayer de créer un admin en étant simple user (cookies + CSRF)
         $client->request('POST', '/register', [
-            'auth_bearer' => $token,
-            'json' => [
-                'email' => 'newadmin@example.com',
-                'plainPassword' => 'adminpassword123',
-                'firstName' => 'New',
-                'lastName' => 'Admin',
-                'roles' => ['ROLE_ADMIN'],
-            ],
-            'headers' => [
-                'Content-Type' => 'application/ld+json',
-            ],
-        ]);
-
-        $this->assertResponseStatusCodeSame(403);
-        $this->assertJsonContains([
-            "detail" => "Only admins can assign admin roles."
-        ]);
-    }
-
-    public function testAdminCanRegisterAdmin(): void
-    {
-        // Créer un admin et obtenir son token
-        $admin = UserFactory::createOne([
-            'email' => 'admin@example.com',
-            'plainPassword' => 'password',
-            'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
-        ]);
-
-        $client = static::createClient();
-        $loginResponse = $client->request('POST', '/auth', [
-            'json' => [
-                'email' => 'admin@example.com',
-                'password' => 'password',
-            ],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $token = $loginResponse->toArray()['token'];
-
-        // Créer un nouvel admin
-        $newAdminEmail = 'newadmin@example.com';
-        $client->request('POST', '/register', [
-            'auth_bearer' => $token,
             'json' => [
                 'email' => $newAdminEmail,
                 'plainPassword' => 'adminpassword123',
@@ -396,11 +368,61 @@ class RegisterTest extends ApiTestCase
             ],
             'headers' => [
                 'Content-Type' => 'application/ld+json',
+                'X-CSRF-TOKEN' => $csrfToken,
             ],
         ]);
 
-        $this->assertResponseStatusCodeSame(201);
-        $this->assertJsonContains([
+        self::assertResponseStatusCodeSame(403);
+        self::assertJsonContains([
+            'detail' => 'Only admins can assign admin roles.',
+        ]);
+    }
+
+    public function testAdminCanRegisterAdmin(): void
+    {
+        $adminEmail = $this->uniqueEmail('admin');
+        $newAdminEmail = $this->uniqueEmail('newadmin');
+
+        UserFactory::createOne([
+            'email' => $adminEmail,
+            'plainPassword' => 'password',
+            'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
+        ]);
+
+        $client = self::createClient();
+
+        // 1. Login admin
+        $loginResponse = $client->request('POST', '/auth', [
+            'json' => [
+                'email' => $adminEmail,
+                'password' => 'password',
+            ],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+        self::assertResponseIsSuccessful();
+
+        // 2. CSRF à partir de la réponse de login
+        $headers = $loginResponse->getHeaders(false);
+        $csrfToken = $headers['x-csrf-token'][0] ?? null;
+        self::assertNotNull($csrfToken, 'Expected X-CSRF-TOKEN header after /auth.');
+
+        // 3. Créer un nouvel admin (cookies + CSRF)
+        $client->request('POST', '/register', [
+            'json' => [
+                'email' => $newAdminEmail,
+                'plainPassword' => 'adminpassword123',
+                'firstName' => 'New',
+                'lastName' => 'Admin',
+                'roles' => ['ROLE_ADMIN'],
+            ],
+            'headers' => [
+                'Content-Type' => 'application/ld+json',
+                'X-CSRF-TOKEN' => $csrfToken,
+            ],
+        ]);
+
+        self::assertResponseStatusCodeSame(201);
+        self::assertJsonContains([
             '@context' => '/contexts/User',
             '@type' => 'User',
             'email' => $newAdminEmail,

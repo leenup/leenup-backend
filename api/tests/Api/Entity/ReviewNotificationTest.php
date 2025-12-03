@@ -5,31 +5,36 @@ namespace App\Tests\Api\Entity;
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Entity\Notification;
 use App\Entity\Session;
+use App\Entity\User;
+use App\Entity\UserSkill;
 use App\Factory\CategoryFactory;
 use App\Factory\NotificationFactory;
-use App\Factory\ReviewFactory;
 use App\Factory\SessionFactory;
 use App\Factory\SkillFactory;
 use App\Factory\UserFactory;
 use App\Factory\UserSkillFactory;
+use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Zenstruck\Foundry\Test\Factories;
 
 class ReviewNotificationTest extends ApiTestCase
 {
     use Factories;
+    use AuthenticatedApiTestTrait;
 
-    private string $mentorToken;
-    private string $studentToken;
-    private $mentor;
-    private $student;
+    private HttpClientInterface $mentorClient;
+    private HttpClientInterface $studentClient;
+
+    private string $mentorCsrfToken;
+    private string $studentCsrfToken;
+
+    private User $mentor;
+    private User $student;
     private $skill;
 
     protected function setUp(): void
     {
         parent::setUp();
-
-        // Générer un suffix unique pour éviter les deadlocks en tests parallèles
-        $uniqueId = uniqid();
 
         $category = CategoryFactory::createOne(['title' => 'Programming']);
 
@@ -38,39 +43,40 @@ class ReviewNotificationTest extends ApiTestCase
             'category' => $category,
         ]);
 
-        $this->mentor = UserFactory::createOne([
-            'email' => "mentor-{$uniqueId}@test.com",
-            'plainPassword' => 'password',
-            'firstName' => 'John',
-            'lastName' => 'Mentor',
-        ]);
+        // Création des utilisateurs via le trait (avec cookies + CSRF)
+        [
+            $this->mentorClient,
+            $this->mentorCsrfToken,
+            $this->mentor,
+        ] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('mentor-review'),
+            password: 'password',
+        );
 
-        $this->student = UserFactory::createOne([
-            'email' => "student-{$uniqueId}@test.com",
-            'plainPassword' => 'password',
-            'firstName' => 'Alice',
-            'lastName' => 'Student',
-        ]);
+        [
+            $this->studentClient,
+            $this->studentCsrfToken,
+            $this->student,
+        ] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('student-review'),
+            password: 'password',
+        );
+
+        // On force les noms pour coller au contenu attendu des notifications
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $this->mentor->setFirstName('John');
+        $this->mentor->setLastName('Mentor');
+        $this->student->setFirstName('Alice');
+        $this->student->setLastName('Student');
+        $em->flush();
 
         // Le mentor doit avoir la skill en "teach"
         UserSkillFactory::createOne([
             'owner' => $this->mentor,
             'skill' => $this->skill,
-            'type' => 'teach',
-            'level' => 'expert',
+            'type' => UserSkill::TYPE_TEACH,
+            'level' => UserSkill::LEVEL_EXPERT,
         ]);
-
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => "mentor-{$uniqueId}@test.com", 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $this->mentorToken = $response->toArray()['token'];
-
-        $response = static::createClient()->request('POST', '/auth', [
-            'json' => ['email' => "student-{$uniqueId}@test.com", 'password' => 'password'],
-            'headers' => ['Content-Type' => 'application/json'],
-        ]);
-        $this->studentToken = $response->toArray()['token'];
     }
 
     // ========================================
@@ -91,40 +97,49 @@ class ReviewNotificationTest extends ApiTestCase
 
         $notificationsBefore = NotificationFactory::count(['user' => $this->mentor]);
 
-        // Student crée une review
-        static::createClient()->request('POST', '/reviews', [
-            'auth_bearer' => $this->studentToken,
-            'json' => [
-                'session' => '/sessions/' . $session->getId(),
-                'rating' => 5,
-                'comment' => 'Excellent mentor!',
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        // Student crée une review (requête NON sûre → via requestUnsafe)
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'POST',
+            '/reviews',
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'session' => '/sessions/'.$session->getId(),
+                    'rating' => 5,
+                    'comment' => 'Excellent mentor!',
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(201);
+        self::assertSame(201, $response->getStatusCode());
 
         // Vérifier qu'une notification a été créée pour le mentor
         $notificationsAfter = NotificationFactory::count(['user' => $this->mentor]);
-        $this->assertEquals($notificationsBefore + 1, $notificationsAfter);
+        self::assertEquals($notificationsBefore + 1, $notificationsAfter);
 
         // Récupérer la notification
-        $notification = NotificationFactory::findBy(
+        $notifications = NotificationFactory::findBy(
             ['user' => $this->mentor, 'type' => Notification::TYPE_NEW_REVIEW],
             ['createdAt' => 'DESC']
-        )[0];
+        );
 
-        $this->assertEquals(Notification::TYPE_NEW_REVIEW, $notification->getType());
-        $this->assertEquals('Nouvel avis reçu', $notification->getTitle());
-        $this->assertStringContainsString('Alice Student', $notification->getContent());
-        $this->assertStringContainsString('5/5', $notification->getContent());
-        $this->assertStringContainsString('PHP', $notification->getContent());
-        $this->assertStringStartsWith('/reviews/', $notification->getLink());
+        self::assertNotEmpty($notifications, 'Aucune notification de type new_review trouvée pour le mentor.');
+
+        /** @var Notification $notification */
+        $notification = $notifications[0];
+
+        self::assertEquals(Notification::TYPE_NEW_REVIEW, $notification->getType());
+        self::assertEquals('Nouvel avis reçu', $notification->getTitle());
+        self::assertStringContainsString('Alice Student', $notification->getContent());
+        self::assertStringContainsString('5/5', $notification->getContent());
+        self::assertStringContainsString('PHP', $notification->getContent());
+        self::assertStringStartsWith('/reviews/', $notification->getLink());
     }
 
     public function testStudentDoesNotReceiveNotificationWhenCreatingReview(): void
     {
-        // Créer une session complétée
         $session = SessionFactory::createOne([
             'mentor' => $this->mentor,
             'student' => $this->student,
@@ -137,19 +152,26 @@ class ReviewNotificationTest extends ApiTestCase
         $notificationsBefore = NotificationFactory::count(['user' => $this->student]);
 
         // Student crée une review
-        static::createClient()->request('POST', '/reviews', [
-            'auth_bearer' => $this->studentToken,
-            'json' => [
-                'session' => '/sessions/' . $session->getId(),
-                'rating' => 5,
-                'comment' => 'Great session!',
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'POST',
+            '/reviews',
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'session' => '/sessions/'.$session->getId(),
+                    'rating' => 5,
+                    'comment' => 'Great session!',
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
+
+        self::assertSame(201, $response->getStatusCode());
 
         // Le student ne doit PAS recevoir de notification
         $notificationsAfter = NotificationFactory::count(['user' => $this->student]);
-        $this->assertEquals($notificationsBefore, $notificationsAfter);
+        self::assertEquals($notificationsBefore, $notificationsAfter);
     }
 
     public function testNotificationContainsCorrectRating(): void
@@ -164,22 +186,34 @@ class ReviewNotificationTest extends ApiTestCase
         ]);
 
         // Test avec une note de 3/5
-        static::createClient()->request('POST', '/reviews', [
-            'auth_bearer' => $this->studentToken,
-            'json' => [
-                'session' => '/sessions/' . $session->getId(),
-                'rating' => 3,
-                'comment' => 'Good but could be better',
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'POST',
+            '/reviews',
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'session' => '/sessions/'.$session->getId(),
+                    'rating' => 3,
+                    'comment' => 'Good but could be better',
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $notification = NotificationFactory::findBy(
+        self::assertSame(201, $response->getStatusCode());
+
+        $notifications = NotificationFactory::findBy(
             ['user' => $this->mentor, 'type' => Notification::TYPE_NEW_REVIEW],
             ['createdAt' => 'DESC']
-        )[0];
+        );
 
-        $this->assertStringContainsString('3/5', $notification->getContent());
+        self::assertNotEmpty($notifications);
+
+        /** @var Notification $notification */
+        $notification = $notifications[0];
+
+        self::assertStringContainsString('3/5', $notification->getContent());
     }
 
     public function testNotificationIsCreatedEvenWithoutComment(): void
@@ -196,19 +230,24 @@ class ReviewNotificationTest extends ApiTestCase
         $notificationsBefore = NotificationFactory::count(['user' => $this->mentor]);
 
         // Review sans commentaire
-        static::createClient()->request('POST', '/reviews', [
-            'auth_bearer' => $this->studentToken,
-            'json' => [
-                'session' => '/sessions/' . $session->getId(),
-                'rating' => 4,
-            ],
-            'headers' => ['Content-Type' => 'application/ld+json'],
-        ]);
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'POST',
+            '/reviews',
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'session' => '/sessions/'.$session->getId(),
+                    'rating' => 4,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
 
-        $this->assertResponseStatusCodeSame(201);
+        self::assertSame(201, $response->getStatusCode());
 
         // La notification doit quand même être créée
         $notificationsAfter = NotificationFactory::count(['user' => $this->mentor]);
-        $this->assertEquals($notificationsBefore + 1, $notificationsAfter);
+        self::assertEquals($notificationsBefore + 1, $notificationsAfter);
     }
 }
