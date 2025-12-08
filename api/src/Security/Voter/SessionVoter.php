@@ -49,6 +49,10 @@ class SessionVoter extends Voter
             return false;
         }
 
+        if (in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+            return true;
+        }
+
         /** @var Session $session */
         $session = $subject;
 
