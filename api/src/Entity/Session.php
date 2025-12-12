@@ -13,6 +13,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\SessionRepository;
+use App\Security\Voter\SessionVoter;
 use App\State\Processor\Session\SessionCreateProcessor;
 use App\State\Processor\Session\SessionUpdateProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -34,14 +35,14 @@ use Symfony\Component\Validator\Constraints as Assert;
             processor: SessionCreateProcessor::class,
         ),
         new Get(
-            security: "is_granted('SESSION_VIEW', object)",
+            security: "is_granted('" . SessionVoter::VIEW . "', object)",
         ),
         new Patch(
-            security: "is_granted('SESSION_UPDATE', object)",
+            security: "is_granted('" . SessionVoter::UPDATE . "', object)",
             processor: SessionUpdateProcessor::class,
         ),
         new Delete(
-            security: "is_granted('SESSION_DELETE', object)",
+            security: "is_granted('" . SessionVoter::DELETE . "', object)",
         ),
     ],
     normalizationContext: ['groups' => ['session:read']],
