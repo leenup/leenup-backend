@@ -2,13 +2,11 @@
 
 namespace App\Repository;
 
+use App\Entity\User;
 use App\Entity\UserCard;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
-/**
- * @extends ServiceEntityRepository<UserCard>
- */
 class UserCardRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
@@ -16,28 +14,18 @@ class UserCardRepository extends ServiceEntityRepository
         parent::__construct($registry, UserCard::class);
     }
 
-//    /**
-//     * @return UserCard[] Returns an array of UserCard objects
-//     */
-//    public function findByExampleField($value): array
-//    {
-//        return $this->createQueryBuilder('u')
-//            ->andWhere('u.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->orderBy('u.id', 'ASC')
-//            ->setMaxResults(10)
-//            ->getQuery()
-//            ->getResult()
-//        ;
-//    }
-
-//    public function findOneBySomeField($value): ?UserCard
-//    {
-//        return $this->createQueryBuilder('u')
-//            ->andWhere('u.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->getQuery()
-//            ->getOneOrNullResult()
-//        ;
-//    }
+    /**
+     * Retourne les UserCard de l'utilisateur avec la Card jointe.
+     */
+    public function findUserCards(User $user): array
+    {
+        return $this->createQueryBuilder('uc')
+            ->addSelect('c')
+            ->join('uc.card', 'c')
+            ->andWhere('uc.user = :user')
+            ->setParameter('user', $user)
+            ->orderBy('uc.obtainedAt', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
 }
