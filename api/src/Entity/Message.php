@@ -30,6 +30,7 @@ use Symfony\Component\Validator\Constraints as Assert;
                     fromClass: Conversation::class
                 )
             ],
+            security: "is_granted('ROLE_USER')",
             provider: ConversationMessagesProvider::class,
         ),
         new Get(
@@ -39,12 +40,13 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "is_granted('ROLE_ADMIN')"
         ),
         new Post(
-            security: "is_granted('ROLE_USER')",
+            securityPostDenormalize: "is_granted('MESSAGE_CREATE', object)",
             validationContext: ['groups' => ['Default', 'message:create']],
             processor: MessageCreateProcessor::class,
         ),
         new Patch(
             denormalizationContext: ['groups' => ['message:update']],
+            security: "is_granted('MESSAGE_UPDATE', object) or is_granted('MESSAGE_MARK_READ', object)",
             processor: MessageUpdateProcessor::class,
         ),
         new Delete(
