@@ -11,6 +11,7 @@ use App\Entity\UserSkill;
 use App\Repository\UserSkillRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Validator\ConstraintViolationList;
 
 /**
@@ -34,7 +35,7 @@ final class SessionCreateProcessor implements ProcessorInterface
         $currentUser = $this->security->getUser();
 
         if (!$currentUser instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to create a session');
         }
 
         // FORCER student = currentUser (ignorer le payload)

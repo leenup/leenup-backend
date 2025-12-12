@@ -33,7 +33,7 @@ final class MessageUpdateProcessor implements ProcessorInterface
         $currentUser = $this->security->getUser();
 
         if (!$currentUser instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to update messages');
         }
 
         $uow = $this->entityManager->getUnitOfWork();

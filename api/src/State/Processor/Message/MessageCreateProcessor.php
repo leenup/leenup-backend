@@ -33,7 +33,7 @@ final class MessageCreateProcessor implements ProcessorInterface
         $currentUser = $this->security->getUser();
 
         if (!$currentUser instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to send messages');
         }
 
         if (!$this->authChecker->isGranted(MessageVoter::CREATE, $data)) {

@@ -11,6 +11,7 @@ use App\Entity\UserSkill;
 use App\Repository\UserSkillRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationList;
 
@@ -36,7 +37,7 @@ final class MySkillsCreateProcessor implements ProcessorInterface
         $user = $this->security->getUser();
 
         if (!$user instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to add a skill');
         }
 
         // Vérifier si la combinaison (user, skill, type) existe déjà

@@ -7,6 +7,7 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /**
  * Processor pour supprimer le compte de l'utilisateur connecté
@@ -26,7 +27,7 @@ final class CurrentUserRemoveProcessor implements ProcessorInterface
         $user = $this->security->getUser();
 
         if (!$user instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to delete your profile');
         }
 
         $this->entityManager->remove($user);
