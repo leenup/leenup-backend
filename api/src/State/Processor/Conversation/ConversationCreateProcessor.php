@@ -10,6 +10,7 @@ use App\Entity\User;
 use App\Repository\ConversationRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Validator\ConstraintViolationList;
 
 /**
@@ -33,7 +34,7 @@ final class ConversationCreateProcessor implements ProcessorInterface
         $currentUser = $this->security->getUser();
 
         if (!$currentUser instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to create a conversation');
         }
 
         // Auto-set participant1 = currentUser

@@ -9,6 +9,7 @@ use App\Dto\ChangePasswordDto;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationList;
@@ -35,7 +36,7 @@ final class ChangePasswordProcessor implements ProcessorInterface
         $currentUser = $this->security->getUser();
 
         if (!$currentUser instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to change the password');
         }
 
         if (!$this->passwordHasher->isPasswordValid($currentUser, $data->currentPassword)) {

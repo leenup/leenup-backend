@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Delete;
 use App\Repository\MessageRepository;
+use App\Security\Voter\MessageVoter;
 use App\State\Processor\Message\MessageCreateProcessor;
 use App\State\Processor\Message\MessageUpdateProcessor;
 use App\State\Provider\Conversation\ConversationMessagesProvider;
@@ -30,25 +31,27 @@ use Symfony\Component\Validator\Constraints as Assert;
                     fromClass: Conversation::class
                 )
             ],
+            security: "is_granted('ROLE_USER')",
             provider: ConversationMessagesProvider::class,
         ),
         new Get(
-            security: "is_granted('MESSAGE_VIEW', object)"
+            security: "is_granted('" . MessageVoter::VIEW . "', object)"
         ),
         new GetCollection(
             security: "is_granted('ROLE_ADMIN')"
         ),
         new Post(
-            security: "is_granted('ROLE_USER')",
+            securityPostDenormalize: "is_granted('" . MessageVoter::CREATE . "', object)",
             validationContext: ['groups' => ['Default', 'message:create']],
             processor: MessageCreateProcessor::class,
         ),
         new Patch(
             denormalizationContext: ['groups' => ['message:update']],
+            security: "is_granted('" . MessageVoter::UPDATE . "', object) or is_granted('" . MessageVoter::MARK_READ . "', object)",
             processor: MessageUpdateProcessor::class,
         ),
         new Delete(
-            security: "is_granted('MESSAGE_DELETE', object)"
+            security: "is_granted('" . MessageVoter::DELETE . "', object)"
         ),
     ],
     normalizationContext: ['groups' => ['message:read']],

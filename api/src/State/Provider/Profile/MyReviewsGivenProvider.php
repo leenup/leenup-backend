@@ -9,6 +9,7 @@ use App\Entity\Review;
 use App\Entity\User;
 use App\Repository\ReviewRepository;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /**
  * @implements ProviderInterface<MyReviewsGiven>
@@ -26,7 +27,7 @@ final class MyReviewsGivenProvider implements ProviderInterface
         $user = $this->security->getUser();
 
         if (!$user instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to view given reviews');
         }
 
         $reviews = $this->reviewRepository->findBy(

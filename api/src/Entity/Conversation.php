@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Repository\ConversationRepository;
+use App\Security\Voter\ConversationVoter;
 use App\State\Processor\Conversation\ConversationCreateProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -23,14 +24,14 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "is_granted('ROLE_ADMIN')", // Admins only pour voir toutes les conversations
         ),
         new Get(
-            security: "is_granted('CONVERSATION_VIEW', object)" // ← Utilise le Voter
+            security: "is_granted('" . ConversationVoter::VIEW . "', object)" // ← Utilise le Voter
         ),
         new Post(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityPostDenormalize: "is_granted('" . ConversationVoter::CREATE . "', object)",
             processor: ConversationCreateProcessor::class,
         ),
         new Delete(
-            security: "is_granted('CONVERSATION_DELETE', object)" // ← Utilise le Voter
+            security: "is_granted('" . ConversationVoter::DELETE . "', object)" // ← Utilise le Voter
         ),
     ],
     normalizationContext: ['groups' => ['conversation:read']],

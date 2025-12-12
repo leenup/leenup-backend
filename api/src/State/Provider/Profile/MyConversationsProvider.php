@@ -9,6 +9,7 @@ use App\Entity\Conversation;
 use App\Entity\User;
 use App\Repository\ConversationRepository;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /**
  * @implements ProviderInterface<MyConversations>
@@ -26,7 +27,7 @@ final class MyConversationsProvider implements ProviderInterface
         $user = $this->security->getUser();
 
         if (!$user instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to view conversations');
         }
 
         $conversations = $this->conversationRepository->findUserConversations($user);

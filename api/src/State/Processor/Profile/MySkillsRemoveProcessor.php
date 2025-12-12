@@ -8,6 +8,7 @@ use App\Entity\User;
 use App\Repository\UserSkillRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -29,7 +30,7 @@ final class MySkillsRemoveProcessor implements ProcessorInterface
         $user = $this->security->getUser();
 
         if (!$user instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to delete a skill');
         }
 
         $userSkill = $this->userSkillRepository->find($uriVariables['id']);

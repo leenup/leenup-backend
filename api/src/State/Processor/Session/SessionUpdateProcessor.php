@@ -35,7 +35,7 @@ final class SessionUpdateProcessor implements ProcessorInterface
         $currentUser = $this->security->getUser();
 
         if (!$currentUser instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to update sessions');
         }
 
         // Vérification globale : l'utilisateur peut-il modifier cette session ?
