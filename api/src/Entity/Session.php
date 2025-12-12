@@ -34,14 +34,14 @@ use Symfony\Component\Validator\Constraints as Assert;
             processor: SessionCreateProcessor::class,
         ),
         new Get(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            security: "is_granted('SESSION_VIEW', object)",
         ),
         new Patch(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            security: "is_granted('SESSION_UPDATE', object)",
             processor: SessionUpdateProcessor::class,
         ),
         new Delete(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            security: "is_granted('SESSION_DELETE', object)",
         ),
     ],
     normalizationContext: ['groups' => ['session:read']],
