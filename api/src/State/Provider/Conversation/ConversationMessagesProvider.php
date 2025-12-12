@@ -11,6 +11,7 @@ use App\Repository\ConversationRepository;
 use App\Security\Voter\ConversationVoter;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 /**
@@ -30,19 +31,19 @@ final class ConversationMessagesProvider implements ProviderInterface
         $user = $this->security->getUser();
 
         if (!$user instanceof User) {
-            throw new \LogicException('User not authenticated');
+            throw new AccessDeniedHttpException('Authentication is required to view conversation messages');
         }
 
         $conversationId = $uriVariables['conversationId'] ?? null;
 
         if (!$conversationId) {
-            throw new \LogicException('Conversation ID is required');
+            throw new NotFoundHttpException('Conversation ID is required');
         }
 
         $conversation = $this->conversationRepository->find($conversationId);
 
         if (!$conversation instanceof Conversation) {
-            throw new \LogicException('Conversation not found');
+            throw new NotFoundHttpException('Conversation not found');
         }
 
         // ✅ Utiliser le Voter pour vérifier l'accès aux messages
