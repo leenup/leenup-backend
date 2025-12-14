@@ -36,8 +36,13 @@ final class MessageUpdateProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
-        $uow = $this->entityManager->getUnitOfWork();
+        // Standardisation : refuser tout accès au message si tu n'es pas participant
+        // (évite les PATCH "vides" ou payloads sans changements qui passeraient à tort)
+        if (!$this->authChecker->isGranted(MessageVoter::VIEW, $data)) {
+            throw new AccessDeniedHttpException('You cannot access this message');
+        }
 
+        $uow = $this->entityManager->getUnitOfWork();
         $uow->computeChangeSets();
 
         $changeSet = $uow->getEntityChangeSet($data);
