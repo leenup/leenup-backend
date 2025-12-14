@@ -20,17 +20,18 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     operations: [
         new GetCollection(
-            security: "is_granted('ROLE_ADMIN')", // Admins only pour voir toutes les conversations
+            security: "is_granted('ROLE_ADMIN')",
         ),
         new Get(
-            security: "is_granted('CONVERSATION_VIEW', object)" // ← Utilise le Voter
+            security: "is_granted('CONVERSATION_VIEW', object)"
         ),
         new Post(
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityPostDenormalize: "is_granted('CONVERSATION_CREATE', object)",
             processor: ConversationCreateProcessor::class,
         ),
         new Delete(
-            security: "is_granted('CONVERSATION_DELETE', object)" // ← Utilise le Voter
+            security: "is_granted('CONVERSATION_DELETE', object)"
         ),
     ],
     normalizationContext: ['groups' => ['conversation:read']],
@@ -164,7 +165,6 @@ class Conversation
     public function removeMessage(Message $message): static
     {
         if ($this->messages->removeElement($message)) {
-            // set the owning side to null (unless already changed)
             if ($message->getConversation() === $this) {
                 $message->setConversation(null);
             }
