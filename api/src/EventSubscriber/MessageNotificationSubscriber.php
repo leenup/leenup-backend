@@ -21,7 +21,6 @@ class MessageNotificationSubscriber
     {
         $entity = $args->getObject();
 
-        // On ne s'intéresse qu'aux entités Message
         if (!$entity instanceof Message) {
             return;
         }
@@ -30,12 +29,24 @@ class MessageNotificationSubscriber
         $conversation = $message->getConversation();
         $sender = $message->getSender();
 
-        // Déterminer qui est le destinataire (l'autre participant)
-        $recipient = $conversation->getParticipant1() === $sender
+        if ($conversation === null || $sender === null) {
+            return;
+        }
+
+        $senderId = $sender->getId();
+
+        if ($senderId === null) {
+            return;
+        }
+
+        $recipient = $conversation->getParticipant1()?->getId() === $senderId
             ? $conversation->getParticipant2()
             : $conversation->getParticipant1();
 
-        // Créer la notification pour le destinataire
+        if ($recipient === null) {
+            return;
+        }
+
         $this->notificationService->createNotification(
             user: $recipient,
             type: Notification::TYPE_NEW_MESSAGE,

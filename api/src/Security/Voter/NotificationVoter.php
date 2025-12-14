@@ -1,5 +1,4 @@
 <?php
-// api/src/Security/Voter/NotificationVoter.php
 
 namespace App\Security\Voter;
 
@@ -19,7 +18,7 @@ class NotificationVoter extends Voter
             return false;
         }
 
-        return in_array($attribute, [self::VIEW, self::UPDATE]);
+        return in_array($attribute, [self::VIEW, self::UPDATE], true);
     }
 
     protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
@@ -43,12 +42,12 @@ class NotificationVoter extends Voter
     private function canView(Notification $notification, User $user): bool
     {
         // Un user ne peut voir que ses propres notifications
-        return $notification->getUser() === $user;
+        return $notification->getUser()?->getId() === $user->getId();
     }
 
     private function canUpdate(Notification $notification, User $user): bool
     {
         // Un user ne peut modifier (marquer comme lu) que ses propres notifications
-        return $notification->getUser() === $user;
+        return $notification->getUser()?->getId() === $user->getId();
     }
 }
