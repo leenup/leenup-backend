@@ -29,7 +29,7 @@ class UserCard
     private ?User $user = null;
 
     #[ORM\ManyToOne(targetEntity: Card::class)]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private ?Card $card = null;
 
     #[ORM\Column]

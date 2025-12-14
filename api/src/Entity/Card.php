@@ -18,7 +18,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ApiResource(
     operations: [
         new GetCollection(
-            security: "is_granted('ROLE_ADMIN')"
+            security: "is_granted('IS_AUTHENTICATED_FULLY')"
         ),
         new Get(
             security: "is_granted('CARD_VIEW', object)"

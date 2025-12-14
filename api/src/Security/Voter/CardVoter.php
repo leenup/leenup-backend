@@ -8,10 +8,11 @@ use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Authorization\Voter\Voter;
 
 /**
- * Voter pour gérer les autorisations sur les cartes (Card)
+ * Voter pour gérer les autorisations sur les cards
  */
 class CardVoter extends Voter
 {
+    // Constantes pour les permissions
     public const VIEW = 'CARD_VIEW';
     public const CREATE = 'CARD_CREATE';
     public const UPDATE = 'CARD_UPDATE';
@@ -19,22 +20,25 @@ class CardVoter extends Voter
 
     protected function supports(string $attribute, mixed $subject): bool
     {
+        // Ce voter ne s'applique que sur les objets Card
         if (!$subject instanceof Card) {
             return false;
         }
 
+        // Et uniquement pour les permissions qu'on gère
         return in_array($attribute, [
             self::VIEW,
             self::CREATE,
             self::UPDATE,
             self::DELETE,
-        ], true);
+        ]);
     }
 
     protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
     {
         $user = $token->getUser();
 
+        // L'utilisateur doit être connecté
         if (!$user instanceof User) {
             return false;
         }
@@ -42,58 +46,56 @@ class CardVoter extends Voter
         /** @var Card $card */
         $card = $subject;
 
+        // Déléguer la vérification selon la permission demandée
         return match ($attribute) {
             self::VIEW => $this->canView($card, $user),
-            self::CREATE => $this->canCreate($user),
-            self::UPDATE => $this->canUpdate($user),
-            self::DELETE => $this->canDelete($user),
+            self::CREATE => $this->canCreate($card, $user),
+            self::UPDATE => $this->canUpdate($card, $user),
+            self::DELETE => $this->canDelete($card, $user),
             default => false,
         };
     }
 
     /**
-     * Peut voir la carte ?
-     *  - Admin : tout
-     *  - Sinon : uniquement les cartes actives
+     * Peut voir la card ?
+     * → Tout le monde peut voir les cards actives
+     * → Les admins peuvent voir même les cards inactives
      */
     private function canView(Card $card, User $user): bool
     {
-        if ($this->isAdmin($user)) {
+        // Si la card est active, tout le monde peut la voir
+        if ($card->isActive()) {
             return true;
         }
 
-        return $card->isActive();
+        // Si la card est inactive, seuls les admins peuvent la voir
+        return in_array('ROLE_ADMIN', $user->getRoles());
     }
 
     /**
-     * Peut créer une carte ?
-     *  - Uniquement admin
+     * Peut créer une card ?
+     * → Seuls les admins peuvent créer
      */
-    private function canCreate(User $user): bool
+    private function canCreate(Card $card, User $user): bool
     {
-        return $this->isAdmin($user);
+        return in_array('ROLE_ADMIN', $user->getRoles());
     }
 
     /**
-     * Peut modifier une carte ?
-     *  - Uniquement admin
+     * Peut modifier la card ?
+     * → Seuls les admins peuvent modifier
      */
-    private function canUpdate(User $user): bool
+    private function canUpdate(Card $card, User $user): bool
     {
-        return $this->isAdmin($user);
+        return in_array('ROLE_ADMIN', $user->getRoles());
     }
 
     /**
-     * Peut supprimer une carte ?
-     *  - Uniquement admin
+     * Peut supprimer la card ?
+     * → Seuls les admins peuvent supprimer
      */
-    private function canDelete(User $user): bool
+    private function canDelete(Card $card, User $user): bool
     {
-        return $this->isAdmin($user);
-    }
-
-    private function isAdmin(User $user): bool
-    {
-        return in_array('ROLE_ADMIN', $user->getRoles(), true);
+        return in_array('ROLE_ADMIN', $user->getRoles());
     }
 }
