@@ -9,6 +9,7 @@ use App\Entity\Review;
 use App\Entity\Session;
 use App\Entity\User;
 use App\Repository\ReviewRepository;
+use App\Service\CardUnlocker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -23,6 +24,7 @@ final class ReviewCreateProcessor implements ProcessorInterface
         private EntityManagerInterface $entityManager,
         private Security $security,
         private ReviewRepository $reviewRepository,
+        private CardUnlocker $cardUnlocker,
     ) {
     }
 
@@ -95,9 +97,11 @@ final class ReviewCreateProcessor implements ProcessorInterface
         }
 
         $this->entityManager->persist($data);
-        $this->entityManager->flush();
 
         $this->updateMentorAverageRating($session->getMentor());
+        $this->cardUnlocker->unlockForUser($session->getMentor(), 'review_received', [
+            'sessionId' => $session->getId(),
+        ]);
         $this->entityManager->flush();
 
         return $data;
