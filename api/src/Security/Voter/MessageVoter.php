@@ -30,7 +30,7 @@ class MessageVoter extends Voter
             self::UPDATE,
             self::DELETE,
             self::MARK_READ,
-        ]);
+        ], true);
     }
 
     protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
@@ -54,67 +54,45 @@ class MessageVoter extends Voter
         };
     }
 
-    /**
-     * Peut voir le message ?
-     * → Tu dois être participant de la conversation
-     */
     private function canView(Message $message, User $user): bool
     {
-        $conversation = $message->getConversation();
-
-        return $conversation->getParticipant1() === $user
-            || $conversation->getParticipant2() === $user;
+        return $this->isParticipant($message, $user);
     }
 
-    /**
-     * Peut créer un message dans cette conversation ?
-     * → Tu dois être participant de la conversation
-     */
     private function canCreate(Message $message, User $user): bool
     {
-        $conversation = $message->getConversation();
-
-        return $conversation->getParticipant1() === $user
-            || $conversation->getParticipant2() === $user;
+        return $this->isParticipant($message, $user);
     }
 
-    /**
-     * Peut modifier le message ?
-     * → Dans un système de messagerie, on ne modifie généralement pas les messages
-     * → Si tu veux permettre : return $message->getSender() === $user;
-     */
     private function canUpdate(Message $message, User $user): bool
     {
-        // Option stricte : personne ne peut modifier
         return false;
-
-        // Option souple : l'expéditeur peut modifier
-        // return $message->getSender() === $user;
     }
 
-    /**
-     * Peut supprimer le message ?
-     * → Seul l'expéditeur peut supprimer son message
-     */
     private function canDelete(Message $message, User $user): bool
     {
-        return $message->getSender() === $user;
+        return $message->getSender()?->getId() === $user->getId();
     }
 
-    /**
-     * Peut marquer le message comme lu ?
-     * → Seul le DESTINATAIRE peut marquer comme lu (pas l'expéditeur)
-     */
     private function canMarkAsRead(Message $message, User $user): bool
     {
+        if (!$this->isParticipant($message, $user)) {
+            return false;
+        }
+
+        return $message->getSender()?->getId() !== $user->getId();
+    }
+
+    private function isParticipant(Message $message, User $user): bool
+    {
         $conversation = $message->getConversation();
-        $sender = $message->getSender();
+        $userId = $user->getId();
 
-        $isParticipant = $conversation->getParticipant1() === $user
-            || $conversation->getParticipant2() === $user;
+        if ($conversation === null || $userId === null) {
+            return false;
+        }
 
-        $isNotSender = $sender !== $user;
-
-        return $isParticipant && $isNotSender;
+        return $conversation->getParticipant1()?->getId() === $userId
+            || $conversation->getParticipant2()?->getId() === $userId;
     }
 }

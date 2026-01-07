@@ -14,6 +14,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\SessionRepository;
 use App\State\Processor\Session\SessionCreateProcessor;
+use App\State\Processor\Session\SessionStatusProcessor;
 use App\State\Processor\Session\SessionUpdateProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -39,6 +40,27 @@ use Symfony\Component\Validator\Constraints as Assert;
         new Patch(
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
             processor: SessionUpdateProcessor::class,
+        ),
+        new Patch(
+            uriTemplate: '/sessions/{id}/confirm',
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            input: false,
+            processor: SessionStatusProcessor::class,
+            extraProperties: ['target_status' => Session::STATUS_CONFIRMED],
+        ),
+        new Patch(
+            uriTemplate: '/sessions/{id}/complete',
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            input: false,
+            processor: SessionStatusProcessor::class,
+            extraProperties: ['target_status' => Session::STATUS_COMPLETED],
+        ),
+        new Patch(
+            uriTemplate: '/sessions/{id}/cancel',
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            input: false,
+            processor: SessionStatusProcessor::class,
+            extraProperties: ['target_status' => Session::STATUS_CANCELLED],
         ),
         new Delete(
             security: "is_granted('IS_AUTHENTICATED_FULLY')",

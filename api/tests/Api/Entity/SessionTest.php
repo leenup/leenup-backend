@@ -224,12 +224,9 @@ class SessionTest extends ApiTestCase
         $response = $this->requestUnsafe(
             $this->mentorClient,
             'PATCH',
-            '/sessions/'.$session->getId(),
+            '/sessions/'.$session->getId()."/confirm",
             $this->mentorCsrfToken,
             [
-                'json' => [
-                    'status' => Session::STATUS_CONFIRMED,
-                ],
                 'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ]
         );
@@ -252,12 +249,9 @@ class SessionTest extends ApiTestCase
         $response = $this->requestUnsafe(
             $this->studentClient,
             'PATCH',
-            '/sessions/'.$session->getId(),
+            '/sessions/'.$session->getId()."/confirm",
             $this->studentCsrfToken,
             [
-                'json' => [
-                    'status' => Session::STATUS_CONFIRMED,
-                ],
                 'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ]
         );
@@ -280,12 +274,9 @@ class SessionTest extends ApiTestCase
         $response = $this->requestUnsafe(
             $this->mentorClient,
             'PATCH',
-            '/sessions/'.$session->getId(),
+            '/sessions/'.$session->getId()."/complete",
             $this->mentorCsrfToken,
             [
-                'json' => [
-                    'status' => Session::STATUS_COMPLETED,
-                ],
                 'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ]
         );
@@ -294,6 +285,31 @@ class SessionTest extends ApiTestCase
 
         $data = $response->toArray(false);
         self::assertSame(Session::STATUS_COMPLETED, $data['status'] ?? null);
+    }
+
+    public function testStudentCannotCompleteSession(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_CONFIRMED,
+        ]);
+
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'PATCH',
+            '/sessions/'.$session->getId().'/complete',
+            $this->studentCsrfToken,
+            [
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
+
+        self::assertSame(403, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+        self::assertSame('Only the mentor can mark a session as completed', $data['detail'] ?? null);
     }
 
     public function testCannotCompletePendingSession(): void
@@ -308,12 +324,9 @@ class SessionTest extends ApiTestCase
         $response = $this->requestUnsafe(
             $this->mentorClient,
             'PATCH',
-            '/sessions/'.$session->getId(),
+            '/sessions/'.$session->getId()."/complete",
             $this->mentorCsrfToken,
             [
-                'json' => [
-                    'status' => Session::STATUS_COMPLETED,
-                ],
                 'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ]
         );
@@ -344,12 +357,9 @@ class SessionTest extends ApiTestCase
         $response = $this->requestUnsafe(
             $this->studentClient,
             'PATCH',
-            '/sessions/'.$session->getId(),
+            '/sessions/'.$session->getId()."/cancel",
             $this->studentCsrfToken,
             [
-                'json' => [
-                    'status' => Session::STATUS_CANCELLED,
-                ],
                 'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ]
         );
@@ -372,12 +382,9 @@ class SessionTest extends ApiTestCase
         $response = $this->requestUnsafe(
             $this->mentorClient,
             'PATCH',
-            '/sessions/'.$session->getId(),
+            '/sessions/'.$session->getId()."/confirm",
             $this->mentorCsrfToken,
             [
-                'json' => [
-                    'status' => Session::STATUS_CONFIRMED,
-                ],
                 'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ]
         );
