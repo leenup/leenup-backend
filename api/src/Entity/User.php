@@ -238,6 +238,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private Collection $reviews;
 
     /**
+     * @var Collection<int, UserCard>
+     */
+    #[ORM\OneToMany(
+        targetEntity: UserCard::class,
+        mappedBy: 'user',
+    )]
+    private Collection $userCards;
+
+    /**
      * @var string|null
      */
     #[ORM\Column(type: Types::DECIMAL, precision: 3, scale: 2, nullable: true)]
