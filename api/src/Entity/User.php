@@ -238,6 +238,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private Collection $reviews;
 
     /**
+     * @var Collection<int, UserCard>
+     */
+    #[ORM\OneToMany(
+        mappedBy: 'user',
+        targetEntity: UserCard::class
+    )]
+    private Collection $userCards;
+
+    /**
      * @var string|null
      */
     #[ORM\Column(type: Types::DECIMAL, precision: 3, scale: 2, nullable: true)]
@@ -251,6 +260,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->sessionsAsMentor = new ArrayCollection();
         $this->sessionsAsStudent = new ArrayCollection();
         $this->reviews = new ArrayCollection();
+        $this->userCards = new ArrayCollection();
         $this->isMentor = false;
         $this->isActive = true;
     }
@@ -643,6 +653,35 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         if ($this->reviews->removeElement($review)) {
             if ($review->getReviewer() === $this) {
                 $review->setReviewer(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, UserCard>
+     */
+    public function getUserCards(): Collection
+    {
+        return $this->userCards;
+    }
+
+    public function addUserCard(UserCard $userCard): static
+    {
+        if (!$this->userCards->contains($userCard)) {
+            $this->userCards->add($userCard);
+            $userCard->setUser($this);
+        }
+
+        return $this;
+    }
+
+    public function removeUserCard(UserCard $userCard): static
+    {
+        if ($this->userCards->removeElement($userCard)) {
+            if ($userCard->getUser() === $this) {
+                $userCard->setUser(null);
             }
         }
 
