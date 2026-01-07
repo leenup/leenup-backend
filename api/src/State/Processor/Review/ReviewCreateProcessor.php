@@ -97,6 +97,7 @@ final class ReviewCreateProcessor implements ProcessorInterface
         }
 
         $this->entityManager->persist($data);
+        $this->entityManager->flush();
 
         $this->updateMentorAverageRating($session->getMentor());
         $this->cardUnlocker->unlockForUser($session->getMentor(), 'review_received', [
