@@ -11,6 +11,7 @@ use App\Entity\User;
 use App\Repository\ReviewRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationList;
 
 /**
@@ -48,32 +49,30 @@ final class ReviewCreateProcessor implements ProcessorInterface
 
         // Validation 1 : La session doit être completed
         if ($session->getStatus() !== Session::STATUS_COMPLETED) {
-            $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+            throw new ValidationException(new ConstraintViolationList([
+                new ConstraintViolation(
                     'You can only review a completed session',
                     null,
                     [],
                     $data,
                     'session',
                     $session
-                )
-            ]);
-            throw new ValidationException($violations);
+                ),
+            ]));
         }
 
-        // Validation 2 : Le reviewer doit être le student de la session
-        if ($session->getStudent() !== $currentUser) {
-            $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+        // Validation 2 : Le reviewer doit être le student de la session (comparaison par ID)
+        if ($session->getStudent()?->getId() !== $currentUser->getId()) {
+            throw new ValidationException(new ConstraintViolationList([
+                new ConstraintViolation(
                     'You can only review sessions where you are the student',
                     null,
                     [],
                     $data,
                     'session',
                     $session
-                )
-            ]);
-            throw new ValidationException($violations);
+                ),
+            ]));
         }
 
         // Validation 3 : Vérifier qu'il n'y a pas déjà une review pour cette session par ce reviewer
@@ -82,18 +81,17 @@ final class ReviewCreateProcessor implements ProcessorInterface
             'reviewer' => $currentUser,
         ]);
 
-        if ($existingReview) {
-            $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+        if ($existingReview !== null) {
+            throw new ValidationException(new ConstraintViolationList([
+                new ConstraintViolation(
                     'You have already reviewed this session',
                     null,
                     [],
                     $data,
                     'session',
                     $session
-                )
-            ]);
-            throw new ValidationException($violations);
+                ),
+            ]));
         }
 
         $this->entityManager->persist($data);

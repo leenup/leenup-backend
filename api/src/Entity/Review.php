@@ -36,7 +36,8 @@ use Symfony\Component\Validator\Constraints as Assert;
             processor: ReviewCreateProcessor::class,
         ),
         new Patch(
-            security: "is_granted('ROLE_ADMIN') or object.getReviewer() == user",
+            security: "is_granted('REVIEW_UPDATE', object)",
+            securityMessage: "You can only modify your own reviews within 7 days of creation",
             processor: ReviewUpdateProcessor::class,
         ),
         new Delete(
