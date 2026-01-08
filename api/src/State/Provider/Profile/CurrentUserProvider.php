@@ -46,6 +46,7 @@ final class CurrentUserProvider implements ProviderInterface
         $currentUser->createdAt = $user->getCreatedAt();
         $currentUser->updatedAt = $user->getUpdatedAt();
         $currentUser->userSkills = $user->getUserSkills()->toArray();
+        $currentUser->tokenBalance = $user->getTokenBalance();
 
         return $currentUser;
     }

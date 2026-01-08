@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\User;
 use App\Entity\UserSkill;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -14,6 +15,30 @@ class UserSkillRepository extends ServiceEntityRepository
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, UserSkill::class);
+    }
+
+    public function hasReciprocalMatch(User $mentor, User $student): bool
+    {
+        $count = $this->createQueryBuilder('studentSkill')
+            ->select('COUNT(studentSkill.id)')
+            ->innerJoin(
+                UserSkill::class,
+                'mentorSkill',
+                'WITH',
+                'mentorSkill.skill = studentSkill.skill
+                AND mentorSkill.owner = :mentor
+                AND mentorSkill.type = :learn'
+            )
+            ->andWhere('studentSkill.owner = :student')
+            ->andWhere('studentSkill.type = :teach')
+            ->setParameter('student', $student)
+            ->setParameter('mentor', $mentor)
+            ->setParameter('teach', UserSkill::TYPE_TEACH)
+            ->setParameter('learn', UserSkill::TYPE_LEARN)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return (int) $count > 0;
     }
 
     //    /**

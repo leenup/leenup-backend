@@ -8,6 +8,7 @@ use ApiPlatform\Validator\Exception\ValidationException;
 use App\Entity\Session;
 use App\Security\Voter\SessionVoter;
 use App\Service\CardUnlocker;
+use App\Repository\UserSkillRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
@@ -19,10 +20,13 @@ use Symfony\Component\Validator\ConstraintViolationList;
  */
 final class SessionStatusProcessor implements ProcessorInterface
 {
+    private const TOKEN_COST_PER_SESSION = 1;
+
     public function __construct(
         private EntityManagerInterface $entityManager,
         private AuthorizationCheckerInterface $authChecker,
         private CardUnlocker $cardUnlocker,
+        private UserSkillRepository $userSkillRepository,
     ) {
     }
 
@@ -39,8 +43,8 @@ final class SessionStatusProcessor implements ProcessorInterface
 
         if ($data->getStatus() !== $targetStatus) {
             $data->setStatus($targetStatus);
-            $this->entityManager->flush();
             if ($targetStatus === Session::STATUS_COMPLETED) {
+                $this->handleTokenSettlement($data);
                 $this->cardUnlocker->unlockForUser($data->getMentor(), 'session_completed', [
                     'sessionId' => $data->getId(),
                     'role' => 'mentor',
@@ -122,5 +126,41 @@ final class SessionStatusProcessor implements ProcessorInterface
                 ),
             ]));
         }
+    }
+
+    private function handleTokenSettlement(Session $session): void
+    {
+        if ($session->getTokenProcessedAt() !== null) {
+            return;
+        }
+
+        $mentor = $session->getMentor();
+        $student = $session->getStudent();
+
+        if ($mentor === null || $student === null) {
+            throw new \LogicException('Session requires both mentor and student');
+        }
+
+        $requiresTokens = !$this->userSkillRepository->hasReciprocalMatch($mentor, $student);
+
+        if ($requiresTokens) {
+            if ($student->getTokenBalance() < self::TOKEN_COST_PER_SESSION) {
+                throw new ValidationException(new ConstraintViolationList([
+                    new ConstraintViolation(
+                        'Insufficient token balance to complete this session',
+                        null,
+                        [],
+                        $session,
+                        'tokenBalance',
+                        $student->getTokenBalance()
+                    ),
+                ]));
+            }
+
+            $student->debitTokens(self::TOKEN_COST_PER_SESSION);
+            $mentor->creditTokens(self::TOKEN_COST_PER_SESSION);
+        }
+
+        $session->setTokenProcessedAt(new \DateTimeImmutable());
     }
 }

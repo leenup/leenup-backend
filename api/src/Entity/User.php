@@ -253,6 +253,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['user:read'])]
     private ?string $averageRating = null;
 
+    #[ORM\Column(options: ['default' => 0])]
+    #[Groups(['user:read'])]
+    private int $tokenBalance = 0;
+
     public function __construct()
     {
         $this->userSkills = new ArrayCollection();
@@ -666,6 +670,33 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setAverageRating(?string $averageRating): static
     {
         $this->averageRating = $averageRating;
+
+        return $this;
+    }
+
+    public function getTokenBalance(): int
+    {
+        return $this->tokenBalance;
+    }
+
+    public function creditTokens(int $amount): static
+    {
+        if ($amount < 0) {
+            throw new \InvalidArgumentException('Token credit amount must be positive');
+        }
+
+        $this->tokenBalance += $amount;
+
+        return $this;
+    }
+
+    public function debitTokens(int $amount): static
+    {
+        if ($amount < 0) {
+            throw new \InvalidArgumentException('Token debit amount must be positive');
+        }
+
+        $this->tokenBalance -= $amount;
 
         return $this;
     }
