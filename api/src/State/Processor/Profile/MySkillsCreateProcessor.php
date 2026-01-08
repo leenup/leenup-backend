@@ -9,6 +9,7 @@ use App\ApiResource\Profile\MySkills;
 use App\Entity\User;
 use App\Entity\UserSkill;
 use App\Repository\UserSkillRepository;
+use App\Service\CardUnlocker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -24,7 +25,8 @@ final class MySkillsCreateProcessor implements ProcessorInterface
     public function __construct(
         private Security $security,
         private EntityManagerInterface $entityManager,
-        private UserSkillRepository $userSkillRepository
+        private UserSkillRepository $userSkillRepository,
+        private CardUnlocker $cardUnlocker,
     ) {
     }
 
@@ -66,8 +68,10 @@ final class MySkillsCreateProcessor implements ProcessorInterface
         $userSkill->setSkill($data->skill);
         $userSkill->setType($data->type);
         $userSkill->setLevel($data->level);
+        $user->addUserSkill($userSkill);
 
         $this->entityManager->persist($userSkill);
+        $this->cardUnlocker->unlockForUser($user, 'skill_added');
         $this->entityManager->flush();
 
         // Retourner le DTO mis à jour

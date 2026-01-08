@@ -2,6 +2,7 @@
 
 namespace App\DataFixtures;
 
+use App\Story\DefaultCardsStory;
 use App\Story\DefaultConversationsStory;
 use App\Story\DefaultReviewsStory;
 use App\Story\DefaultSessionsStory;
@@ -37,6 +38,9 @@ class AppFixtures extends Fixture
 
         echo "Loading DefaultConversationsStory...\n";
         DefaultConversationsStory::load();
+
+        echo "Loading DefaultCardsStory...\n";
+        DefaultCardsStory::load();
 
         echo "Done!\n";
     }
