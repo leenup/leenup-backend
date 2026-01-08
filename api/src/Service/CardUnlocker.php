@@ -40,7 +40,7 @@ final class CardUnlocker
                 continue;
             }
 
-            $userCard = (new UserCard())
+            $userCard = new UserCard()
                 ->setUser($user)
                 ->setCard($card);
 

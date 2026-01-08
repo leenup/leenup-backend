@@ -39,6 +39,7 @@ final class SessionStatusProcessor implements ProcessorInterface
 
         if ($data->getStatus() !== $targetStatus) {
             $data->setStatus($targetStatus);
+            $this->entityManager->flush();
             if ($targetStatus === Session::STATUS_COMPLETED) {
                 $this->cardUnlocker->unlockForUser($data->getMentor(), 'session_completed', [
                     'sessionId' => $data->getId(),
