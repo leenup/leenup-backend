@@ -7,6 +7,7 @@ use ApiPlatform\State\ProcessorInterface;
 use ApiPlatform\Validator\Exception\ValidationException;
 use App\Entity\Session;
 use App\Security\Voter\SessionVoter;
+use App\Service\CardUnlocker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
@@ -21,6 +22,7 @@ final class SessionStatusProcessor implements ProcessorInterface
     public function __construct(
         private EntityManagerInterface $entityManager,
         private AuthorizationCheckerInterface $authChecker,
+        private CardUnlocker $cardUnlocker,
     ) {
     }
 
@@ -37,6 +39,16 @@ final class SessionStatusProcessor implements ProcessorInterface
 
         if ($data->getStatus() !== $targetStatus) {
             $data->setStatus($targetStatus);
+            if ($targetStatus === Session::STATUS_COMPLETED) {
+                $this->cardUnlocker->unlockForUser($data->getMentor(), 'session_completed', [
+                    'sessionId' => $data->getId(),
+                    'role' => 'mentor',
+                ]);
+                $this->cardUnlocker->unlockForUser($data->getStudent(), 'session_completed', [
+                    'sessionId' => $data->getId(),
+                    'role' => 'student',
+                ]);
+            }
             $this->entityManager->flush();
         }
 

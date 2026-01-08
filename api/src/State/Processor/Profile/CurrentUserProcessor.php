@@ -7,6 +7,7 @@ use ApiPlatform\State\ProcessorInterface;
 use ApiPlatform\Validator\Exception\ValidationException;
 use App\ApiResource\CurrentUser\CurrentUser;
 use App\Entity\User;
+use App\Service\CardUnlocker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -23,6 +24,7 @@ final class CurrentUserProcessor implements ProcessorInterface
         private Security $security,
         private EntityManagerInterface $entityManager,
         private ValidatorInterface $validator,
+        private CardUnlocker $cardUnlocker,
     ) {
     }
 
@@ -145,6 +147,7 @@ final class CurrentUserProcessor implements ProcessorInterface
             }
 
             $user->onPreUpdate();
+            $this->cardUnlocker->unlockForUser($user, 'profile_updated');
             $this->entityManager->flush();
         }
 
