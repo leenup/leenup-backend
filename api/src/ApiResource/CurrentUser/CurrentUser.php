@@ -110,5 +110,8 @@ class CurrentUser
     #[Groups(['user:read'])]
     public ?\DateTimeImmutable $updatedAt = null;
 
+    #[Groups(['user:read'])]
+    public int $tokenBalance = 0;
+
     public ?string $plainPassword = null;
 }

@@ -156,6 +156,10 @@ class Session
     #[Groups(['session:read'])]
     private ?\DateTimeImmutable $updatedAt = null;
 
+    #[ORM\Column(nullable: true)]
+    #[Groups(['session:read'])]
+    private ?\DateTimeImmutable $tokenProcessedAt = null;
+
     /**
      * @var Collection<int, Review>
      */
@@ -288,6 +292,17 @@ class Session
     public function getUpdatedAt(): ?\DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    public function getTokenProcessedAt(): ?\DateTimeImmutable
+    {
+        return $this->tokenProcessedAt;
+    }
+
+    public function setTokenProcessedAt(?\DateTimeImmutable $tokenProcessedAt): static
+    {
+        $this->tokenProcessedAt = $tokenProcessedAt;
+        return $this;
     }
 
     /**
