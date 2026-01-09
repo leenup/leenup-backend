@@ -19,13 +19,18 @@ class UserSkillRepository extends ServiceEntityRepository
 
     public function hasPerfectMatch(User $student, User $mentor): bool
     {
-        $count = $this->createQueryBuilder('teach')
-            ->select('COUNT(teach.id)')
-            ->innerJoin(UserSkill::class, 'learn', 'WITH', 'teach.skill = learn.skill')
-            ->andWhere('teach.owner = :student')
-            ->andWhere('teach.type = :teachType')
+        $queryBuilder = $this->createQueryBuilder('teach');
+        $matchSubquery = $this->createQueryBuilder('learn')
+            ->select('1')
             ->andWhere('learn.owner = :mentor')
             ->andWhere('learn.type = :learnType')
+            ->andWhere('learn.skill = teach.skill');
+
+        $count = $queryBuilder
+            ->select('COUNT(teach.id)')
+            ->andWhere('teach.owner = :student')
+            ->andWhere('teach.type = :teachType')
+            ->andWhere($queryBuilder->expr()->exists($matchSubquery->getDQL()))
             ->setParameters([
                 'student' => $student,
                 'mentor' => $mentor,
