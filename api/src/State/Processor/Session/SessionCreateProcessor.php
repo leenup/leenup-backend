@@ -38,24 +38,16 @@ final class SessionCreateProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
-        if ($currentUser->getTokenBalance() < 1) {
-            $violations = new ConstraintViolationList([
-                new ConstraintViolation(
-                    'You need at least 1 token to join a session as a student',
-                    null,
-                    [],
-                    $data,
-                    'student',
-                    $data->getStudent()
-                )
-            ]);
-            throw new ValidationException($violations);
-        }
-
         // FORCER student = currentUser (ignorer le payload)
         $data->setStudent($currentUser);
 
-        if ($data->getMentor() === $data->getStudent()) {
+        $mentor = $data->getMentor();
+
+        if (!$mentor instanceof User) {
+            throw new \LogicException('Mentor not provided');
+        }
+
+        if ($mentor === $data->getStudent()) {
             $violations = new ConstraintViolationList([
                 new ConstraintViolation(
                     'You cannot be your own mentor',
@@ -69,8 +61,24 @@ final class SessionCreateProcessor implements ProcessorInterface
             throw new ValidationException($violations);
         }
 
+        $isPerfectMatch = $this->userSkillRepository->hasPerfectMatch($currentUser, $mentor);
+
+        if (!$isPerfectMatch && $currentUser->getTokenBalance() < 1) {
+            $violations = new ConstraintViolationList([
+                new ConstraintViolation(
+                    'You need at least 1 token to join a session as a student',
+                    null,
+                    [],
+                    $data,
+                    'student',
+                    $data->getStudent()
+                )
+            ]);
+            throw new ValidationException($violations);
+        }
+
         $mentorSkill = $this->userSkillRepository->findOneBy([
-            'owner' => $data->getMentor(),
+            'owner' => $mentor,
             'skill' => $data->getSkill(),
             'type' => UserSkill::TYPE_TEACH,
         ]);
@@ -89,7 +97,9 @@ final class SessionCreateProcessor implements ProcessorInterface
             throw new ValidationException($violations);
         }
 
-        $currentUser->removeTokenBalance(1);
+        if (!$isPerfectMatch) {
+            $currentUser->removeTokenBalance(1);
+        }
         $this->entityManager->persist($data);
         $this->entityManager->flush();
 
