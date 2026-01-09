@@ -1,4 +1,4 @@
-# 🚀 LeenUp Backend
+# 🚀 LeenUp Backend !
 
 API REST moderne construite avec **Symfony 7**, **API Platform 3**, et **PostgreSQL**.
 
