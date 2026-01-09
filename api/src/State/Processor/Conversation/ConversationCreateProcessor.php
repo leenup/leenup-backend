@@ -10,6 +10,7 @@ use App\Entity\User;
 use App\Repository\ConversationRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationList;
 
 /**
@@ -44,7 +45,7 @@ final class ConversationCreateProcessor implements ProcessorInterface
         // Validation 1 : On ne peut pas créer une conversation avec soi-même
         if ($participant2 === $currentUser) {
             $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+                new ConstraintViolation(
                     'You cannot create a conversation with yourself',
                     null,
                     [],
@@ -64,7 +65,7 @@ final class ConversationCreateProcessor implements ProcessorInterface
 
         if ($existingConversation) {
             $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+                new ConstraintViolation(
                     'A conversation already exists with this user',
                     null,
                     [],

@@ -11,6 +11,7 @@ use App\Entity\UserSkill;
 use App\Repository\UserSkillRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationList;
 
 /**
@@ -39,7 +40,7 @@ final class SessionCreateProcessor implements ProcessorInterface
 
         if ($currentUser->getTokenBalance() < 1) {
             $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+                new ConstraintViolation(
                     'You need at least 1 token to join a session as a student',
                     null,
                     [],
@@ -56,7 +57,7 @@ final class SessionCreateProcessor implements ProcessorInterface
 
         if ($data->getMentor() === $data->getStudent()) {
             $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+                new ConstraintViolation(
                     'You cannot be your own mentor',
                     null,
                     [],
@@ -76,7 +77,7 @@ final class SessionCreateProcessor implements ProcessorInterface
 
         if (!$mentorSkill) {
             $violations = new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+                new ConstraintViolation(
                     'The mentor must have this skill with type "teach"',
                     null,
                     [],

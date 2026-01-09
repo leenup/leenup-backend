@@ -12,6 +12,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationList;
 
 /**
@@ -70,7 +71,7 @@ final class SessionUpdateProcessor implements ProcessorInterface
             || $new->getStudent() !== $old->getStudent()
             || $new->getSkill() !== $old->getSkill()) {
             throw new ValidationException(new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+                new ConstraintViolation(
                     'You cannot change the mentor, student, or skill of a session',
                     null,
                     [],
@@ -98,7 +99,7 @@ final class SessionUpdateProcessor implements ProcessorInterface
         // Règle 1 : On ne peut pas modifier une session cancelled ou completed
         if (in_array($oldStatus, [Session::STATUS_CANCELLED, Session::STATUS_COMPLETED])) {
             throw new ValidationException(new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+                new ConstraintViolation(
                     'Cannot change status from ' . $oldStatus,
                     null,
                     [],
@@ -112,7 +113,7 @@ final class SessionUpdateProcessor implements ProcessorInterface
         // Règle 2 : Transition pending → completed interdite (il faut passer par confirmed)
         if ($oldStatus === Session::STATUS_PENDING && $newStatus === Session::STATUS_COMPLETED) {
             throw new ValidationException(new ConstraintViolationList([
-                new \Symfony\Component\Validator\ConstraintViolation(
+                new ConstraintViolation(
                     'A pending session must be confirmed before being completed',
                     null,
                     [],
