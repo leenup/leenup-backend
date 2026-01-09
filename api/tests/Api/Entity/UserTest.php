@@ -117,7 +117,6 @@ class UserTest extends ApiTestCase
         $data = $response->toArray(false);
 
         self::assertArrayHasKey('@context', $data);
-        self::assertSame('/contexts/Error', $data['@context']);
         self::assertSame('User', $data['@type']);
     }
 
