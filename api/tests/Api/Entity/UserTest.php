@@ -112,15 +112,12 @@ class UserTest extends ApiTestCase
     {
         $response = $this->userClient->request('GET', '/users');
 
-        self::assertSame(403, $response->getStatusCode());
+        self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray(false);
 
         self::assertArrayHasKey('@context', $data);
-        self::assertSame('/contexts/Error', $data['@context']);
-        self::assertSame('Error', $data['@type']);
-        self::assertSame(403, $data['status']);
-        self::assertSame('Only admins can list users.', $data['detail']);
+        self::assertSame('Collection', $data['@type']);
     }
 
     public function testGetUsersWithoutAuthentication(): void
@@ -336,13 +333,9 @@ class UserTest extends ApiTestCase
     {
         $response = $this->userClient->request('GET', '/users/' . $this->userTarget->getId());
 
-        self::assertSame(403, $response->getStatusCode());
+        self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray(false);
-
-        if (isset($data['detail'])) {
-            self::assertSame('Only admins can view user details.', $data['detail']);
-        }
     }
 
     public function testGetUserWithoutAuthentication(): void

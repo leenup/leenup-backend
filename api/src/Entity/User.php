@@ -57,12 +57,10 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     operations: [
         new GetCollection(
-            security: "is_granted('ROLE_ADMIN')",
-            securityMessage: 'Only admins can list users.'
+            security: "is_granted('ROLE_USER')",
         ),
         new Get(
-            security: "is_granted('ROLE_ADMIN')",
-            securityMessage: 'Only admins can view user details.'
+            security: "is_granted('ROLE_USER')",
         ),
         new Patch(
             security: "is_granted('ROLE_ADMIN')",
@@ -197,6 +195,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['user:read', 'user:create', 'user:update'])]
     private bool $isMentor = false;
 
+    #[ORM\Column(type: 'integer', options: ['default' => 1])]
+    #[Assert\PositiveOrZero]
+    #[Groups(['user:read'])]
+    private int $tokenBalance = 1;
+
     #[ORM\Column(type: 'boolean')]
     #[Groups(['user:read'])]
     private bool $isActive = true;
@@ -217,6 +220,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
      * @var Collection<int, UserSkill>
      */
     #[ORM\OneToMany(targetEntity: UserSkill::class, mappedBy: 'owner', cascade: ['remove'], orphanRemoval: true)]
+    #[Groups(['user:read'])]
     private Collection $userSkills;
 
     /**
@@ -514,6 +518,48 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setIsMentor(bool $isMentor): static
     {
         $this->isMentor = $isMentor;
+
+        return $this;
+    }
+
+    public function getTokenBalance(): int
+    {
+        return $this->tokenBalance;
+    }
+
+    public function setTokenBalance(int $tokenBalance): static
+    {
+        if ($tokenBalance < 0) {
+            throw new \InvalidArgumentException('Token balance cannot be negative.');
+        }
+
+        $this->tokenBalance = $tokenBalance;
+
+        return $this;
+    }
+
+    public function addTokenBalance(int $amount): static
+    {
+        if ($amount < 0) {
+            throw new \InvalidArgumentException('Token amount must be positive.');
+        }
+
+        $this->tokenBalance += $amount;
+
+        return $this;
+    }
+
+    public function removeTokenBalance(int $amount): static
+    {
+        if ($amount < 0) {
+            throw new \InvalidArgumentException('Token amount must be positive.');
+        }
+
+        if ($this->tokenBalance < $amount) {
+            throw new \InvalidArgumentException('Not enough tokens available.');
+        }
+
+        $this->tokenBalance -= $amount;
 
         return $this;
     }

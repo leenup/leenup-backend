@@ -143,6 +143,53 @@ class SessionTest extends ApiTestCase
         $data = $response->toArray(false);
         self::assertSame(Session::STATUS_PENDING, $data['status'] ?? null);
         self::assertSame('/users/'.$this->student->getId(), $data['student'] ?? null);
+
+        $em = self::getContainer()->get('doctrine')->getManager();
+        $student = $em->getRepository(User::class)->find($this->student->getId());
+        self::assertSame(0, $student->getTokenBalance());
+    }
+
+    public function testCannotCreateSessionWithoutTokens(): void
+    {
+        [
+            $studentClient,
+            $studentCsrfToken,
+        ] = $this->createAuthenticatedUser(
+            email: $this->uniqueEmail('student-no-token'),
+            password: 'password',
+            extraData: ['tokenBalance' => 0],
+        );
+
+        $scheduledAt = (new \DateTimeImmutable('+1 week'))->format(\DateTimeInterface::ATOM);
+
+        $response = $this->requestUnsafe(
+            $studentClient,
+            'POST',
+            '/sessions',
+            $studentCsrfToken,
+            [
+                'json' => [
+                    'mentor' => '/users/'.$this->mentor->getId(),
+                    'skill' => '/skills/'.$this->skill->getId(),
+                    'scheduledAt' => $scheduledAt,
+                    'duration' => 60,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
+
+        self::assertSame(422, $response->getStatusCode());
+
+        $data = $response->toArray(false);
+        self::assertSame('ConstraintViolation', $data['@type'] ?? null);
+
+        $violations = $data['violations'] ?? [];
+        self::assertNotEmpty($violations);
+        self::assertSame('student', $violations[0]['propertyPath'] ?? null);
+        self::assertSame(
+            'You need at least 1 token to join a session as a student',
+            $violations[0]['message'] ?? null
+        );
     }
 
     public function testCannotCreateSessionWithSelfAsMentor(): void
@@ -264,6 +311,11 @@ class SessionTest extends ApiTestCase
 
     public function testMentorCanCompleteSession(): void
     {
+        $em = self::getContainer()->get('doctrine')->getManager();
+        $mentor = $em->getRepository(User::class)->find($this->mentor->getId());
+        $mentor->setTokenBalance(0);
+        $em->flush();
+
         $session = SessionFactory::createOne([
             'mentor' => $this->mentor,
             'student' => $this->student,
@@ -285,6 +337,10 @@ class SessionTest extends ApiTestCase
 
         $data = $response->toArray(false);
         self::assertSame(Session::STATUS_COMPLETED, $data['status'] ?? null);
+
+        $em->clear();
+        $refreshedMentor = $em->getRepository(User::class)->find($this->mentor->getId());
+        self::assertSame(1, $refreshedMentor->getTokenBalance());
     }
 
     public function testStudentCannotCompleteSession(): void

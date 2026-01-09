@@ -98,6 +98,9 @@ class CurrentUser
     #[Groups(['user:read', 'user:update'])]
     public ?bool $isMentor = null;
 
+    #[Groups(['user:read'])]
+    public ?int $tokenBalance = null;
+
     #[Groups(['my_skill:read'])]
     public array $userSkills = [];
 

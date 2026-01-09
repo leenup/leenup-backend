@@ -41,6 +41,7 @@ final class SessionStatusProcessor implements ProcessorInterface
             $data->setStatus($targetStatus);
             $this->entityManager->flush();
             if ($targetStatus === Session::STATUS_COMPLETED) {
+                $data->getMentor()?->addTokenBalance(1);
                 $this->cardUnlocker->unlockForUser($data->getMentor(), 'session_completed', [
                     'sessionId' => $data->getId(),
                     'role' => 'mentor',

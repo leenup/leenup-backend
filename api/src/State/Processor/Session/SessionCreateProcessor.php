@@ -37,6 +37,20 @@ final class SessionCreateProcessor implements ProcessorInterface
             throw new \LogicException('User not authenticated');
         }
 
+        if ($currentUser->getTokenBalance() < 1) {
+            $violations = new ConstraintViolationList([
+                new \Symfony\Component\Validator\ConstraintViolation(
+                    'You need at least 1 token to join a session as a student',
+                    null,
+                    [],
+                    $data,
+                    'student',
+                    $data->getStudent()
+                )
+            ]);
+            throw new ValidationException($violations);
+        }
+
         // FORCER student = currentUser (ignorer le payload)
         $data->setStudent($currentUser);
 
@@ -74,6 +88,7 @@ final class SessionCreateProcessor implements ProcessorInterface
             throw new ValidationException($violations);
         }
 
+        $currentUser->removeTokenBalance(1);
         $this->entityManager->persist($data);
         $this->entityManager->flush();
 
