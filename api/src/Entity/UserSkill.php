@@ -87,7 +87,7 @@ class UserSkill
         choices: [self::TYPE_TEACH, self::TYPE_LEARN],
         message: 'The type must be either "teach" or "learn"'
     )]
-    #[Groups(['user_skill:read', 'user_skill:write'])]
+    #[Groups(['user_skill:read', 'user_skill:write', 'user:read'])]
     private ?string $type = null;
 
     #[ORM\Column(length: 20, nullable: true)]
@@ -100,7 +100,7 @@ class UserSkill
         ],
         message: 'The level must be one of: beginner, intermediate, advanced, expert'
     )]
-    #[Groups(['user_skill:read', 'user_skill:write'])]
+    #[Groups(['user_skill:read', 'user_skill:write', 'user:read'])]
     private ?string $level = null;
 
     #[ORM\Column]

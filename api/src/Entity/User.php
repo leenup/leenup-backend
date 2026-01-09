@@ -57,12 +57,10 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     operations: [
         new GetCollection(
-            security: "is_granted('ROLE_ADMIN')",
-            securityMessage: 'Only admins can list users.'
+            security: "is_granted('ROLE_USER')",
         ),
         new Get(
-            security: "is_granted('ROLE_ADMIN')",
-            securityMessage: 'Only admins can view user details.'
+            security: "is_granted('ROLE_USER')",
         ),
         new Patch(
             security: "is_granted('ROLE_ADMIN')",
@@ -222,6 +220,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
      * @var Collection<int, UserSkill>
      */
     #[ORM\OneToMany(targetEntity: UserSkill::class, mappedBy: 'owner', cascade: ['remove'], orphanRemoval: true)]
+    #[Groups(['user:read'])]
     private Collection $userSkills;
 
     /**
