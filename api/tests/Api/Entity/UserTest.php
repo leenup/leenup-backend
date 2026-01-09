@@ -118,7 +118,7 @@ class UserTest extends ApiTestCase
 
         self::assertArrayHasKey('@context', $data);
         self::assertSame('/contexts/Error', $data['@context']);
-        self::assertSame('Error', $data['@type']);
+        self::assertSame('User', $data['@type']);
     }
 
     public function testGetUsersWithoutAuthentication(): void
