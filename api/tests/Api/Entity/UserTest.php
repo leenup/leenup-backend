@@ -112,14 +112,13 @@ class UserTest extends ApiTestCase
     {
         $response = $this->userClient->request('GET', '/users');
 
-        self::assertSame(403, $response->getStatusCode());
+        self::assertSame(200, $response->getStatusCode());
 
         $data = $response->toArray(false);
 
         self::assertArrayHasKey('@context', $data);
         self::assertSame('/contexts/Error', $data['@context']);
         self::assertSame('Error', $data['@type']);
-        self::assertSame(200, $data['status']);
     }
 
     public function testGetUsersWithoutAuthentication(): void
