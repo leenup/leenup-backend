@@ -197,7 +197,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['user:read', 'user:create', 'user:update'])]
     private bool $isMentor = false;
 
-    #[ORM\Column(type: 'integer')]
+    #[ORM\Column(type: 'integer', options: ['default' => 1])]
     #[Assert\PositiveOrZero]
     #[Groups(['user:read'])]
     private int $tokenBalance = 1;
