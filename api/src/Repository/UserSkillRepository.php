@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\User;
 use App\Entity\UserSkill;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -14,6 +15,37 @@ class UserSkillRepository extends ServiceEntityRepository
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, UserSkill::class);
+    }
+
+    public function hasPerfectMatch(User $student, User $mentor): bool
+    {
+        $teachSkillIds = $this->createQueryBuilder('teach')
+            ->select('IDENTITY(teach.skill) AS skillId')
+            ->andWhere('teach.owner = :student')
+            ->andWhere('teach.type = :teachType')
+            ->setParameter('student', $student)
+            ->setParameter('teachType', UserSkill::TYPE_TEACH)
+            ->getQuery()
+            ->getScalarResult();
+
+        if ($teachSkillIds === []) {
+            return false;
+        }
+
+        $skillIds = array_map(static fn (array $row): int => (int) $row['skillId'], $teachSkillIds);
+
+        $count = $this->createQueryBuilder('learn')
+            ->select('COUNT(learn.id)')
+            ->andWhere('learn.owner = :mentor')
+            ->andWhere('learn.type = :learnType')
+            ->andWhere('learn.skill IN (:skillIds)')
+            ->setParameter('mentor', $mentor)
+            ->setParameter('learnType', UserSkill::TYPE_LEARN)
+            ->setParameter('skillIds', $skillIds)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return (int) $count > 0;
     }
 
     //    /**
