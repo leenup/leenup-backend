@@ -257,6 +257,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['user:read'])]
     private ?string $averageRating = null;
 
+    #[ORM\Column]
+    #[Groups(['user:read', 'user:create', 'user:update:admin'])]
+    private array $profiles = [];
+
     public function __construct()
     {
         $this->userSkills = new ArrayCollection();
@@ -712,6 +716,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setAverageRating(?string $averageRating): static
     {
         $this->averageRating = $averageRating;
+
+        return $this;
+    }
+
+    public function getProfiles(): array
+    {
+        return $this->profiles;
+    }
+
+    public function setProfiles(array $profiles): static
+    {
+        $this->profiles = $profiles;
 
         return $this;
     }

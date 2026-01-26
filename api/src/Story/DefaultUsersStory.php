@@ -15,6 +15,7 @@ final class DefaultUsersStory extends Story
             'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
             'plainPassword' => 'admin123',
             'isMentor' => false,
+            'profiles' => ['mentor', 'student']
         ]);
 
         echo "Admin créé: admin@leenup.com / admin123\n";
@@ -24,6 +25,7 @@ final class DefaultUsersStory extends Story
             'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
             'plainPassword' => 'admin123',
             'isMentor' => false,
+            'profiles' => ['mentor']
         ]);
 
         // Quelques professeurs / formateurs réalistes (mentors)
@@ -32,6 +34,7 @@ final class DefaultUsersStory extends Story
             'roles' => ['ROLE_USER'],
             'plainPassword' => 'password',
             'isMentor' => true,
+            'profiles' => ['student']
         ]);
 
         UserFactory::createOne([
@@ -39,6 +42,7 @@ final class DefaultUsersStory extends Story
             'roles' => ['ROLE_USER'],
             'plainPassword' => 'password',
             'isMentor' => true,
+            'profiles' => ['mentor']
         ]);
 
         UserFactory::createOne([
@@ -46,6 +50,7 @@ final class DefaultUsersStory extends Story
             'roles' => ['ROLE_USER'],
             'plainPassword' => 'password',
             'isMentor' => true,
+            'profiles' => ['mentor']
         ]);
 
         UserFactory::createOne([
@@ -53,6 +58,7 @@ final class DefaultUsersStory extends Story
             'roles' => ['ROLE_USER'],
             'plainPassword' => 'password',
             'isMentor' => true,
+            'profiles' => ['mentor', 'student']
         ]);
 
         UserFactory::createOne([
@@ -60,6 +66,7 @@ final class DefaultUsersStory extends Story
             'roles' => ['ROLE_USER'],
             'plainPassword' => 'password',
             'isMentor' => true,
+            'profiles' => ['mentor']
         ]);
 
         // Utilisateur de test simple (plutôt côté élève)
@@ -68,6 +75,7 @@ final class DefaultUsersStory extends Story
             'roles' => ['ROLE_USER'],
             'plainPassword' => 'user123',
             'isMentor' => false,
+            'profiles' => ['mentor', 'student']
         ]);
 
         echo "User de test créé: user@leenup.com / user123\n";
