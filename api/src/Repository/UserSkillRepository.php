@@ -23,10 +23,8 @@ class UserSkillRepository extends ServiceEntityRepository
             ->select('IDENTITY(teach.skill) AS skillId')
             ->andWhere('teach.owner = :student')
             ->andWhere('teach.type = :teachType')
-            ->setParameters([
-                'student' => $student,
-                'teachType' => UserSkill::TYPE_TEACH,
-            ])
+            ->setParameter('student', $student)
+            ->setParameter('teachType', UserSkill::TYPE_TEACH)
             ->getQuery()
             ->getScalarResult();
 
@@ -41,11 +39,9 @@ class UserSkillRepository extends ServiceEntityRepository
             ->andWhere('learn.owner = :mentor')
             ->andWhere('learn.type = :learnType')
             ->andWhere('learn.skill IN (:skillIds)')
-            ->setParameters([
-                'mentor' => $mentor,
-                'learnType' => UserSkill::TYPE_LEARN,
-                'skillIds' => $skillIds,
-            ])
+            ->setParameter('mentor', $mentor)
+            ->setParameter('learnType', UserSkill::TYPE_LEARN)
+            ->setParameter('skillIds', $skillIds)
             ->getQuery()
             ->getSingleScalarResult();
 
