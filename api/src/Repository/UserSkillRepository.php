@@ -19,23 +19,32 @@ class UserSkillRepository extends ServiceEntityRepository
 
     public function hasPerfectMatch(User $student, User $mentor): bool
     {
-        $queryBuilder = $this->createQueryBuilder('teach');
-        $matchSubquery = $this->createQueryBuilder('learn')
-            ->select('1')
-            ->andWhere('learn.owner = :mentor')
-            ->andWhere('learn.type = :learnType')
-            ->andWhere('learn.skill = teach.skill');
-
-        $count = $queryBuilder
-            ->select('COUNT(teach.id)')
+        $teachSkillIds = $this->createQueryBuilder('teach')
+            ->select('IDENTITY(teach.skill) AS skillId')
             ->andWhere('teach.owner = :student')
             ->andWhere('teach.type = :teachType')
-            ->andWhere($queryBuilder->expr()->exists($matchSubquery->getDQL()))
             ->setParameters([
                 'student' => $student,
-                'mentor' => $mentor,
                 'teachType' => UserSkill::TYPE_TEACH,
+            ])
+            ->getQuery()
+            ->getScalarResult();
+
+        if ($teachSkillIds === []) {
+            return false;
+        }
+
+        $skillIds = array_map(static fn (array $row): int => (int) $row['skillId'], $teachSkillIds);
+
+        $count = $this->createQueryBuilder('learn')
+            ->select('COUNT(learn.id)')
+            ->andWhere('learn.owner = :mentor')
+            ->andWhere('learn.type = :learnType')
+            ->andWhere('learn.skill IN (:skillIds)')
+            ->setParameters([
+                'mentor' => $mentor,
                 'learnType' => UserSkill::TYPE_LEARN,
+                'skillIds' => $skillIds,
             ])
             ->getQuery()
             ->getSingleScalarResult();
