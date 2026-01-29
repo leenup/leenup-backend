@@ -52,6 +52,9 @@ class CurrentUser
     #[Groups(['user:read'])]
     public array $roles = [];
 
+    #[Groups(['user:read', 'user:update'])]
+    public array $profiles = [];
+
     #[Assert\Length(min: 2, max: 100)]
     #[Groups(['user:read', 'user:update'])]
     public ?string $firstName = null;

@@ -30,6 +30,7 @@ final class CurrentUserProvider implements ProviderInterface
         $currentUser->id = $user->getId();
         $currentUser->email = $user->getEmail();
         $currentUser->roles = $user->getRoles();
+        $currentUser->profiles = $user->getProfiles();
         $currentUser->firstName = $user->getFirstName();
         $currentUser->lastName = $user->getLastName();
         $currentUser->avatarUrl = $user->getAvatarUrl();
