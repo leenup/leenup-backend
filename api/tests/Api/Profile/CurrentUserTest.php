@@ -426,6 +426,24 @@ class CurrentUserTest extends ApiTestCase
         $this->assertTrue($data['isMentor']);
     }
 
+    public function testUpdateCurrentUserProfilesIsIgnored(): void
+    {
+        $this->user->setProfiles(['mentor']);
+        self::getContainer()->get('doctrine')->getManager()->flush();
+
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
+            'json' => ['profiles' => ['student']],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $response = $this->client->request('GET', '/me');
+        $data = $response->toArray(false);
+
+        $this->assertSame(['mentor'], $data['profiles']);
+    }
+
     public function testUpdateCurrentUserWithoutAuthentication(): void
     {
         static::createClient()->request('PATCH', '/me', [
@@ -521,6 +539,56 @@ class CurrentUserTest extends ApiTestCase
         ]);
 
         $this->assertResponseIsSuccessful();
+    }
+
+    // ==================== POST /me/addProfiles ====================
+
+    public function testAddProfileToCurrentUser(): void
+    {
+        $this->user->setProfiles(['mentor']);
+        self::getContainer()->get('doctrine')->getManager()->flush();
+
+        $this->requestUnsafe($this->client, 'POST', '/me/addProfiles', $this->csrfToken, [
+            'json' => ['profile' => 'student'],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $response = $this->client->request('GET', '/me');
+        $data = $response->toArray(false);
+
+        $this->assertCount(2, $data['profiles']);
+        $this->assertContains('mentor', $data['profiles']);
+        $this->assertContains('student', $data['profiles']);
+    }
+
+    public function testAddProfileAlreadyPresentKeepsProfiles(): void
+    {
+        $this->user->setProfiles(['mentor']);
+        self::getContainer()->get('doctrine')->getManager()->flush();
+
+        $this->requestUnsafe($this->client, 'POST', '/me/addProfiles', $this->csrfToken, [
+            'json' => ['profile' => 'mentor'],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+
+        $response = $this->client->request('GET', '/me');
+        $data = $response->toArray(false);
+
+        $this->assertSame(['mentor'], $data['profiles']);
+    }
+
+    public function testAddProfileWithoutAuthentication(): void
+    {
+        static::createClient()->request('POST', '/me/addProfiles', [
+            'json' => ['profile' => 'mentor'],
+            'headers' => ['Content-Type' => 'application/json'],
+        ]);
+
+        $this->assertResponseStatusCodeSame(401);
     }
 
     // ==================== DELETE /me ====================
