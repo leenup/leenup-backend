@@ -13,6 +13,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Enum\ProfilesEnum;
 use App\Repository\UserRepository;
 use App\State\UserPasswordHasher;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -256,6 +257,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: Types::DECIMAL, precision: 3, scale: 2, nullable: true)]
     #[Groups(['user:read'])]
     private ?string $averageRating = null;
+
+    #[ORM\Column]
+    #[Groups(['user:read', 'user:create', 'user:update:admin'])]
+    #[Assert\Type('array')]
+    #[Assert\All(constraints: [
+        new Assert\Choice(
+            choices: [ProfilesEnum::MENTOR->value, ProfilesEnum::STUDENT->value],
+            message: 'Profile must be student or/and mentor.',
+        )
+    ])]
+    #[Assert\Count(max: 2, maxMessage: 'You can select up to {{ limit }} profiles.')]
+    private array $profiles = [];
 
     public function __construct()
     {
@@ -712,6 +725,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setAverageRating(?string $averageRating): static
     {
         $this->averageRating = $averageRating;
+
+        return $this;
+    }
+
+    public function getProfiles(): array
+    {
+        return $this->profiles;
+    }
+
+    public function setProfiles(array $profiles): static
+    {
+        $this->profiles = $profiles;
 
         return $this;
     }

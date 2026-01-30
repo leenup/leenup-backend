@@ -155,6 +155,7 @@ final class CurrentUserProcessor implements ProcessorInterface
         $data->id = $user->getId();
         $data->email = $user->getEmail();
         $data->roles = $user->getRoles();
+        $data->profiles = $user->getProfiles();
         $data->firstName = $user->getFirstName();
         $data->lastName = $user->getLastName();
         $data->avatarUrl = $user->getAvatarUrl();

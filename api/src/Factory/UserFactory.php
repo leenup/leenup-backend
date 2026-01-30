@@ -34,14 +34,13 @@ final class UserFactory extends PersistentObjectFactory
 
         $allLanguages = ['fr', 'en', 'es', 'de', 'it'];
         $allLearningStyles = [
-            'calm_explanations',      // expliquer calmement
-            'straight_to_the_point',  // aller droit au but
-            'concrete_examples',      // exemples concrets
-            'hands_on',               // pouvoir expérimenter
-            'structured',             // avoir de la structure
+            'calm_explanations',
+            'straight_to_the_point',
+            'concrete_examples',
+            'hands_on',
+            'structured',
         ];
 
-        // 🐸 Avatars : photos d’animaux chelous/moches via loremflickr (placeholder fait pour ça)
         $uglyAnimalAvatars = [
             'https://loremflickr.com/320/320/ugly,animal',
             'https://loremflickr.com/320/320/weird,animal',
@@ -59,7 +58,6 @@ final class UserFactory extends PersistentObjectFactory
             'firstName' => $faker->firstName(),
             'lastName' => $faker->lastName(),
 
-            // 80% de chances d’avoir un avatar d’animal… discutable
             'avatarUrl' => $faker->optional(0.8)->randomElement($uglyAnimalAvatars),
 
             'bio' => $faker->optional(0.6)->paragraph(2),
@@ -74,7 +72,6 @@ final class UserFactory extends PersistentObjectFactory
             ]),
             'locale' => $faker->optional(0.9)->randomElement(['fr', 'en', 'es', 'de']),
 
-            // Champs onboarding
             'birthdate' => $faker->optional(0.9)->dateTimeBetween('-50 years', '-18 years'),
             'languages' => $faker->optional(0.9)->randomElements(
                 $allLanguages,
@@ -86,6 +83,7 @@ final class UserFactory extends PersistentObjectFactory
                 $faker->numberBetween(1, 3)
             ),
             'isMentor' => $faker->boolean(40),
+            'profiles' => $faker->randomElements(['mentor', 'student'], $faker->numberBetween(1, 2)),
 
             'isActive' => true,
             'lastLoginAt' => $lastLoginAt,
