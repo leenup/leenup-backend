@@ -7,6 +7,7 @@ use ApiPlatform\State\ProcessorInterface;
 use ApiPlatform\Validator\Exception\ValidationException;
 use App\ApiResource\Profile\MyProfiles;
 use App\Entity\User;
+use App\Service\CardUnlocker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -20,6 +21,7 @@ final class MyProfilesAddProcessor implements ProcessorInterface
         private Security $security,
         private EntityManagerInterface $entityManager,
         private ValidatorInterface $validator,
+        private CardUnlocker $cardUnlocker,
     ) {
     }
 
@@ -47,6 +49,7 @@ final class MyProfilesAddProcessor implements ProcessorInterface
             }
 
             $user->onPreUpdate();
+            $this->cardUnlocker->unlockForUser($user, 'profile_updated');
             $this->entityManager->flush();
         }
 
