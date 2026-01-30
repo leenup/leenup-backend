@@ -52,7 +52,7 @@ class CurrentUser
     #[Groups(['user:read'])]
     public array $roles = [];
 
-    #[Groups(['user:read', 'user:update'])]
+    #[Groups(['user:read'])]
     public array $profiles = [];
 
     #[Assert\Length(min: 2, max: 100)]
