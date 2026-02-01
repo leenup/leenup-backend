@@ -15,6 +15,8 @@ jobs:
   tests:
     name: Tests
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8"
     steps:
       -
         name: Checkout
@@ -54,17 +56,22 @@ jobs:
         name: Check Mercure reachability
         run: curl -vkI --fail-with-body https://localhost/.well-known/mercure?topic=test
       -
-        name: Create test database
-        run: docker compose exec -T php bin/console -e test doctrine:database:create
-      -
-        name: Run migrations
-        run: docker compose exec -T php bin/console -e test doctrine:migrations:migrate --no-interaction
+        name: Generate JWT keys
+        run: docker compose exec -T php sh -c "php bin/console lexik:jwt:generate-keypair --skip-if-exists"
+      -  
+        name: Prepare test database
+        run: |
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:database:drop --force --if-exists
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:database:create
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console doctrine:migrations:migrate --no-interaction
+          docker compose exec -T -e DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" php bin/console dbal:run-sql "SELECT 1" || true
       -
         name: Run PHPUnit
-        run: docker compose exec -T php bin/phpunit
+        run: docker compose exec -T php php -d memory_limit=512M bin/phpunit
       -
         name: Doctrine Schema Validator
-        run: docker compose exec -T php bin/console -e test doctrine:schema:validate
+        run: docker compose exec -T php bin/console doctrine:schema:validate
+
   lint:
     name: Docker Lint
     runs-on: ubuntu-latest

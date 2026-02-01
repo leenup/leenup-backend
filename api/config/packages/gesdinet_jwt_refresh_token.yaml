@@ -1,0 +1,28 @@
+gesdinet_jwt_refresh_token:
+    refresh_token_class: App\Entity\RefreshToken
+
+    # Durée de vie du refresh token (14 jours)
+    ttl: 1209600
+
+    user_identity_field: email
+    token_parameter_name: refresh_token
+
+    # Un seul usage par refresh token (rotation)
+    single_use: true
+
+    # Retourner l'expiration dans la réponse
+    return_expiration: true
+
+    # 🔐 Invalidation du refresh token sur logout pour le firewall "main"
+    logout_firewall: main
+
+    # 👉 Mode cookie activé
+    cookie:
+        enabled: true
+        same_site: lax
+        path: /
+        domain: null
+        http_only: true
+        secure: true      # en DEV sans HTTPS tu peux passer à false
+        partitioned: false
+        remove_token_from_body: true

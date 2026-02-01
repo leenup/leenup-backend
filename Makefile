@@ -13,11 +13,13 @@ NC = \033[0m # No Color
 .PHONY: help build start stop restart logs clean doctor
 
 ## —— 🚀 LeenUp Backend Makefile 🚀 ——————————————————————————————————
+
 help: ## Affiche cette aide
 	@echo "$(GREEN)LeenUp Backend - Commandes disponibles:$(NC)"
 	@grep -E '(^[a-zA-Z0-9_-]+:.*?##.*$$)|(^##)' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}{printf "\033[32m%-30s\033[0m %s\n", $$1, $$2}' | sed -e 's/\[32m##/[33m/'
 
 ## —— 🐳 Docker ——————————————————————————————————————————————————————
+
 build: ## Construit les images Docker
 	@echo "$(YELLOW)🔨 Construction des images Docker...$(NC)"
 	$(DOCKER_COMPOSE) build --no-cache
@@ -25,12 +27,20 @@ build: ## Construit les images Docker
 start: ## Démarre les conteneurs
 	@echo "$(YELLOW)🚀 Démarrage des conteneurs...$(NC)"
 	$(DOCKER_COMPOSE) up --wait
+	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
+	@echo "  • API Documentation: https://localhost/docs/"
+	@echo "  • Admin Interface:   https://localhost/admin/"
+	@echo "  . Github Repo:       https://github.com/leenup/leenup-backend/tree/develop"
 
 stop: ## Arrête les conteneurs
 	@echo "$(YELLOW)🛑 Arrêt des conteneurs...$(NC)"
 	$(DOCKER_COMPOSE) down
 
-restart: stop start ## Redémarre les conteneurs
+restart: stop start ## Redémarre les conteneurs et reconfigure la BD de test
+	@echo "$(GREEN)✅ Redémarrage terminé$(NC)"
+	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
+	@echo "  • API Documentation: https://localhost/docs/"
+	@echo "  • Admin Interface:   https://localhost/admin/"
 
 logs: ## Affiche les logs des conteneurs
 	$(DOCKER_COMPOSE) logs -f
@@ -41,7 +51,7 @@ logs-php: ## Affiche les logs du conteneur PHP
 status: ## Affiche le statut des conteneurs
 	$(DOCKER_COMPOSE) ps
 
-## —— 🗄️ Base de données ————————————————————————————————————————————
+## —— 🗄️ Base de données (Développement) ————————————————————————————
 db-create: ## Crée la base de données
 	@echo "$(YELLOW)📊 Création de la base de données...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:create --if-not-exists
@@ -50,8 +60,14 @@ db-drop: ## Supprime la base de données
 	@echo "$(RED)🗑️ Suppression de la base de données...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists
 
-db-reset: db-drop db-create ## Recrée la base de données à zéro
-	@echo "$(GREEN)✅ Base de données recréée$(NC)"
+db-reset: restart db-drop db-create migration-migrate ## Recrée la base de données à zéro
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
+
+db-reset-fixture: restart db-drop db-create migration-migrate fixtures-load ## Recrée la base de données à zéro
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
+
+db-reset-fixtures: db-reset fixtures-load ## Recrée la base de données et charge les fixtures
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations et fixtures$(NC)"
 
 migration-diff: ## Génère une nouvelle migration
 	@echo "$(YELLOW)📝 Génération d'une migration...$(NC)"
@@ -60,6 +76,15 @@ migration-diff: ## Génère une nouvelle migration
 migration-migrate: ## Applique les migrations
 	@echo "$(YELLOW)🔄 Application des migrations...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:migrate --no-interaction
+
+migration-migrate-drop: ## Vide la base et applique les migrations
+	@echo "$(RED)🗑️ Vidage de la base de données...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists
+	@echo "$(YELLOW)📊 Recréation de la base de données...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:create --if-not-exists
+	@echo "$(YELLOW)🔄 Application des migrations...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:migrate --no-interaction
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
 
 migration-status: ## Affiche le statut des migrations
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:status
@@ -70,6 +95,25 @@ schema-update: ## Met à jour le schéma de la base (DEV uniquement)
 
 schema-validate: ## Valide le mapping des entités
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:schema:validate
+
+## —— 🧪 Base de données de TEST ————————————————————————————————————
+db-test-create: ## Crée la base de données de test
+	@echo "$(YELLOW)📊 Création de la base de données de test...$(NC)"
+	-$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -c "CREATE DATABASE app_test;" 2>/dev/null || echo "$(YELLOW)Base app_test existe déjà$(NC)"
+	@echo "$(GREEN)✅ Base de données de test prête$(NC)"
+
+db-test-drop: ## Supprime la base de données de test
+	@echo "$(RED)🗑️ Suppression de la base de données de test...$(NC)"
+	-$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -c "DROP DATABASE IF EXISTS app_test;"
+	@echo "$(GREEN)✅ Base de données de test supprimée$(NC)"
+
+db-test-migrate: ## Applique les migrations sur la BD de test
+	@echo "$(YELLOW)🔄 Application des migrations sur la BD de test...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" bin/console doctrine:migrations:migrate --no-interaction'
+	@echo "$(GREEN)✅ Migrations appliquées sur la BD de test$(NC)"
+
+db-test-reset: db-test-drop db-test-create db-test-migrate ## Recrée la base de test à zéro
+	@echo "$(GREEN)✅ Base de données de test recréée avec les migrations$(NC)"
 
 ## —— 🏗️ Entités et Code ————————————————————————————————————————————
 make-entity: ## Crée une nouvelle entité
@@ -92,12 +136,55 @@ fixtures-load: ## Charge les fixtures
 	@echo "$(YELLOW)📥 Chargement des fixtures...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:fixtures:load --no-interaction
 
+fixtures-load-drop: ## Vide la base et charge les fixtures
+	@echo "$(YELLOW)🗑️ Vidage de la base de données...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists
+	@echo "$(YELLOW)📊 Recréation de la base de données...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:create --if-not-exists
+	@echo "$(YELLOW)🔄 Application des migrations...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:migrate --no-interaction
+	@echo "$(YELLOW)📥 Chargement des fixtures...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:fixtures:load --no-interaction
+	@echo "$(GREEN)✅ Base de données recréée avec les migrations et fixtures$(NC)"
+
 ## —— 🧪 Tests et Qualité ———————————————————————————————————————————
-test: ## Lance les tests
+
+test: db-test-reset ## Lance les tests (usage: make test ou make test FILE=tests/Api/Profile/CurrentUserTest.php)
+	@echo "$(YELLOW)🧪 Lancement des tests...$(NC)"
+ifdef FILE
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit $(FILE)
+else
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
+endif
+
+test-parallel: db-test-reset cache-clear ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
+	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
+ifdef FILE
+ifdef PROCESSES
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES) $(FILE)
+else
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest $(FILE)
+endif
+else
+ifdef PROCESSES
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES)
+else
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
+endif
+endif
+
 
 test-coverage: ## Lance les tests avec couverture
+	@echo "$(YELLOW)🧪 Génération de la couverture de code...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit --coverage-html public/coverage
+
+test-coverage-parallel: ## Lance les tests avec couverture en parallèle
+	@echo "$(YELLOW)⚡ Génération de la couverture de code (parallèle)...$(NC)"
+ifdef PROCESSES
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES) --coverage-html public/coverage
+else
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest --coverage-html public/coverage
+endif
 
 cs-fixer: ## Corrige le style de code
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/php-cs-fixer fix src/
@@ -127,6 +214,9 @@ shell: ## Ouvre un shell dans le conteneur PHP
 shell-db: ## Ouvre un shell dans la base de données
 	$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -d app
 
+shell-db-test: ## Ouvre un shell dans la base de données de test
+	$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -d app_test
+
 cache-clear: ## Vide le cache Symfony
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console cache:clear
 
@@ -150,8 +240,11 @@ doctor: ## Diagnostic complet du système
 	@echo "$(GREEN)📊 Statut des conteneurs:$(NC)"
 	$(DOCKER_COMPOSE) ps
 	@echo ""
-	@echo "$(GREEN)🗄️ Statut de la base de données:$(NC)"
+	@echo "$(GREEN)🗄️ Statut de la base de données (dev):$(NC)"
 	@$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:status 2>/dev/null || echo "❌ Problème avec la base"
+	@echo ""
+	@echo "$(GREEN)🗄️ Statut de la base de données (test):$(NC)"
+	@$(DOCKER_COMPOSE) exec $(DATABASE_CONTAINER) psql -U app -c "SELECT COUNT(*) as users_in_test FROM \"user\";" app_test 2>/dev/null || echo "❌ Base de test non configurée"
 	@echo ""
 	@echo "$(GREEN)🔧 Validation du schéma:$(NC)"
 	@$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:schema:validate 2>/dev/null || echo "❌ Schéma invalide"
@@ -159,7 +252,6 @@ doctor: ## Diagnostic complet du système
 	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
 	@echo "  • API Documentation: https://localhost/docs/"
 	@echo "  • Admin Interface:   https://localhost/admin/"
-	@echo "  • GraphQL:           https://localhost/graphql/"
 	@echo ""
 	@echo "$(GREEN)💾 Espace disque Docker:$(NC)"
 	@docker system df
@@ -178,9 +270,12 @@ clean-docker: ## Nettoie les ressources Docker inutiles
 clean-all: clean clean-docker ## Nettoyage complet
 
 ## —— 🚀 Installation complète ——————————————————————————————————————
-install: build start db-create migration-migrate ## Installation complète du projet
+install: build start db-create migration-migrate db-test-reset ## Installation complète du projet
 	@echo "$(GREEN)✅ Installation terminée !$(NC)"
 	@echo "$(YELLOW)🌐 Accédez à votre API: https://localhost/docs/$(NC)"
+
+setup-after-restart: db-test-reset ## Configure la BD de test après un restart
+	@echo "$(GREEN)✅ Configuration post-restart terminée !$(NC)"
 
 ## —— 📱 Frontend PWA ———————————————————————————————————————————————
 pwa-install: ## Installe les dépendances PWA
@@ -198,5 +293,11 @@ pwa-generate: ## Génère le client API
 ## —— 🎯 Commandes rapides ——————————————————————————————————————————
 dev: start ## Alias pour start (environnement de dev)
 
-full-reset: stop clean-docker build start db-reset migration-migrate fixtures-load ## Reset complet du projet
+full-reset: stop clean-docker build start db-reset db-test-reset fixtures-load ## Reset complet du projet
 	@echo "$(GREEN)🔄 Reset complet terminé !$(NC)"
+
+url: ## Affiche les URLs disponibles
+	@echo "$(GREEN)🌐 URLs disponibles:$(NC)"
+	@echo "  • API Documentation: https://localhost/docs/"
+	@echo "  • Admin Interface:   https://localhost/admin/"
+	@echo "  • Github Repo:       https://github.com/leenup/leenup-backend/tree/develop"

@@ -1,11 +1,33 @@
 api_platform:
-    title: Hello API Platform
+    title: Leenup API
+    description: 'Leenup API documentation'
+    swagger:
+        api_keys:
+            JWT:
+                name: Authorization
+                type: header
     version: 1.0.0
+
+    # 👇 IMPORTANT : on dit à API Platform où chercher les ressources
+    mapping:
+        paths:
+            - '%kernel.project_dir%/src/Entity'
+            - '%kernel.project_dir%/src/ApiResource'
+
     # Mercure integration, remove if unwanted
     mercure:
         include_type: true
+
     # Good defaults for REST APIs
     defaults:
+        skip_null_values: false
         stateless: true
         cache_headers:
             vary: ['Content-Type', 'Authorization', 'Origin']
+
+        # Pagination configuration
+        pagination_enabled: true
+        pagination_items_per_page: 30
+        pagination_maximum_items_per_page: 100
+        pagination_client_enabled: true
+        pagination_client_items_per_page: true
