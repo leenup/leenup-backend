@@ -1,19 +1,36 @@
 # Production environment override
 services:
   php:
+    image: ${REGISTRY_IMAGE_PHP:-ghcr.io/leenup/leenup-backend-php}
     build:
       context: ./api
       target: frankenphp_prod
+    ports: []
+    expose:
+      - "80"
+    networks:
+      - web
+      - default
     environment:
       APP_SECRET: ${APP_SECRET}
       MERCURE_PUBLISHER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
       MERCURE_SUBSCRIBER_JWT_KEY: ${CADDY_MERCURE_JWT_SECRET}
 
   pwa:
+    image: ${REGISTRY_IMAGE_PWA:-ghcr.io/leenup/leenup-backend-pwa}
     build:
       context: ./pwa
       target: prod
+    expose:
+      - "3000"
+    networks:
+      - web
+      - default
 
   database:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+networks:
+  web:
+    external: true

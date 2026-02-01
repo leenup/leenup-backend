@@ -234,6 +234,96 @@ make pwa-generate       # Générer le client API
 
 ---
 
+## 🚀 Déploiement continu (GitHub Actions + VPS)
+
+Le déploiement en production est automatisé via le workflow GitHub Actions `Deploy` qui :
+
+1. build les images Docker (PHP + PWA) et les pousse sur GHCR,
+2. se connecte au VPS par SSH,
+3. met à jour le repo et relance `docker compose` avec `compose.prod.yaml`.
+
+### Pré-requis côté VPS
+
+- Le repo est cloné sur le VPS (ex : `/srv/apps/leenup-backend`).
+- Le réseau Docker externe `web` existe déjà (utilisé par le reverse proxy).
+- L’utilisateur de déploiement a accès à Docker (groupe `docker`).
+
+### Secrets GitHub requis
+
+Renseigner les secrets suivants dans le dépôt GitHub :
+
+- `APP_SECRET` : secret Symfony.
+- `POSTGRES_PASSWORD` : mot de passe Postgres.
+- `CADDY_MERCURE_JWT_SECRET` : secret Mercure.
+- `DEPLOY_HOST` : IP/host du VPS.
+- `DEPLOY_USER` : utilisateur SSH.
+- `DEPLOY_SSH_KEY` : clé SSH privée (format PEM).
+- `DEPLOY_PATH` : chemin du repo sur le VPS.
+- `GHCR_USERNAME` : utilisateur GHCR (souvent le même que le compte GitHub).
+- `GHCR_TOKEN` : token GHCR (scope `read:packages`).
+
+### Comment récupérer chaque valeur de secret
+
+Vous trouverez ci-dessous **comment obtenir chaque valeur**, pas seulement la liste.
+
+#### Secrets applicatifs (à générer)
+
+- `APP_SECRET` (Symfony)
+  ```bash
+  openssl rand -hex 32
+  ```
+  Copiez la sortie dans le secret `APP_SECRET`.
+
+- `POSTGRES_PASSWORD` (mot de passe base prod)
+  ```bash
+  openssl rand -base64 24
+  ```
+  Copiez la sortie dans `POSTGRES_PASSWORD`.
+
+- `CADDY_MERCURE_JWT_SECRET` (secret JWT Mercure)
+  ```bash
+  openssl rand -hex 32
+  ```
+  Copiez la sortie dans `CADDY_MERCURE_JWT_SECRET`.
+
+#### Secrets de déploiement (valeurs spécifiques au VPS)
+
+- `DEPLOY_HOST`  
+  IP publique ou nom de domaine du VPS. Exemple : `123.45.67.89` ou `vps.example.com`.
+
+- `DEPLOY_USER`  
+  L’utilisateur SSH utilisé pour le déploiement (ex: `ubuntu`).
+
+- `DEPLOY_SSH_KEY`  
+  La **clé privée** SSH correspondant à la clé autorisée sur le VPS.
+  Si vous n’en avez pas, générez-en une dédiée :
+  ```bash
+  ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/leenup_deploy
+  ```
+  - Ajoutez le contenu de `~/.ssh/leenup_deploy.pub` dans `~/.ssh/authorized_keys` du VPS.
+  - Copiez **le contenu complet** de `~/.ssh/leenup_deploy` (clé privée) dans le secret `DEPLOY_SSH_KEY`.
+
+- `DEPLOY_PATH`  
+  Chemin **absolu** du repo sur le VPS. Exemple : `/srv/apps/leenup-backend`.
+
+#### Secrets GHCR (authentification registry sur le VPS)
+
+- `GHCR_USERNAME`  
+  Votre **username GitHub** (ex: `benjamin-gleitz`).
+
+- `GHCR_TOKEN`  
+  Personal Access Token GitHub avec scope **`read:packages`**.  
+  À créer via **GitHub → Settings → Developer settings → Personal access tokens**.
+
+### Variables d’images (optionnel)
+
+Les images utilisées en production peuvent être personnalisées via ces variables :
+
+- `REGISTRY_IMAGE_PHP` (défaut : `ghcr.io/<owner>/<repo>-php`)
+- `REGISTRY_IMAGE_PWA` (défaut : `ghcr.io/<owner>/<repo>-pwa`)
+
+---
+
 ## 📚 Documentation
 
 ```bash
