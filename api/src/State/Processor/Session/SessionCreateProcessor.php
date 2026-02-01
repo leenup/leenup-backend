@@ -8,6 +8,9 @@ use ApiPlatform\Validator\Exception\ValidationException;
 use App\Entity\Session;
 use App\Entity\User;
 use App\Entity\UserSkill;
+use App\Entity\MentorAvailabilityException;
+use App\Repository\MentorAvailabilityExceptionRepository;
+use App\Repository\MentorAvailabilityRepository;
 use App\Repository\UserSkillRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -22,6 +25,8 @@ final class SessionCreateProcessor implements ProcessorInterface
     public function __construct(
         private EntityManagerInterface $entityManager,
         private UserSkillRepository $userSkillRepository,
+        private MentorAvailabilityRepository $availabilityRepository,
+        private MentorAvailabilityExceptionRepository $availabilityExceptionRepository,
         private Security $security,
     ) {
     }
@@ -97,6 +102,8 @@ final class SessionCreateProcessor implements ProcessorInterface
             throw new ValidationException($violations);
         }
 
+        $this->assertMentorAvailability($data, $mentor);
+
         if (!$isPerfectMatch) {
             $currentUser->removeTokenBalance(1);
         }
@@ -104,5 +111,129 @@ final class SessionCreateProcessor implements ProcessorInterface
         $this->entityManager->flush();
 
         return $data;
+    }
+
+    private function assertMentorAvailability(Session $session, User $mentor): void
+    {
+        $availabilities = $this->availabilityRepository->findBy(['mentor' => $mentor]);
+
+        if (count($availabilities) === 0) {
+            return;
+        }
+
+        $scheduledAt = $session->getScheduledAt();
+        $duration = $session->getDuration();
+
+        if (!$scheduledAt || !$duration) {
+            return;
+        }
+
+        $sessionStart = $scheduledAt;
+        $sessionEnd = $scheduledAt->modify(sprintf('+%d minutes', $duration));
+        $sessionDate = $scheduledAt->setTime(0, 0, 0);
+
+        $exceptions = $this->availabilityExceptionRepository->findBy([
+            'mentor' => $mentor,
+            'date' => $sessionDate,
+        ]);
+
+        $overrideExceptions = array_filter(
+            $exceptions,
+            fn($exception) => $exception->getType() === MentorAvailabilityException::TYPE_OVERRIDE
+        );
+
+        foreach ($exceptions as $exception) {
+            if ($exception->getType() !== MentorAvailabilityException::TYPE_UNAVAILABLE) {
+                continue;
+            }
+
+            $startTime = $exception->getStartTime();
+            $endTime = $exception->getEndTime();
+
+            if (!$startTime || !$endTime) {
+                $this->throwAvailabilityViolation();
+            }
+
+            $blockStart = $this->combineDateAndTime($sessionDate, $startTime);
+            $blockEnd = $this->combineDateAndTime($sessionDate, $endTime);
+
+            if ($this->overlaps($sessionStart, $sessionEnd, $blockStart, $blockEnd)) {
+                $this->throwAvailabilityViolation();
+            }
+        }
+
+        $availabilityWindows = [];
+
+        if (count($overrideExceptions) > 0) {
+            foreach ($overrideExceptions as $exception) {
+                $startTime = $exception->getStartTime();
+                $endTime = $exception->getEndTime();
+
+                if (!$startTime || !$endTime) {
+                    $availabilityWindows[] = [$sessionDate->setTime(0, 0), $sessionDate->setTime(23, 59)];
+                    continue;
+                }
+
+                $availabilityWindows[] = [
+                    $this->combineDateAndTime($sessionDate, $startTime),
+                    $this->combineDateAndTime($sessionDate, $endTime),
+                ];
+            }
+        } else {
+            $dayOfWeek = (int) $scheduledAt->format('w');
+
+            foreach ($availabilities as $availability) {
+                if ($availability->getDayOfWeek() !== $dayOfWeek) {
+                    continue;
+                }
+
+                $availabilityWindows[] = [
+                    $this->combineDateAndTime($sessionDate, $availability->getStartTime()),
+                    $this->combineDateAndTime($sessionDate, $availability->getEndTime()),
+                ];
+            }
+        }
+
+        if (count($availabilityWindows) === 0) {
+            $this->throwAvailabilityViolation();
+        }
+
+        foreach ($availabilityWindows as [$windowStart, $windowEnd]) {
+            if ($sessionStart >= $windowStart && $sessionEnd <= $windowEnd) {
+                return;
+            }
+        }
+
+        $this->throwAvailabilityViolation();
+    }
+
+    private function combineDateAndTime(\DateTimeImmutable $date, \DateTimeImmutable $time): \DateTimeImmutable
+    {
+        return $date->setTime(
+            (int) $time->format('H'),
+            (int) $time->format('i'),
+            (int) $time->format('s')
+        );
+    }
+
+    private function overlaps(\DateTimeImmutable $startA, \DateTimeImmutable $endA, \DateTimeImmutable $startB, \DateTimeImmutable $endB): bool
+    {
+        return $startA < $endB && $endA > $startB;
+    }
+
+    private function throwAvailabilityViolation(): void
+    {
+        $violations = new ConstraintViolationList([
+            new ConstraintViolation(
+                'The requested time is outside of the mentor availability',
+                null,
+                [],
+                null,
+                'scheduledAt',
+                null
+            )
+        ]);
+
+        throw new ValidationException($violations);
     }
 }
