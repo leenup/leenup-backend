@@ -234,6 +234,43 @@ make pwa-generate       # Générer le client API
 
 ---
 
+## 🚀 Déploiement continu (GitHub Actions + VPS)
+
+Le déploiement en production est automatisé via le workflow GitHub Actions `Deploy` qui :
+
+1. build les images Docker (PHP + PWA) et les pousse sur GHCR,
+2. se connecte au VPS par SSH,
+3. met à jour le repo et relance `docker compose` avec `compose.prod.yaml`.
+
+### Pré-requis côté VPS
+
+- Le repo est cloné sur le VPS (ex : `/srv/apps/leenup-backend`).
+- Le réseau Docker externe `web` existe déjà (utilisé par le reverse proxy).
+- L’utilisateur de déploiement a accès à Docker (groupe `docker`).
+
+### Secrets GitHub requis
+
+Renseigner les secrets suivants dans le dépôt GitHub :
+
+- `APP_SECRET` : secret Symfony.
+- `POSTGRES_PASSWORD` : mot de passe Postgres.
+- `CADDY_MERCURE_JWT_SECRET` : secret Mercure.
+- `DEPLOY_HOST` : IP/host du VPS.
+- `DEPLOY_USER` : utilisateur SSH.
+- `DEPLOY_SSH_KEY` : clé SSH privée (format PEM).
+- `DEPLOY_PATH` : chemin du repo sur le VPS.
+- `GHCR_USERNAME` : utilisateur GHCR (souvent le même que le compte GitHub).
+- `GHCR_TOKEN` : token GHCR (scope `read:packages`).
+
+### Variables d’images (optionnel)
+
+Les images utilisées en production peuvent être personnalisées via ces variables :
+
+- `REGISTRY_IMAGE_PHP` (défaut : `ghcr.io/<owner>/<repo>-php`)
+- `REGISTRY_IMAGE_PWA` (défaut : `ghcr.io/<owner>/<repo>-pwa`)
+
+---
+
 ## 📚 Documentation
 
 ```bash
