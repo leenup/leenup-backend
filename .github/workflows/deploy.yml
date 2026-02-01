@@ -61,8 +61,8 @@ jobs:
           CADDY_MERCURE_JWT_SECRET: ${{ secrets.CADDY_MERCURE_JWT_SECRET }}
           REGISTRY_IMAGE_PHP: ${{ env.REGISTRY_IMAGE_PHP }}
           REGISTRY_IMAGE_PWA: ${{ env.REGISTRY_IMAGE_PWA }}
-          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.GHCR_TOKEN }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -81,7 +81,7 @@ jobs:
             REGISTRY_IMAGE_PHP=$REGISTRY_IMAGE_PHP
             REGISTRY_IMAGE_PWA=$REGISTRY_IMAGE_PWA
             ENVVARS
-            echo "$REGISTRY_PASSWORD" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+            echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
             docker compose --env-file .env -f compose.yaml -f compose.prod.yaml pull
             docker compose --env-file .env -f compose.yaml -f compose.prod.yaml up -d --remove-orphans
             docker image prune -f
