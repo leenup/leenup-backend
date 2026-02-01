@@ -44,7 +44,8 @@ jobs:
             compose.prod.yaml
           push: true
           set: |
-            php.tags=${{ env.REGISTRY_IMAGE_PHP }}:${{ github.sha }},${{ env.REGISTRY_IMAGE_PHP }}:latest
+            php.tags=${{ env.REGISTRY_IMAGE_PHP }}:${{ github.sha }}
+            php.tags=${{ env.REGISTRY_IMAGE_PHP }}:latest
             php.cache-from=type=gha,scope=php-${{github.ref}}
             php.cache-from=type=gha,scope=php-refs/heads/main
             php.cache-to=type=gha,scope=php-${{github.ref}},mode=max
