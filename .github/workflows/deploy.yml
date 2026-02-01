@@ -72,7 +72,7 @@ jobs:
             cd ${{ secrets.DEPLOY_PATH }}
             git fetch origin main
             git reset --hard origin/main
-            cat > .env <<'ENVVARS'
+            cat > .env <<ENVVARS
             APP_ENV=prod
             APP_DEBUG=0
             APP_SECRET=$APP_SECRET

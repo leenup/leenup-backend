@@ -28,6 +28,7 @@ services:
       - default
 
   database:
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
