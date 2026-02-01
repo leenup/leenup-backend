@@ -49,7 +49,8 @@ jobs:
             php.cache-from=type=gha,scope=php-${{github.ref}}
             php.cache-from=type=gha,scope=php-refs/heads/main
             php.cache-to=type=gha,scope=php-${{github.ref}},mode=max
-            pwa.tags=${{ env.REGISTRY_IMAGE_PWA }}:${{ github.sha }},${{ env.REGISTRY_IMAGE_PWA }}:latest
+            pwa.tags=${{ env.REGISTRY_IMAGE_PWA }}:${{ github.sha }}
+            pwa.tags=${{ env.REGISTRY_IMAGE_PWA }}:latest
             pwa.cache-from=type=gha,scope=pwa-${{github.ref}}
             pwa.cache-from=type=gha,scope=pwa-refs/heads/main
             pwa.cache-to=type=gha,scope=pwa-${{github.ref}},mode=max
