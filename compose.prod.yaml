@@ -5,6 +5,8 @@ services:
       context: ./api
       target: frankenphp_prod
     ports: []
+    expose:
+      - "80"
     networks:
       - web
       - default
