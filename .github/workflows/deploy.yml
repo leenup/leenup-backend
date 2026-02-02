@@ -61,6 +61,7 @@ jobs:
           APP_SECRET: ${{ secrets.APP_SECRET }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           CADDY_MERCURE_JWT_SECRET: ${{ secrets.CADDY_MERCURE_JWT_SECRET }}
+          DEPLOY_REPO_SSH_KEY: ${{ secrets.DEPLOY_REPO_SSH_KEY }}
           REGISTRY_IMAGE_PHP: ${{ env.REGISTRY_IMAGE_PHP }}
           REGISTRY_IMAGE_PWA: ${{ env.REGISTRY_IMAGE_PWA }}
           REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
@@ -71,9 +72,28 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -euo pipefail
+            mkdir -p ${{ secrets.DEPLOY_PATH }}
             cd ${{ secrets.DEPLOY_PATH }}
-            git fetch origin main
-            git reset --hard origin/main
+            mkdir -p ~/.ssh
+            chmod 700 ~/.ssh
+            repo_key_path=""
+            if [ -n "${DEPLOY_REPO_SSH_KEY:-}" ]; then
+              repo_key_path=~/.ssh/deploy_repo_key
+              printf '%s\n' "$DEPLOY_REPO_SSH_KEY" > "$repo_key_path"
+              chmod 600 "$repo_key_path"
+            elif [ -f ~/.ssh/github_deploy_key ]; then
+              repo_key_path=~/.ssh/github_deploy_key
+            fi
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
+            if [ -n "$repo_key_path" ]; then
+              export GIT_SSH_COMMAND="ssh -i $repo_key_path -o IdentitiesOnly=yes"
+            fi
+            if [ ! -d .git ]; then
+              git clone --depth 1 git@github.com:${{ github.repository }}.git .
+            else
+              git fetch origin main
+              git reset --hard origin/main
+            fi
             cat > .env <<ENVVARS
             APP_ENV=prod
             APP_DEBUG=0
