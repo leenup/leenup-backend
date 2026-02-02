@@ -73,24 +73,22 @@ jobs:
           script: |
             set -euo pipefail
             mkdir -p ${{ secrets.DEPLOY_PATH }}
-            if command -v sudo >/dev/null 2>&1 && sudo -n true; then
-              sudo chown -R "$USER":"$USER" ${{ secrets.DEPLOY_PATH }}
-            fi
             cd ${{ secrets.DEPLOY_PATH }}
             mkdir -p ~/.ssh
             chmod 700 ~/.ssh
+            repo_key_path=""
             if [ -n "${DEPLOY_REPO_SSH_KEY:-}" ]; then
-              printf '%s\n' "$DEPLOY_REPO_SSH_KEY" > ~/.ssh/deploy_repo_key
-              chmod 600 ~/.ssh/deploy_repo_key
+              repo_key_path=~/.ssh/deploy_repo_key
+              printf '%s\n' "$DEPLOY_REPO_SSH_KEY" > "$repo_key_path"
+              chmod 600 "$repo_key_path"
+            elif [ -f ~/.ssh/github_deploy_key ]; then
+              repo_key_path=~/.ssh/github_deploy_key
             fi
             ssh-keyscan github.com >> ~/.ssh/known_hosts
-            if [ -f ~/.ssh/deploy_repo_key ]; then
-              export GIT_SSH_COMMAND='ssh -i ~/.ssh/deploy_repo_key -o IdentitiesOnly=yes'
+            if [ -n "$repo_key_path" ]; then
+              export GIT_SSH_COMMAND="ssh -i $repo_key_path -o IdentitiesOnly=yes"
             fi
             if [ ! -d .git ]; then
-              ls -la ~/.ssh
-              test -f ~/.ssh/deploy_repo_key && echo "deploy_repo_key present" || echo "deploy_repo_key missing"
-              ssh -i ~/.ssh/deploy_repo_key -o IdentitiesOnly=yes -T git@github.com || true
               git clone --depth 1 git@github.com:${{ github.repository }}.git .
             else
               git fetch origin main
