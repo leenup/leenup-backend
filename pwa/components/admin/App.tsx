@@ -5,6 +5,7 @@ import {
   hydraDataProvider as baseHydraDataProvider,
   useIntrospection,
 } from "@api-platform/admin";
+import type { HttpClientOptions } from "@api-platform/admin";
 import { parseHydraDocumentation } from "@api-platform/api-doc-parser";
 import authProvider from "./authProvider";
 import { SkillList } from "./collection/SkillList";
@@ -13,13 +14,14 @@ import { CategoryShow } from "./view/CategoryShow";
 
 const entrypoint = window.origin;
 
-const getHeaders = () =>
-  localStorage.getItem("token")
-    ? { Authorization: `Bearer ${localStorage.getItem("token")}` }
-    : {};
+const getHeaders = (): HeadersInit => {
+  const token = localStorage.getItem("token");
 
-const fetchHydra = (url, options = {}) =>
-  baseFetchHydra(url, {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const fetchHydra = (url: URL | string, options: HttpClientOptions = {}) =>
+  baseFetchHydra(typeof url === "string" ? new URL(url) : url, {
     ...options,
     headers: getHeaders,
   });
@@ -34,12 +36,12 @@ const RedirectToLogin = () => {
   return <>Redirecting to login...</>;
 };
 
-const apiDocumentationParser = async (entrypoint) => {
+const apiDocumentationParser = async (entrypoint: string) => {
   try {
     const headers = getHeaders();
     return await parseHydraDocumentation(entrypoint, { headers });
-  } catch (result) {
-    if (result.status === 401) {
+  } catch (result: any) {
+    if (result?.status === 401) {
       return Promise.resolve({
         api: { entrypoint },
         response: result,

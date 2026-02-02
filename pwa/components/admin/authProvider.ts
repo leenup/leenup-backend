@@ -35,8 +35,12 @@ const authProvider: AuthProvider = {
     }
     return Promise.resolve();
   },
-  getIdentity: () => Promise.resolve(),
-  getPermissions: () => Promise.resolve(),
+  getIdentity: () =>
+    Promise.resolve({
+      id: "user",
+      fullName: "Utilisateur",
+    }),
+  getPermissions: () => Promise.resolve([]),
 };
 
 export default authProvider;
