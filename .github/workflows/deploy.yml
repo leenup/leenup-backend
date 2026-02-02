@@ -88,6 +88,9 @@ jobs:
               export GIT_SSH_COMMAND='ssh -i ~/.ssh/deploy_repo_key -o IdentitiesOnly=yes'
             fi
             if [ ! -d .git ]; then
+              ls -la ~/.ssh
+              test -f ~/.ssh/deploy_repo_key && echo "deploy_repo_key present" || echo "deploy_repo_key missing"
+              ssh -i ~/.ssh/deploy_repo_key -o IdentitiesOnly=yes -T git@github.com || true
               git clone --depth 1 git@github.com:${{ github.repository }}.git .
             else
               git fetch origin main
