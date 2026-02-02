@@ -20,6 +20,7 @@ services:
     image: ${REGISTRY_IMAGE_PWA:-ghcr.io/leenup/leenup-backend-pwa}
     build:
       context: ./pwa
+      dockerfile: Dockerfile
       target: prod
     expose:
       - "3000"
