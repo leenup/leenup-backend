@@ -72,6 +72,7 @@ jobs:
           script: |
             set -euo pipefail
             mkdir -p ${{ secrets.DEPLOY_PATH }}
+            sudo chown -R "$USER":"$USER" ${{ secrets.DEPLOY_PATH }}
             cd ${{ secrets.DEPLOY_PATH }}
             if [ ! -d .git ]; then
               git clone --depth 1 git@github.com:${{ github.repository }}.git .
