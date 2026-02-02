@@ -61,6 +61,7 @@ jobs:
           APP_SECRET: ${{ secrets.APP_SECRET }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           CADDY_MERCURE_JWT_SECRET: ${{ secrets.CADDY_MERCURE_JWT_SECRET }}
+          DEPLOY_REPO_SSH_KEY: ${{ secrets.DEPLOY_REPO_SSH_KEY }}
           REGISTRY_IMAGE_PHP: ${{ env.REGISTRY_IMAGE_PHP }}
           REGISTRY_IMAGE_PWA: ${{ env.REGISTRY_IMAGE_PWA }}
           REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
@@ -76,6 +77,16 @@ jobs:
               sudo chown -R "$USER":"$USER" ${{ secrets.DEPLOY_PATH }}
             fi
             cd ${{ secrets.DEPLOY_PATH }}
+            mkdir -p ~/.ssh
+            chmod 700 ~/.ssh
+            if [ -n "${DEPLOY_REPO_SSH_KEY:-}" ]; then
+              printf '%s\n' "$DEPLOY_REPO_SSH_KEY" > ~/.ssh/deploy_repo_key
+              chmod 600 ~/.ssh/deploy_repo_key
+            fi
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
+            if [ -f ~/.ssh/deploy_repo_key ]; then
+              export GIT_SSH_COMMAND='ssh -i ~/.ssh/deploy_repo_key -o IdentitiesOnly=yes'
+            fi
             if [ ! -d .git ]; then
               git clone --depth 1 git@github.com:${{ github.repository }}.git .
             else
