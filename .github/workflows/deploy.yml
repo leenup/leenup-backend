@@ -71,9 +71,15 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -euo pipefail
+            mkdir -p ${{ secrets.DEPLOY_PATH }}
+            sudo chown -R "$USER":"$USER" ${{ secrets.DEPLOY_PATH }}
             cd ${{ secrets.DEPLOY_PATH }}
-            git fetch origin main
-            git reset --hard origin/main
+            if [ ! -d .git ]; then
+              git clone --depth 1 git@github.com:${{ github.repository }}.git .
+            else
+              git fetch origin main
+              git reset --hard origin/main
+            fi
             cat > .env <<ENVVARS
             APP_ENV=prod
             APP_DEBUG=0

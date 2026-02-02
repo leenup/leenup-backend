@@ -1,12 +1,10 @@
-import { ListGuesser, FieldGuesser } from "@api-platform/admin";
-import { ReferenceField, TextField } from "react-admin";
+import { ShowGuesser, FieldGuesser } from "@api-platform/admin";
 
-export const SkillList = () => (
-  <ListGuesser>
+export const SkillShow = () => (
+  <ShowGuesser>
     <FieldGuesser source="title" />
-    <ReferenceField source="category" reference="categories" link="show">
-      <TextField source="title" />
-    </ReferenceField>
+    <FieldGuesser source="category.title" label="Category" />
     <FieldGuesser source="createdAt" />
-  </ListGuesser>
+    <FieldGuesser source="updatedAt" />
+  </ShowGuesser>
 );
