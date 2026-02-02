@@ -39,7 +39,7 @@ COPY --link . .
 
 ENV CI=true
 
-RUN	pnpm install --frozen-lockfile --offline --force && \
+RUN	pnpm install --frozen-lockfile --force && \
 	pnpm run build
 
 
