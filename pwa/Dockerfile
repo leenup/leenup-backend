@@ -34,11 +34,12 @@ CMD ["sh", "-c", "pnpm install; pnpm dev"]
 FROM base AS builder
 
 COPY --link pnpm-lock.yaml ./
-RUN pnpm fetch
 
 COPY --link . .
 
-RUN	pnpm install --frozen-lockfile --offline && \
+ENV CI=true
+
+RUN	pnpm install --frozen-lockfile --force && \
 	pnpm run build
 
 
