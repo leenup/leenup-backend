@@ -13,7 +13,7 @@ on:
       compose_args:
         description: "Optional docker compose args (e.g. -f compose.yaml -f compose.prod.yaml)"
         required: false
-        default: ""
+        default: "-f compose.yaml -f compose.prod.yaml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,24 +26,27 @@ jobs:
   ssh-test:
     name: SSH smoke test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - name: Prepare SSH key
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+      - name: Add VPS host key
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "${DEPLOY_SSH_KEY}" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       - name: Run remote checks
         shell: bash
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes "${DEPLOY_USER}@${DEPLOY_HOST}" <<'REMOTE'
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" <<'REMOTE'
           set -euo pipefail
           whoami
           docker --version
@@ -55,26 +58,68 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
 
+  build-images:
+    name: Build and push images
+    runs-on: ubuntu-latest
+    needs: ssh-test
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push images
+        uses: docker/bake-action@v6
+        with:
+          files: |
+            compose.prod.yaml
+          push: true
+          set: |
+            php.tags=${{ env.REGISTRY_IMAGE_PHP }}:${{ github.sha }}
+            php.tags=${{ env.REGISTRY_IMAGE_PHP }}:latest
+            php.cache-from=type=gha,scope=php-${{github.ref}}
+            php.cache-from=type=gha,scope=php-refs/heads/main
+            php.cache-to=type=gha,scope=php-${{github.ref}},mode=max
+            pwa.tags=${{ env.REGISTRY_IMAGE_PWA }}:${{ github.sha }}
+            pwa.tags=${{ env.REGISTRY_IMAGE_PWA }}:latest
+            pwa.cache-from=type=gha,scope=pwa-${{github.ref}}
+            pwa.cache-from=type=gha,scope=pwa-refs/heads/main
+            pwa.cache-to=type=gha,scope=pwa-${{github.ref}},mode=max
+
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
-    needs: ssh-test
+    needs: build-images
+    permissions:
+      contents: read
     steps:
-      - name: Prepare SSH key
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+      - name: Add VPS host key
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "${DEPLOY_SSH_KEY}" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       - name: Deploy
         shell: bash
         env:
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          CADDY_MERCURE_JWT_SECRET: ${{ secrets.CADDY_MERCURE_JWT_SECRET }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
@@ -82,15 +127,26 @@ jobs:
           DEPLOY_REPO_SSH_KEY: ${{ secrets.DEPLOY_REPO_SSH_KEY }}
           DEPLOY_STRATEGY: ${{ inputs.deploy_strategy || 'git' }}
           DEPLOY_COMPOSE_ARGS: ${{ inputs.compose_args || secrets.DEPLOY_COMPOSE_ARGS }}
+          REGISTRY_IMAGE_PHP: ${{ env.REGISTRY_IMAGE_PHP }}
+          REGISTRY_IMAGE_PWA: ${{ env.REGISTRY_IMAGE_PWA }}
+          REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes "${DEPLOY_USER}@${DEPLOY_HOST}" <<REMOTE
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" <<REMOTE
           set -euo pipefail
 
+          APP_SECRET="${APP_SECRET}"
+          POSTGRES_PASSWORD="${POSTGRES_PASSWORD}"
+          CADDY_MERCURE_JWT_SECRET="${CADDY_MERCURE_JWT_SECRET}"
           DEPLOY_PATH="${DEPLOY_PATH}"
           DEPLOY_REPO="${DEPLOY_REPO}"
           DEPLOY_STRATEGY="${DEPLOY_STRATEGY}"
           DEPLOY_COMPOSE_ARGS="${DEPLOY_COMPOSE_ARGS}"
+          REGISTRY_IMAGE_PHP="${REGISTRY_IMAGE_PHP}"
+          REGISTRY_IMAGE_PWA="${REGISTRY_IMAGE_PWA}"
+          REGISTRY_USERNAME="${REGISTRY_USERNAME}"
+          REGISTRY_TOKEN="${REGISTRY_TOKEN}"
           DEPLOY_REPO_SSH_KEY="$(cat <<'KEY'
 ${DEPLOY_REPO_SSH_KEY}
 KEY
@@ -127,6 +183,18 @@ KEY
               git reset --hard origin/main
             fi
           fi
+
+          cat > .env <<ENVVARS
+          APP_ENV=prod
+          APP_DEBUG=0
+          APP_SECRET=$APP_SECRET
+          POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+          CADDY_MERCURE_JWT_SECRET=$CADDY_MERCURE_JWT_SECRET
+          REGISTRY_IMAGE_PHP=$REGISTRY_IMAGE_PHP
+          REGISTRY_IMAGE_PWA=$REGISTRY_IMAGE_PWA
+          ENVVARS
+
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
 
           compose_args="${DEPLOY_COMPOSE_ARGS:-}"
           if [ -n "$compose_args" ]; then
