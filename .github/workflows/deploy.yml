@@ -21,11 +21,6 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
-
-env:
-  REGISTRY_IMAGE_PHP: ghcr.io/${{ github.repository }}-php
-  REGISTRY_IMAGE_PWA: ghcr.io/${{ github.repository }}-pwa
 
 jobs:
   ssh-test:
