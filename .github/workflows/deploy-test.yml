@@ -1,0 +1,56 @@
+name: Deploy Test (SSH)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: ~
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ssh-test:
+    name: SSH smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start SSH agent
+        shell: bash
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)"
+          install -m 700 -d ~/.ssh
+          printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null
+          ssh-add ~/.ssh/deploy_key
+      - name: Add VPS host key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      - name: Run remote checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" <<'REMOTE'
+          set -euo pipefail
+          whoami
+          docker --version
+          docker compose version
+          docker ps
+          ls -la /srv/apps /srv/reverse-proxy
+          REMOTE
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
