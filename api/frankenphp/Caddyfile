@@ -3,6 +3,9 @@
 
 	{$CADDY_GLOBAL_OPTIONS}
 
+	# ✅ Désactive l'Auto-HTTPS (pas de redirect, pas de cert) pour ce Caddy interne
+	auto_https disable_redirects
+
 	frankenphp {
 		{$FRANKENPHP_CONFIG}
 
@@ -18,8 +21,6 @@
 {$CADDY_EXTRA_CONFIG}
 
 :80 {
-	auto_https off
-
 	log {
 		format filter {
 			request>uri query {
@@ -28,7 +29,7 @@
 		}
 	}
 
-	root /app/public
+	root * /app/public
 	encode zstd br gzip
 
 	mercure {
@@ -67,13 +68,10 @@
 			not path /.well-known/mercure*
 			not file {path}
 		}
-		rewrite @phpRoute index.php
+		rewrite @phpRoute /index.php
 
-		@frontController path index.php
-		php @frontController
+		php
 
-		file_server {
-			hide *.php
-		}
+		file_server
 	}
 }
