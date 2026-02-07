@@ -9,84 +9,69 @@ use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 
-/**
- * EventListener pour appliquer le rate limiting sur les endpoints critiques
- */
-class RateLimitListener
+#[AsEventListener(event: KernelEvents::REQUEST, priority: 10)]
+final class RateLimitListener
 {
     public function __construct(
-        private RateLimiterFactory $authLimiter,
-        private RateLimiterFactory $registerLimiter,
-        private RateLimiterFactory $refreshTokenLimiter
+        #[Autowire(service: 'limiter.auth')]
+        private readonly RateLimiterFactory $authLimiter,
+
+        #[Autowire(service: 'limiter.register')]
+        private readonly RateLimiterFactory $registerLimiter,
+
+        #[Autowire(service: 'limiter.refresh_token')]
+        private readonly RateLimiterFactory $refreshTokenLimiter,
+
+        #[Autowire('%kernel.environment%')]
+        private readonly string $environment,
     ) {
     }
 
-    public function onKernelRequest(RequestEvent $event): void
+    public function __invoke(RequestEvent $event): void
     {
         // Désactiver le rate limiting en environnement test
         if ($this->environment === 'test') {
             return;
         }
 
-        $request = $event->getRequest();
-
-        // Ne s'applique que sur les requêtes principales
         if (!$event->isMainRequest()) {
             return;
         }
 
+        $request = $event->getRequest();
         $path = $request->getPathInfo();
         $method = $request->getMethod();
 
-        // Identifier l'IP du client
-        $identifier = $request->getClientIp();
+        $identifier = $request->getClientIp() ?? 'unknown';
 
-        // Rate limit sur /auth (POST)
         if ($path === '/auth' && $method === 'POST') {
-            $limiter = $this->authLimiter->create($identifier);
-
-            if (!$limiter->consume(1)->isAccepted()) {
-                $event->setResponse(new JsonResponse([
-                    '@context' => '/contexts/Error',
-                    '@type' => 'Error',
-                    'title' => 'Too Many Requests',
-                    'detail' => 'Too many login attempts. Please try again later.',
-                    'status' => 429,
-                ], 429));
-                return;
-            }
+            $this->consumeOr429($event, $this->authLimiter->create($identifier), 'Too many login attempts. Please try again later.');
+            return;
         }
 
-        // Rate limit sur /register (POST)
         if ($path === '/register' && $method === 'POST') {
-            $limiter = $this->registerLimiter->create($identifier);
-
-            if (!$limiter->consume(1)->isAccepted()) {
-                $event->setResponse(new JsonResponse([
-                    '@context' => '/contexts/Error',
-                    '@type' => 'Error',
-                    'title' => 'Too Many Requests',
-                    'detail' => 'Too many registration attempts. Please try again later.',
-                    'status' => 429,
-                ], 429));
-                return;
-            }
+            $this->consumeOr429($event, $this->registerLimiter->create($identifier), 'Too many registration attempts. Please try again later.');
+            return;
         }
 
-        // Rate limit sur /api/token/refresh (POST)
         if ($path === '/api/token/refresh' && $method === 'POST') {
-            $limiter = $this->refreshTokenLimiter->create($identifier);
-
-            if (!$limiter->consume(1)->isAccepted()) {
-                $event->setResponse(new JsonResponse([
-                    '@context' => '/contexts/Error',
-                    '@type' => 'Error',
-                    'title' => 'Too Many Requests',
-                    'detail' => 'Too many token refresh attempts. Please try again later.',
-                    'status' => 429,
-                ], 429));
-                return;
-            }
+            $this->consumeOr429($event, $this->refreshTokenLimiter->create($identifier), 'Too many token refresh attempts. Please try again later.');
+            return;
         }
+    }
+
+    private function consumeOr429(RequestEvent $event, $limiter, string $detail): void
+    {
+        if ($limiter->consume(1)->isAccepted()) {
+            return;
+        }
+
+        $event->setResponse(new JsonResponse([
+            '@context' => '/contexts/Error',
+            '@type' => 'Error',
+            'title' => 'Too Many Requests',
+            'detail' => $detail,
+            'status' => 429,
+        ], 429));
     }
 }

@@ -1,56 +1,47 @@
-name: Deploy Test (SSH)
+name: Deploy - SSH Test
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch: ~
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [main]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
+concurrency:
+  group: deploy-test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ssh-test:
-    name: SSH smoke test
     runs-on: ubuntu-latest
     steps:
-      - name: Start SSH agent
-        shell: bash
-        env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          eval "$(ssh-agent -s)"
-          install -m 700 -d ~/.ssh
-          printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null
-          ssh-add ~/.ssh/deploy_key
-      - name: Add VPS host key
+      - name: Prepare SSH
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      - name: Run remote checks
+
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -p "${{ secrets.DEPLOY_PORT || '22' }}" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Run non-destructive checks on VPS
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "${DEPLOY_USER}@${DEPLOY_HOST}" <<'REMOTE'
-          set -euo pipefail
-          whoami
-          docker --version
-          docker compose version
-          docker ps
-          ls -la /srv/apps /srv/reverse-proxy
-          REMOTE
+          SSH="ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p ${DEPLOY_PORT} ${DEPLOY_USER}@${DEPLOY_HOST}"
+
+          $SSH "whoami"
+          $SSH "uname -a"
+          $SSH "docker --version"
+          $SSH "docker compose version"
+          $SSH "docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' | head -n 30"
+          $SSH "ls -la /srv/apps || true"
+          $SSH "ls -la /srv/reverse-proxy || true"
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
