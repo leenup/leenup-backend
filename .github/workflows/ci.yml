@@ -48,13 +48,13 @@ jobs:
         run: curl -v --fail-with-body http://localhost
       -
         name: Check API reachability
-        run: curl -vk --fail-with-body https://localhost
+        run: curl -v --fail-with-body http://localhost
       -
         name: Check PWA reachability
-        run: "curl -vk --fail-with-body -H 'Accept: text/html' https://localhost"
+        run: "curl -v --fail-with-body -H 'Accept: text/html' http://localhost"
       -
         name: Check Mercure reachability
-        run: curl -vkI --fail-with-body https://localhost/.well-known/mercure?topic=test
+        run: curl -vI --fail-with-body http://localhost/.well-known/mercure?topic=test
       -
         name: Generate JWT keys
         run: docker compose exec -T php sh -c "php bin/console lexik:jwt:generate-keypair --skip-if-exists"
