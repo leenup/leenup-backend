@@ -1,7 +1,9 @@
 name: Deploy - Production
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
   workflow_dispatch: {}
 
@@ -10,7 +12,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: deploy-prod-${{ github.ref }}
+  group: deploy-prod-${{ github.event.workflow_run.head_branch || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -22,6 +24,8 @@ env:
 
 jobs:
   build-and-push:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -125,4 +129,3 @@ jobs:
           REGISTRY: ${{ env.REGISTRY }}
           GHCR_USER: ${{ secrets.GHCR_USER }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-  
