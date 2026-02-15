@@ -136,6 +136,10 @@ fixtures-load: ## Charge les fixtures
 	@echo "$(YELLOW)📥 Chargement des fixtures...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:fixtures:load --no-interaction
 
+seed-reference-data: ## Charge les données de référence (prod-safe) sans dépendre des fixtures
+	@echo "$(YELLOW)🌱 Chargement des données de référence (catégories, skills, cards)...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console app:seed-reference-data --no-interaction
+
 fixtures-load-drop: ## Vide la base et charge les fixtures
 	@echo "$(YELLOW)🗑️ Vidage de la base de données...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists

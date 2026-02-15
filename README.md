@@ -218,7 +218,7 @@ make shell-db-test      # Ouvrir un shell PostgreSQL (base test)
 ```bash
 make make-fixtures      # Créer des fixtures
 make fixtures-load      # Charger toutes les fixtures (dev/demo)
-make fixtures-load-prod # Charger uniquement les fixtures de référence prod (sans purge)
+make seed-reference-data # Charger les données de référence prod (sans fixtures)
 ```
 
 ---
