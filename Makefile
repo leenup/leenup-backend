@@ -136,6 +136,10 @@ fixtures-load: ## Charge les fixtures
 	@echo "$(YELLOW)📥 Chargement des fixtures...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:fixtures:load --no-interaction
 
+fixtures-load-prod: ## Charge uniquement les fixtures de référence pour la production (sans purge)
+	@echo "$(YELLOW)📥 Chargement des fixtures de référence prod (group=prod, --append)...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:fixtures:load --group=prod --append --no-interaction
+
 fixtures-load-drop: ## Vide la base et charge les fixtures
 	@echo "$(YELLOW)🗑️ Vidage de la base de données...$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists
