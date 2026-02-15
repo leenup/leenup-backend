@@ -155,6 +155,9 @@ class SeedReferenceDataCommand extends Command
         $io = new SymfonyStyle($input, $output);
 
         $createdCategories = $this->seedCategories();
+
+        $this->entityManager->flush();
+
         $createdSkills = $this->seedSkills();
         $createdCards = $this->seedCards();
 
