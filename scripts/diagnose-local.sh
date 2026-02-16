@@ -16,9 +16,14 @@ else
 fi
 
 echo
-if [[ -f "api/frankenphp/Caddyfile" ]]; then
-  if grep -qE '^:80\s*\{' api/frankenphp/Caddyfile && ! grep -qE '^:443\s*\{' api/frankenphp/Caddyfile; then
-    echo "ℹ️  Dev Caddyfile listens on :80 only. HTTPS may fail locally unless additional TLS config is enabled."
+dev_caddyfile="api/frankenphp/Caddyfile.dev"
+if [[ ! -f "$dev_caddyfile" ]]; then
+  dev_caddyfile="api/frankenphp/Caddyfile"
+fi
+
+if [[ -f "$dev_caddyfile" ]]; then
+  if grep -qE '^:80\s*\{' "$dev_caddyfile" && ! grep -qE '^:443\s*\{' "$dev_caddyfile" && ! grep -qE '^localhost(,|\s*\{)' "$dev_caddyfile"; then
+    echo "ℹ️  Dev Caddyfile ($dev_caddyfile) listens on :80 only. HTTPS may fail locally unless additional TLS config is enabled."
     echo
   fi
 fi

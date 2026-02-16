@@ -85,11 +85,11 @@ https://localhost/admin
 2. Vérifiez que vous n'avez pas activé par erreur le fichier de prod `compose.prod.yaml` en local.
    Ce fichier retire les ports publiés côté `php` (`ports: []`) pour laisser un reverse proxy externe gérer l'exposition.
 
-3. Relancez en mode dev standard :
+3. Relancez en mode dev standard (important après un changement de config FrankenPHP/Caddy) :
 
 ```bash
 docker compose down
-docker compose up --build --wait
+docker compose up --build --force-recreate --wait
 ```
 
 4. Si vous utilisez la variable `COMPOSE_FILE`, revenez à la configuration locale :
