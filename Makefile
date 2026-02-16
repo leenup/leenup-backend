@@ -10,7 +10,7 @@ YELLOW = \033[1;33m
 RED = \033[0;31m
 NC = \033[0m # No Color
 
-.PHONY: help build start stop restart logs clean doctor
+.PHONY: help build start stop restart logs clean doctor diagnose-local
 
 ## —— 🚀 LeenUp Backend Makefile 🚀 ——————————————————————————————————
 
@@ -259,6 +259,10 @@ doctor: ## Diagnostic complet du système
 	@echo ""
 	@echo "$(GREEN)💾 Espace disque Docker:$(NC)"
 	@docker system df
+
+
+diagnose-local: ## Diagnostic ciblé des erreurs localhost (ERR_CONNECTION_CLOSED)
+	@./scripts/diagnose-local.sh
 
 ## —— 🧹 Nettoyage ——————————————————————————————————————————————————
 clean: ## Nettoie le cache et les fichiers temporaires
