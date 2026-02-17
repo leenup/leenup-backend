@@ -11,6 +11,7 @@ php:
   appEnv: prod
   appDebug: "0"
   appSecret: ""
+  jwtCookieSecure: "1"
   corsAllowOrigin: "^https?://(localhost|127\\.0\\.0\\.1|app\\.leenup\\.com)(:[0-9]+)?\\.?$"
   trustedHosts: "^127\\.0\\.0\\.1|localhost|.*\\.chart-example\\.local$"
   trustedProxies:
