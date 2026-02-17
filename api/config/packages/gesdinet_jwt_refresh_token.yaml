@@ -19,7 +19,7 @@ gesdinet_jwt_refresh_token:
     # 👉 Mode cookie activé
     cookie:
         enabled: true
-        same_site: lax
+        same_site: none
         path: /
         domain: null
         http_only: true
