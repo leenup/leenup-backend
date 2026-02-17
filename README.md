@@ -68,6 +68,44 @@ make shell              # Ouvrir un shell dans le conteneur PHP
 ```bash
 make help               # Afficher toutes les commandes disponibles
 make doctor             # Diagnostic complet du système
+make diagnose-local     # Diagnostic ciblé des erreurs localhost
+```
+
+### ⚠️ Dépannage local : `ERR_CONNECTION_CLOSED` sur `localhost`
+
+Si `http://localhost/docs` ou `http://localhost/admin` renvoie une erreur de connexion fermée :
+
+1. Vérifiez que vous utilisez bien l'URL en HTTPS :
+
+```text
+https://localhost/docs
+https://localhost/admin
+```
+
+2. Vérifiez que vous n'avez pas activé par erreur le fichier de prod `compose.prod.yaml` en local.
+   Ce fichier retire les ports publiés côté `php` (`ports: []`) pour laisser un reverse proxy externe gérer l'exposition.
+
+3. Relancez en mode dev standard (important après un changement de config FrankenPHP/Caddy) :
+
+```bash
+docker compose down
+docker compose up --build --force-recreate --wait
+```
+
+4. Si vous utilisez la variable `COMPOSE_FILE`, revenez à la configuration locale :
+
+```bash
+# Linux/macOS
+unset COMPOSE_FILE
+
+# PowerShell
+Remove-Item Env:COMPOSE_FILE
+```
+
+5. Lancez un diagnostic guidé du stack local :
+
+```bash
+make diagnose-local
 ```
 
 ---
