@@ -8,6 +8,7 @@ data:
   php-app-env: {{ .Values.php.appEnv | quote }}
   php-app-debug: {{ .Values.php.appDebug | quote }}
   php-cors-allow-origin: {{ .Values.php.corsAllowOrigin | quote }}
+  php-jwt-cookie-secure: {{ .Values.php.jwtCookieSecure | quote }}
   php-trusted-hosts: {{ .Values.php.trustedHosts | quote }}
   php-trusted-proxies: "{{ join "," .Values.php.trustedProxies }}"
   mercure-url: "http://{{ include "api-platform.fullname" . }}/.well-known/mercure"

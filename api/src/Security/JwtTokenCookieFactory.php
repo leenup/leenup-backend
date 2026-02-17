@@ -30,7 +30,7 @@ class JwtTokenCookieFactory
             secure: $this->cookieSecure,
             httpOnly: true,
             raw: false,
-            sameSite: Cookie::SAMESITE_LAX,
+            sameSite: Cookie::SAMESITE_NONE,
             partitioned: false,
         );
     }
@@ -48,7 +48,7 @@ class JwtTokenCookieFactory
             secure: $this->cookieSecure,
             httpOnly: false, // lisible par le front
             raw: false,
-            sameSite: Cookie::SAMESITE_LAX,
+            sameSite: Cookie::SAMESITE_NONE,
             partitioned: false,
         );
     }
@@ -76,7 +76,7 @@ class JwtTokenCookieFactory
             secure: $this->cookieSecure,
             httpOnly: $httpOnly,
             raw: false,
-            sameSite: Cookie::SAMESITE_LAX,
+            sameSite: Cookie::SAMESITE_NONE,
             partitioned: false,
         );
     }
