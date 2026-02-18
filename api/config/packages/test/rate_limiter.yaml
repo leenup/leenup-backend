@@ -1,18 +1,3 @@
 framework:
-    rate_limiter:
-        # En environnement TEST, désactiver le rate limiting
-        # On garde la config mais avec des limites très élevées
-        auth:
-            policy: 'sliding_window'
-            limit: 10000
-            interval: '1 hour'
-        
-        register:
-            policy: 'sliding_window'
-            limit: 10000
-            interval: '1 hour'
-        
-        refresh_token:
-            policy: 'sliding_window'
-            limit: 10000
-            interval: '1 hour'
+    # Rate limiting is intentionally disabled in tests as well.
+    rate_limiter: { }
