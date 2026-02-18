@@ -13,7 +13,7 @@ class CsrfCookieRequestListener implements EventSubscriberInterface
     private const CSRF_COOKIE = JwtTokenCookieFactory::CSRF_COOKIE;
     private const CSRF_HEADER = 'X-CSRF-TOKEN';
     private const ACCESS_TOKEN_COOKIE = JwtTokenCookieFactory::ACCESS_TOKEN_COOKIE;
-    private const EXCLUDED_PATHS = ['/auth', '/api/token/refresh'];
+    private const EXCLUDED_PATHS = ['/auth', '/api/token/refresh', '/register'];
 
     public static function getSubscribedEvents(): array
     {
