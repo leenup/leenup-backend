@@ -28,6 +28,10 @@ services:
             $jwtTtl: '%lexik_jwt_authentication.token_ttl%'
             $cookieSecure: '%app.jwt_cookie_secure%'
 
+    App\Controller\ProfileAvatarUploadController:
+        arguments:
+            $projectDir: '%kernel.project_dir%'
+
     App\State\Processor\UserSkill\UserSkillProcessor:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'
