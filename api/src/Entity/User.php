@@ -13,7 +13,10 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use ApiPlatform\OpenApi\Model\Operation as OpenApiOperation;
+use ApiPlatform\OpenApi\Model\RequestBody;
 use App\Enum\ProfilesEnum;
+use App\Controller\UploadUserProfileImageController;
 use App\Repository\UserRepository;
 use App\State\UserPasswordHasher;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -83,6 +86,32 @@ use Symfony\Component\Validator\Constraints as Assert;
             securityPostDenormalizeMessage: "Only admins can assign admin roles.",
             validationContext: ['groups' => ['Default', 'user:create']],
             processor: UserPasswordHasher::class,
+        ),
+        new Post(
+            uriTemplate: '/users/{id}/profile-image',
+            controller: UploadUserProfileImageController::class,
+            deserialize: false,
+            inputFormats: ['multipart' => ['multipart/form-data']],
+            openapi: new OpenApiOperation(
+                summary: 'Upload a profile image for a user',
+                description: 'Upload a profile image and automatically store the public URL in avatarUrl.',
+                requestBody: new RequestBody(
+                    content: new \ArrayObject([
+                        'multipart/form-data' => [
+                            'schema' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'file' => [
+                                        'type' => 'string',
+                                        'format' => 'binary',
+                                    ],
+                                ],
+                                'required' => ['file'],
+                            ],
+                        ],
+                    ]),
+                ),
+            ),
         ),
     ],
     normalizationContext: ['groups' => ['user:read']],
