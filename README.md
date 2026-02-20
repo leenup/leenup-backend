@@ -439,11 +439,32 @@ Cette commande va :
 
 ### Générer les clés JWT
 
-Les clés JWT sont générées automatiquement lors de l'installation. Si besoin :
+Les clés JWT sont requises pour `/auth` et donc pour la majorité des tests API.
 
 ```bash
-docker compose exec php bin/console lexik:jwt:generate-keypair --skip-if-exists
+make jwt-keys            # profil dev
+make jwt-keys-test       # profil test (recommandé avant make test)
+# ou en direct :
+docker compose exec -e APP_ENV=test php bin/console lexik:jwt:generate-keypair --skip-if-exists --no-interaction
 ```
+
+> Symptôme classique si les clés sont absentes **ou incompatibles avec la passphrase courante** : beaucoup de réponses `500 Internal Server Error` dès les premiers tests (login `/auth`, puis effet domino sur toute la suite).
+>
+> Si les clés existent déjà mais que les 500 persistent, force leur régénération :
+>
+> ```bash
+> make jwt-keys-refresh-test
+> ```
+
+> Pour diagnostiquer précisément la cause (clé invalide, passphrase, variables d'env effectives, stacktrace du 1er test), lance :
+>
+> ```bash
+> make diagnose-test-500
+> ```
+>
+> ⚠️ Vérifie aussi que tu n'as pas un `api/.env.local.php` ancien qui surcharge les valeurs de `.env` (ce fichier a priorité s'il existe).
+
+> ⚠️ Si ton `APP_ENV=test` n'utilise pas la même passphrase que `APP_ENV=dev` (ex: `.env.test`, `.env.test.local`, `.env.local.php`), une clé générée en dev peut casser tous les tests avec `JWTEncodeFailureException` / `bad decrypt`.
 
 ### Tester l'authentification
 
