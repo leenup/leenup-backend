@@ -535,6 +535,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->isMentor;
     }
 
+    public function isMentor(): bool
+    {
+        return $this->isMentor;
+    }
+
     public function setIsMentor(bool $isMentor): static
     {
         $this->isMentor = $isMentor;
