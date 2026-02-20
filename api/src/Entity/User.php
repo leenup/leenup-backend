@@ -237,6 +237,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private Collection $sessionsAsStudent;
 
     /**
+     * @var Collection<int, MentorAvailabilityRule>
+     */
+    #[ORM\OneToMany(targetEntity: MentorAvailabilityRule::class, mappedBy: 'mentor', orphanRemoval: true)]
+    private Collection $mentorAvailabilityRules;
+
+    /**
      * @var Collection<int, Review>
      */
     #[ORM\OneToMany(targetEntity: Review::class, mappedBy: 'reviewer', orphanRemoval: true)]
@@ -276,6 +282,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->roles = ['ROLE_USER'];
         $this->sessionsAsMentor = new ArrayCollection();
         $this->sessionsAsStudent = new ArrayCollection();
+        $this->mentorAvailabilityRules = new ArrayCollection();
         $this->reviews = new ArrayCollection();
         $this->isMentor = false;
         $this->isActive = true;
@@ -528,6 +535,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->isMentor;
     }
 
+    public function isMentor(): bool
+    {
+        return $this->isMentor;
+    }
+
     public function setIsMentor(bool $isMentor): static
     {
         $this->isMentor = $isMentor;
@@ -682,6 +694,35 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         if ($this->sessionsAsStudent->removeElement($session)) {
             if ($session->getStudent() === $this) {
                 $session->setStudent(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, MentorAvailabilityRule>
+     */
+    public function getMentorAvailabilityRules(): Collection
+    {
+        return $this->mentorAvailabilityRules;
+    }
+
+    public function addMentorAvailabilityRule(MentorAvailabilityRule $rule): static
+    {
+        if (!$this->mentorAvailabilityRules->contains($rule)) {
+            $this->mentorAvailabilityRules->add($rule);
+            $rule->setMentor($this);
+        }
+
+        return $this;
+    }
+
+    public function removeMentorAvailabilityRule(MentorAvailabilityRule $rule): static
+    {
+        if ($this->mentorAvailabilityRules->removeElement($rule)) {
+            if ($rule->getMentor() === $this) {
+                $rule->setMentor(null);
             }
         }
 
