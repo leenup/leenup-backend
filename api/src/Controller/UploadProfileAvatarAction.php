@@ -7,12 +7,10 @@ use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
-use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[AsController]
@@ -22,11 +20,10 @@ final class UploadProfileAvatarAction
         private readonly Security $security,
         private readonly EntityManagerInterface $entityManager,
         private readonly ValidatorInterface $validator,
-        private readonly NormalizerInterface $normalizer,
     ) {
     }
 
-    public function __invoke(Request $request): JsonResponse
+    public function __invoke(Request $request): CurrentUser
     {
         $user = $this->security->getUser();
 
@@ -78,10 +75,6 @@ final class UploadProfileAvatarAction
         $dto->updatedAt = $user->getUpdatedAt();
         $dto->userSkills = $user->getUserSkills()->toArray();
 
-        $data = $this->normalizer->normalize($dto, 'json', [
-            'groups' => ['user:read', 'my_skill:read'],
-        ]);
-
-        return new JsonResponse($data, JsonResponse::HTTP_OK);
+        return $dto;
     }
 }
