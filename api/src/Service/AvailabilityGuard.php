@@ -20,6 +20,10 @@ class AvailabilityGuard
         $end = $start->modify(sprintf('+%d minutes', $duration));
         $rules = $this->ruleRepository->findActiveByMentor($mentor);
 
+        if ($rules === []) {
+            return true;
+        }
+
         $hasInclusion = false;
         foreach ($rules as $rule) {
             if (!$this->matchesRule($rule, $start, $end)) {

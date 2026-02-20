@@ -23,19 +23,24 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiResource(
     operations: [
         new GetCollection(
+            uriTemplate: '/mentor_availability_rules',
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
         ),
         new Post(
+            uriTemplate: '/mentor_availability_rules',
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
             processor: MentorAvailabilityRuleCreateProcessor::class,
         ),
         new Get(
+            uriTemplate: '/mentor_availability_rules/{id}',
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
         ),
         new Patch(
+            uriTemplate: '/mentor_availability_rules/{id}',
             security: "is_granted('ROLE_ADMIN') or object.getMentor() == user",
         ),
         new Delete(
+            uriTemplate: '/mentor_availability_rules/{id}',
             security: "is_granted('ROLE_ADMIN') or object.getMentor() == user",
         ),
     ],

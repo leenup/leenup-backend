@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+namespace DoctrineMigrations;
+
+use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\AbstractMigration;
+
+final class Version20260220135547 extends AbstractMigration
+{
+    public function getDescription(): string
+    {
+        return 'Add mentor availability rule table';
+    }
+
+    public function up(Schema $schema): void
+    {
+        $this->addSql('CREATE TABLE mentor_availability_rule (id SERIAL NOT NULL, mentor_id INT NOT NULL, type VARCHAR(20) NOT NULL, day_of_week INT DEFAULT NULL, start_time TIME(0) WITHOUT TIME ZONE DEFAULT NULL, end_time TIME(0) WITHOUT TIME ZONE DEFAULT NULL, starts_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, ends_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, timezone VARCHAR(64) NOT NULL, is_active BOOLEAN NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, PRIMARY KEY(id))');
+        $this->addSql('CREATE INDEX IDX_D32B1FBADE67B8B ON mentor_availability_rule (mentor_id)');
+        $this->addSql('ALTER TABLE mentor_availability_rule ADD CONSTRAINT FK_D32B1FBADE67B8B FOREIGN KEY (mentor_id) REFERENCES "user" (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE');
+    }
+
+    public function down(Schema $schema): void
+    {
+        $this->addSql('ALTER TABLE mentor_availability_rule DROP CONSTRAINT FK_D32B1FBADE67B8B');
+        $this->addSql('DROP TABLE mentor_availability_rule');
+    }
+}
