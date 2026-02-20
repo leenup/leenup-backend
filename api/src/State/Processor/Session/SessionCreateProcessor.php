@@ -9,6 +9,7 @@ use App\Entity\Session;
 use App\Entity\User;
 use App\Entity\UserSkill;
 use App\Repository\UserSkillRepository;
+use App\Service\AvailabilityGuard;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -23,6 +24,7 @@ final class SessionCreateProcessor implements ProcessorInterface
         private EntityManagerInterface $entityManager,
         private UserSkillRepository $userSkillRepository,
         private Security $security,
+        private AvailabilityGuard $availabilityGuard,
     ) {
     }
 
@@ -93,6 +95,20 @@ final class SessionCreateProcessor implements ProcessorInterface
                     'mentor',
                     $data->getMentor()
                 )
+            ]);
+            throw new ValidationException($violations);
+        }
+
+        if (!$this->availabilityGuard->isDateAvailable($mentor, $data->getScheduledAt(), (int) $data->getDuration())) {
+            $violations = new ConstraintViolationList([
+                new ConstraintViolation(
+                    'This date is not available for the selected mentor',
+                    null,
+                    [],
+                    $data,
+                    'scheduledAt',
+                    $data->getScheduledAt()
+                ),
             ]);
             throw new ValidationException($violations);
         }
