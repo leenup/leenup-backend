@@ -153,7 +153,23 @@ fixtures-load-drop: ## Vide la base et charge les fixtures
 
 ## —— 🧪 Tests et Qualité ———————————————————————————————————————————
 
-test: db-test-reset ## Lance les tests (usage: make test ou make test FILE=tests/Api/Profile/CurrentUserTest.php)
+jwt-keys: ## Génère les clés JWT si absentes (profil dev)
+	@echo "$(YELLOW)🔐 Vérification des clés JWT...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "php bin/console lexik:jwt:generate-keypair --skip-if-exists --no-interaction"
+
+jwt-keys-refresh: ## Régénère les clés JWT (profil dev)
+	@echo "$(YELLOW)♻️ Régénération des clés JWT...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c "php bin/console lexik:jwt:generate-keypair --overwrite --no-interaction"
+
+jwt-keys-test: ## Génère les clés JWT avec APP_ENV=test (recommandé pour les tests)
+	@echo "$(YELLOW)🔐 Vérification des clés JWT (APP_ENV=test)...$(NC)"
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test $(PHP_CONTAINER) sh -c "php bin/console lexik:jwt:generate-keypair --skip-if-exists --no-interaction"
+
+jwt-keys-refresh-test: ## Régénère les clés JWT avec APP_ENV=test (corrige passphrase test)
+	@echo "$(YELLOW)♻️ Régénération des clés JWT (APP_ENV=test)...$(NC)"
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test $(PHP_CONTAINER) sh -c "php bin/console lexik:jwt:generate-keypair --overwrite --no-interaction"
+
+test: jwt-keys-test db-test-reset ## Lance les tests (usage: make test ou make test FILE=tests/Api/Profile/CurrentUserTest.php)
 	@echo "$(YELLOW)🧪 Lancement des tests...$(NC)"
 ifdef FILE
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit $(FILE)
@@ -161,7 +177,7 @@ else
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
 endif
 
-test-parallel: db-test-reset cache-clear ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
+test-parallel: jwt-keys-test db-test-reset cache-clear ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
 	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
 ifdef FILE
 ifdef PROCESSES
@@ -264,6 +280,18 @@ doctor: ## Diagnostic complet du système
 diagnose-local: ## Diagnostic ciblé des erreurs localhost (ERR_CONNECTION_CLOSED)
 	@./scripts/diagnose-local.sh
 
+diagnose-test-500: ## Diagnostic des 500 en test (auth, env effectif, logs)
+	@echo "$(YELLOW)🧪 Diagnostic ciblé des erreurs 500 en test...$(NC)"
+	@echo "$(GREEN)1) Vérification des clés JWT dans le conteneur$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'ls -l config/jwt || true; test -s config/jwt/private.pem && echo "private.pem: OK" || echo "private.pem: MISSING"; test -s config/jwt/public.pem && echo "public.pem: OK" || echo "public.pem: MISSING"'
+	@echo "$(GREEN)2) Vérification de la lecture de la clé privée avec la passphrase courante$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'openssl pkey -in config/jwt/private.pem -passin pass:"$${JWT_PASSPHRASE:-}" -noout >/dev/null 2>&1 && echo "private key load: OK" || echo "private key load: FAIL"'
+	@echo "$(GREEN)3) Variables résolues en APP_ENV=test$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'bin/console debug:container --env-vars --env=test | grep -E "APP_SECRET|JWT_SECRET_KEY|JWT_PUBLIC_KEY|JWT_PASSPHRASE|DATABASE_URL" || true'
+	@echo "$(GREEN)4) Exécution du 1er test d'auth + logs test$(NC)"
+	-$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit tests/Api/Auth/AuthenticationTest.php --filter testLogin
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'tail -n 200 var/log/test.log || true'
+
 ## —— 🧹 Nettoyage ——————————————————————————————————————————————————
 clean: ## Nettoie le cache et les fichiers temporaires
 	@echo "$(YELLOW)🧹 Nettoyage...$(NC)"
@@ -278,7 +306,7 @@ clean-docker: ## Nettoie les ressources Docker inutiles
 clean-all: clean clean-docker ## Nettoyage complet
 
 ## —— 🚀 Installation complète ——————————————————————————————————————
-install: build start db-create migration-migrate db-test-reset ## Installation complète du projet
+install: build start jwt-keys db-create migration-migrate db-test-reset ## Installation complète du projet
 	@echo "$(GREEN)✅ Installation terminée !$(NC)"
 	@echo "$(YELLOW)🌐 Accédez à votre API: https://localhost/docs/$(NC)"
 
