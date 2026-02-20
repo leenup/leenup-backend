@@ -63,11 +63,20 @@ db-drop: ## Supprime la base de données
 db-reset: restart db-drop db-create migration-migrate ## Recrée la base de données à zéro
 	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
 
-db-reset-fixture: restart db-drop db-create migration-migrate fixtures-load ## Recrée la base de données à zéro
-	@echo "$(GREEN)✅ Base de données recréée avec les migrations$(NC)"
+reset-fixtures: db-reset## Vide la DB + migrations + toutes les fixtures
+	@echo "$(RED) fixtures...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:drop --force --if-exists
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:create --if-not-exists
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:migrate --no-interaction
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:fixtures:load --no-interaction
+	@echo "$(GREEN)✅ DB recréée + fixtures rejouées$(NC)"
 
-db-reset-fixtures: db-reset fixtures-load ## Recrée la base de données et charge les fixtures
-	@echo "$(GREEN)✅ Base de données recréée avec les migrations et fixtures$(NC)"
+reset-prod: db-reset## Vide la DB + migrations + seed prod-safe
+	@echo "$(RED) seed prod-safe...$(NC)"
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:database:create --if-not-exists
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console doctrine:migrations:migrate --no-interaction
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console app:seed-reference-data --no-interaction
+	@echo "$(GREEN)✅ DB recréée + seed prod-safe exécuté$(NC)"
 
 migration-diff: ## Génère une nouvelle migration
 	@echo "$(YELLOW)📝 Génération d'une migration...$(NC)"
