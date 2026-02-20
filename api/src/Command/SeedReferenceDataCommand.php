@@ -22,29 +22,35 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class SeedReferenceDataCommand extends Command
 {
     private const CATEGORIES = [
-        'Développement Web',
-        'Développement Mobile',
-        'Design & UX/UI',
-        'Marketing Digital',
-        'Graphisme',
-        'No-Code / Low-Code',
-        'Bases de données',
-        'DevOps & Cloud',
-        'Cybersécurité',
-        'Intelligence Artificielle',
+        'Création & Design',
+        'Outils & Production',
+        'Communication & SoftSkills',
     ];
 
     private const SKILLS_BY_CATEGORY = [
-        'Développement Web' => ['HTML/CSS', 'JavaScript', 'TypeScript', 'React', 'Vue.js', 'Angular', 'Next.js', 'Nuxt.js', 'PHP', 'Symfony', 'Laravel', 'WordPress', 'Node.js', 'Express.js', 'Tailwind CSS', 'Bootstrap'],
-        'Développement Mobile' => ['React Native', 'Flutter', 'Swift (iOS)', 'Kotlin (Android)', 'Ionic'],
-        'Design & UX/UI' => ['UX Design', 'UI Design', 'Design System', 'Wireframing', 'Prototypage', 'Recherche utilisateur', "Architecture de l'information"],
-        'Marketing Digital' => ['SEO', 'SEA (Google Ads)', 'Social Media Marketing', 'Email Marketing', 'Content Marketing', 'Google Analytics', 'Marketing Automation'],
-        'Graphisme' => ['Photoshop', 'Illustrator', 'Figma', 'Adobe XD', 'Sketch', 'InDesign', 'Canva', 'Procreate'],
-        'No-Code / Low-Code' => ['Webflow', 'Bubble', 'Framer', 'Wix', 'Squarespace', 'Zapier', 'Make (Integromat)'],
-        'Bases de données' => ['MySQL', 'PostgreSQL', 'MongoDB', 'Redis', 'SQL', 'Firebase'],
-        'DevOps & Cloud' => ['Docker', 'Kubernetes', 'AWS', 'Azure', 'Google Cloud', 'CI/CD', 'Git / GitHub'],
-        'Cybersécurité' => ['Pentesting', 'Sécurité Web (OWASP)', 'Cryptographie', 'Audit de sécurité'],
-        'Intelligence Artificielle' => ['Machine Learning', 'Python (IA)', 'TensorFlow', 'PyTorch', 'Prompt Engineering', 'ChatGPT / LLMs'],
+        'Création & Design' => [
+            'Graphisme',
+            'UI/UX Design',
+            'Illustration',
+            'Branding',
+            'Edition',
+            'IA Créative',
+        ],
+
+        'Outils & Production' => [
+            'Figma',
+            'Adobe',
+            'Animation',
+            'Notion',
+            'Production',
+        ],
+
+        'Communication & SoftSkills' => [
+            'Prise de parole',
+            'Storytelling',
+            'Rédaction',
+            'Organisation',
+        ],
     ];
 
     /** @var array<int, array<string, mixed>> */
