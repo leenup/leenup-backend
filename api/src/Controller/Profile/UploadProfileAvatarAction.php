@@ -7,10 +7,9 @@ use App\ApiResource\Profile\ProfileAvatarUpload;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Validator\Constraints as Assert;
-use Symfony\Component\Validator\ConstraintViolationList;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 final class UploadProfileAvatarAction
@@ -19,7 +18,6 @@ final class UploadProfileAvatarAction
         private readonly Security $security,
         private readonly ValidatorInterface $validator,
         private readonly EntityManagerInterface $entityManager,
-        private readonly string $uploadProfileDir,
         private readonly string $uploadProfilePublicPath,
     ) {
     }
@@ -48,23 +46,17 @@ final class UploadProfileAvatarAction
         }
 
         if (!$file instanceof UploadedFile) {
-            throw new ValidationException(new ConstraintViolationList());
+            throw new \LogicException('Expected an uploaded file.');
         }
 
-        if (!is_dir($this->uploadProfileDir)) {
-            mkdir($this->uploadProfileDir, 0775, true);
-        }
-
-        $extension = $file->guessExtension() ?: $file->getClientOriginalExtension() ?: 'bin';
-        $filename = sprintf('%s.%s', bin2hex(random_bytes(16)), $extension);
-
-        $file->move($this->uploadProfileDir, $filename);
+        $user->setAvatarFile($file);
+        $this->entityManager->flush();
 
         $avatarUrl = sprintf(
             '%s%s/%s',
             $request->getSchemeAndHttpHost(),
             rtrim($this->uploadProfilePublicPath, '/'),
-            $filename
+            $user->getAvatarName()
         );
 
         $user->setAvatarUrl($avatarUrl);

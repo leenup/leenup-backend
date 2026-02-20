@@ -3,7 +3,6 @@
 
 parameters:
     app.jwt_cookie_secure: '%env(bool:JWT_COOKIE_SECURE)%'
-    app.upload_profile_dir: '%kernel.project_dir%/public/upload/profile'
     app.upload_profile_public_path: '/upload/profile'
     
 services:
@@ -32,7 +31,6 @@ services:
 
     App\Controller\Profile\UploadProfileAvatarAction:
         bind:
-            $uploadProfileDir: '%app.upload_profile_dir%'
             $uploadProfilePublicPath: '%app.upload_profile_public_path%'
 
     App\State\Processor\UserSkill\UserSkillProcessor:
