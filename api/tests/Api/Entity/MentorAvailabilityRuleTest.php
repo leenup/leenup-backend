@@ -4,6 +4,7 @@ namespace App\Tests\Api\Entity;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Entity\MentorAvailabilityRule;
+use App\Entity\User;
 use App\Factory\MentorAvailabilityRuleFactory;
 use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -20,6 +21,7 @@ class MentorAvailabilityRuleTest extends ApiTestCase
 
     private HttpClientInterface $studentClient;
     private string $studentCsrfToken;
+    private User $student;
 
     protected function setUp(): void
     {
@@ -38,6 +40,7 @@ class MentorAvailabilityRuleTest extends ApiTestCase
         [
             $this->studentClient,
             $this->studentCsrfToken,
+            $this->student,
         ] = $this->createAuthenticatedUser(
             email: $this->uniqueEmail('student-availability'),
             password: 'password',
@@ -108,5 +111,46 @@ class MentorAvailabilityRuleTest extends ApiTestCase
         self::assertSame(200, $response->getStatusCode());
         $data = $response->toArray(false);
         self::assertNotEmpty($data['member'] ?? []);
+    }
+
+    public function testExclusionRuleRemovesMatchingSlots(): void
+    {
+        $startsAt = new \DateTimeImmutable('+2 days 17:00');
+        $endsAt = $startsAt->modify('+2 hours');
+
+        MentorAvailabilityRuleFactory::createOne([
+            'mentor' => $this->mentor,
+            'type' => MentorAvailabilityRule::TYPE_ONE_SHOT,
+            'startsAt' => $startsAt,
+            'endsAt' => $endsAt,
+        ]);
+
+        MentorAvailabilityRuleFactory::createOne([
+            'mentor' => $this->mentor,
+            'type' => MentorAvailabilityRule::TYPE_EXCLUSION,
+            'startsAt' => $startsAt->modify('+1 hour'),
+            'endsAt' => $startsAt->modify('+2 hours'),
+        ]);
+
+        $from = $startsAt->modify('-30 minutes')->format(\DateTimeInterface::ATOM);
+        $to = $endsAt->modify('+30 minutes')->format(\DateTimeInterface::ATOM);
+
+        $response = $this->mentorClient->request('GET', sprintf('/mentors/%d/available-slots?from=%s&to=%s&duration=60', $this->mentor->getId(), urlencode($from), urlencode($to)));
+
+        self::assertSame(200, $response->getStatusCode());
+        $data = $response->toArray(false);
+
+        $starts = array_map(static fn (array $slot): string => $slot['startAt'] ?? '', $data['member'] ?? []);
+        self::assertContains($startsAt->format(\DateTimeInterface::ATOM), $starts);
+        self::assertNotContains($startsAt->modify('+1 hour')->format(\DateTimeInterface::ATOM), $starts);
+    }
+
+    public function testGetAvailableSlotsReturnsEmptyForNonMentor(): void
+    {
+        $response = $this->studentClient->request('GET', sprintf('/mentors/%d/available-slots', $this->student->getId()));
+
+        self::assertSame(200, $response->getStatusCode());
+        $data = $response->toArray(false);
+        self::assertSame(0, $data['totalItems'] ?? 0);
     }
 }

@@ -33,7 +33,7 @@ final class DefaultSessionsStory extends Story
             'student' => $user,
             'skill' => $reactSkill,
             'status' => Session::STATUS_CONFIRMED,
-            'scheduledAt' => new \DateTimeImmutable('+2 days 14:00'),
+            'scheduledAt' => $this->nextMondayAt(17, 0),
             'duration' => 60,
             'location' => 'Zoom',
             'notes' => 'Introduction à React - Composants et Props',
@@ -44,7 +44,7 @@ final class DefaultSessionsStory extends Story
             'student' => $user,
             'skill' => $figmaSkill,
             'status' => Session::STATUS_PENDING,
-            'scheduledAt' => new \DateTimeImmutable('+5 days 10:00'),
+            'scheduledAt' => $this->nextMondayAt(19, 0),
             'duration' => 90,
             'location' => 'Google Meet',
             'notes' => 'Bases de Figma pour débutants',
@@ -55,7 +55,7 @@ final class DefaultSessionsStory extends Story
             'student' => $thomas,
             'skill' => $seoSkill,
             'status' => Session::STATUS_COMPLETED,
-            'scheduledAt' => new \DateTimeImmutable('-3 days'),
+            'scheduledAt' => $this->nextMondayAt(17, 0)->modify('-7 days'),
             'duration' => 60,
             'location' => 'Zoom',
             'notes' => 'SEO avancé - Optimisation on-page',
@@ -66,7 +66,7 @@ final class DefaultSessionsStory extends Story
             'student' => $sarah,
             'skill' => $phpSkill,
             'status' => Session::STATUS_CONFIRMED,
-            'scheduledAt' => new \DateTimeImmutable('+1 week 16:00'),
+            'scheduledAt' => $this->nextMondayAt(19, 0)->modify('+7 days'),
             'duration' => 120,
             'location' => 'En personne - Paris',
             'notes' => 'Symfony avancé - Doctrine et performances',
@@ -77,19 +77,21 @@ final class DefaultSessionsStory extends Story
             'student' => $marc,
             'skill' => $uxSkill,
             'status' => Session::STATUS_CANCELLED,
-            'scheduledAt' => new \DateTimeImmutable('-1 day'),
+            'scheduledAt' => $this->nextMondayAt(17, 0)->modify('-14 days'),
             'duration' => 60,
             'location' => 'Discord',
             'notes' => 'Session annulée par le mentor',
         ]);
 
         SessionFactory::createMany(15, function() {
+            $hour = self::faker()->randomElement([17, 19]);
             return [
                 'status' => self::faker()->randomElement([
                     Session::STATUS_PENDING,
                     Session::STATUS_CONFIRMED,
                     Session::STATUS_COMPLETED,
                 ]),
+                'scheduledAt' => $this->nextMondayAt($hour, 0)->modify(sprintf('+%d days', self::faker()->numberBetween(0, 56))),
             ];
         });
 
@@ -99,5 +101,11 @@ final class DefaultSessionsStory extends Story
     private static function faker()
     {
         return \Faker\Factory::create();
+    }
+
+    private function nextMondayAt(int $hour, int $minute): \DateTimeImmutable
+    {
+        return (new \DateTimeImmutable('next monday'))
+            ->setTime($hour, $minute);
     }
 }
