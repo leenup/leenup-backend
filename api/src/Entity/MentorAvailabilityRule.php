@@ -62,7 +62,7 @@ class MentorAvailabilityRule
     private ?int $id = null;
 
     #[ORM\ManyToOne(inversedBy: 'mentorAvailabilityRules')]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     #[Groups(['availability:read'])]
     private ?User $mentor = null;
 
