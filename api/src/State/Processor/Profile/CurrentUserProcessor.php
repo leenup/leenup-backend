@@ -85,13 +85,6 @@ final class CurrentUserProcessor implements ProcessorInterface
             $user->setLastName($data->lastName);
             $hasChanges = true;
         }
-
-        // AvatarUrl
-        if ($data->avatarUrl !== null && $data->avatarUrl !== $user->getAvatarUrl()) {
-            $user->setAvatarUrl($data->avatarUrl);
-            $hasChanges = true;
-        }
-
         // Bio
         if ($data->bio !== null && $data->bio !== $user->getBio()) {
             $user->setBio($data->bio);
