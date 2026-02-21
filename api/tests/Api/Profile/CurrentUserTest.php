@@ -638,8 +638,7 @@ class CurrentUserTest extends ApiTestCase
 
 
 
-
-    public function testUploadAvatarWithPatchIsNotAllowed(): void
+    public function testUploadAvatarWithPatchSuccessfully(): void
     {
         $tmpFile = tempnam(sys_get_temp_dir(), 'avatar_patch_');
         file_put_contents($tmpFile, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2ioAAAAASUVORK5CYII='));
@@ -653,7 +652,9 @@ class CurrentUserTest extends ApiTestCase
                 ],
             ]);
 
-            $this->assertContains($response->getStatusCode(), [404, 405]);
+            $this->assertResponseStatusCodeSame(200);
+            $data = $response->toArray(false);
+            $this->assertStringStartsWith('/upload/profile/', (string) $data['avatarUrl']);
         } finally {
             @unlink($tmpFile);
         }

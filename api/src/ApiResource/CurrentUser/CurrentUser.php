@@ -50,6 +50,29 @@ use Symfony\Component\HttpFoundation\Response;
             inputFormats: ['multipart' => ['multipart/form-data']],
             outputFormats: ['jsonld' => ['application/ld+json']],
         ),
+
+        new Patch(
+            uriTemplate: '/me/avatar',
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityMessage: 'You must be authenticated to upload an avatar.',
+            controller: UploadProfileAvatarAction::class,
+            deserialize: false,
+            validate: false,
+            status: Response::HTTP_OK,
+            inputFormats: ['multipart' => ['multipart/form-data']],
+            outputFormats: ['jsonld' => ['application/ld+json']],
+        ),
+        new Post(
+            uriTemplate: '/me/avatar',
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityMessage: 'You must be authenticated to upload an avatar.',
+            controller: UploadProfileAvatarAction::class,
+            deserialize: false,
+            validate: false,
+            status: Response::HTTP_OK,
+            inputFormats: ['multipart' => ['multipart/form-data']],
+            outputFormats: ['jsonld' => ['application/ld+json']],
+        ),
     ],
     normalizationContext: ['groups' => ['user:read', 'my_skill:read']],
     denormalizationContext: ['groups' => ['user:update']],
@@ -76,7 +99,9 @@ class CurrentUser
     #[Assert\Length(min: 2, max: 100)]
     #[Groups(['user:read', 'user:update'])]
     public ?string $lastName = null;
-    #[Groups(['user:read'])]
+
+    #[Assert\Url]
+    #[Groups(['user:read', 'user:update'])]
     public ?string $avatarUrl = null;
 
     #[Assert\Length(max: 500)]
