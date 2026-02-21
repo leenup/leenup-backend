@@ -686,8 +686,10 @@ class UserTest extends ApiTestCase
         ]);
     }
 
-    public function testUpdateUserAvatarUrlInvalid(): void
+    public function testUpdateUserAvatarUrlInvalidIsIgnored(): void
     {
+        $before = $this->userTarget->getAvatarUrl();
+
         $response = $this->requestUnsafe(
             $this->adminClient,
             'PATCH',
@@ -699,11 +701,9 @@ class UserTest extends ApiTestCase
             ],
         );
 
-        self::assertSame(422, $response->getStatusCode());
-        $this->assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [['propertyPath' => 'avatarUrl']],
-        ]);
+        self::assertSame(200, $response->getStatusCode());
+        $data = $response->toArray(false);
+        self::assertSame($before, $data['avatarUrl'] ?? null);
     }
 
     // ==================== DELETE /users/{id} ====================
