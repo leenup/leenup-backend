@@ -591,6 +591,86 @@ class CurrentUserTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(401);
     }
 
+
+    // ==================== POST /me/avatar ====================
+
+    public function testUploadAvatarSuccessfully(): void
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'avatar_');
+        file_put_contents($tmpFile, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2ioAAAAASUVORK5CYII='));
+
+        try {
+            $response = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
+                'body' => [
+                    'file' => fopen($tmpFile, 'rb'),
+                ],
+            ]);
+
+            $this->assertResponseStatusCodeSame(200);
+            $this->assertJsonContains(['@type' => 'User']);
+
+            $data = $response->toArray(false);
+            $this->assertArrayHasKey('avatarUrl', $data);
+            $this->assertStringStartsWith('/upload/profile/', (string) $data['avatarUrl']);
+
+            $this->user = self::getContainer()->get('doctrine')->getRepository(User::class)->find($this->user->getId());
+            $this->assertNotNull($this->user->getAvatarFileName());
+        } finally {
+            @unlink($tmpFile);
+        }
+    }
+
+    public function testUploadAvatarFailsWithoutFile(): void
+    {
+        $response = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
+            'body' => [],
+        ]);
+
+        $this->assertResponseStatusCodeSame(400);
+        $this->assertJsonContains([
+            'detail' => 'The "file" field is required and must be a valid uploaded file.',
+        ]);
+    }
+
+    public function testUploadAvatarFailsWithoutAuthentication(): void
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'avatar_');
+        file_put_contents($tmpFile, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2ioAAAAASUVORK5CYII='));
+
+        try {
+            static::createClient()->request('POST', '/me/avatar', [
+                'body' => [
+                    'file' => fopen($tmpFile, 'rb'),
+                ],
+            ]);
+
+            $this->assertResponseStatusCodeSame(401);
+        } finally {
+            @unlink($tmpFile);
+        }
+    }
+
+    public function testUploadAvatarFailsForInvalidFileType(): void
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'avatar_txt_');
+        file_put_contents($tmpFile, 'not an image');
+
+        try {
+            $response = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
+                'body' => [
+                    'file' => fopen($tmpFile, 'rb'),
+                ],
+            ]);
+
+            $this->assertResponseStatusCodeSame(422);
+            $this->assertJsonContains([
+                '@type' => 'Error',
+            ]);
+        } finally {
+            @unlink($tmpFile);
+        }
+    }
+
     // ==================== DELETE /me ====================
 
     public function testDeleteCurrentUserAccount(): void

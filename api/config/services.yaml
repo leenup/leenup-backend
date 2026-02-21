@@ -19,6 +19,11 @@ services:
             - '../src/Entity/'
             - '../src/Kernel.php'
     
+
+    App\Controller\:
+        resource: ../src/Controller/
+        tags: ['controller.service_arguments']
+
     App\State\UserPasswordHasher:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'
