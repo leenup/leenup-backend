@@ -336,7 +336,7 @@ class CurrentUserTest extends ApiTestCase
         $this->assertJsonContains(['locale' => 'en']);
     }
 
-    public function testUpdateCurrentUserAvatarUrl(): void
+    public function testUpdateCurrentUserAvatarUrlIsIgnoredInPatchMe(): void
     {
         $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['avatarUrl' => 'https://example.com/avatar.jpg'],
@@ -344,7 +344,11 @@ class CurrentUserTest extends ApiTestCase
         ]);
 
         $this->assertResponseIsSuccessful();
-        $this->assertJsonContains(['avatarUrl' => 'https://example.com/avatar.jpg']);
+
+        $response = $this->client->request('GET', '/me');
+        $data = $response->toArray(false);
+
+        $this->assertNull($data['avatarUrl']);
     }
 
     public function testUpdateMultipleFieldsAtOnce(): void
@@ -490,14 +494,19 @@ class CurrentUserTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(422);
     }
 
-    public function testUpdateCurrentUserAvatarUrlWithInvalidUrl(): void
+    public function testUpdateCurrentUserAvatarUrlWithInvalidUrlIsIgnored(): void
     {
         $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['avatarUrl' => 'not-a-valid-url'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
+        $this->assertResponseIsSuccessful();
+
+        $response = $this->client->request('GET', '/me');
+        $data = $response->toArray(false);
+
+        $this->assertNull($data['avatarUrl']);
     }
 
     public function testUpdateCurrentUserBioTooLong(): void
@@ -615,6 +624,28 @@ class CurrentUserTest extends ApiTestCase
 
             $this->user = self::getContainer()->get('doctrine')->getRepository(User::class)->find($this->user->getId());
             $this->assertNotNull($this->user->getAvatarFileName());
+        } finally {
+            @unlink($tmpFile);
+        }
+    }
+
+
+
+    public function testUploadAvatarWithPatchSuccessfully(): void
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'avatar_patch_');
+        file_put_contents($tmpFile, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2ioAAAAASUVORK5CYII='));
+
+        try {
+            $response = $this->requestUnsafe($this->client, 'PATCH', '/me/avatar', $this->csrfToken, [
+                'body' => [
+                    'file' => fopen($tmpFile, 'rb'),
+                ],
+            ]);
+
+            $this->assertResponseStatusCodeSame(200);
+            $data = $response->toArray(false);
+            $this->assertStringStartsWith('/upload/profile/', (string) $data['avatarUrl']);
         } finally {
             @unlink($tmpFile);
         }
