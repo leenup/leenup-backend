@@ -11,6 +11,7 @@ use App\Factory\SkillFactory;
 use App\Factory\UserFactory;
 use App\Factory\UserSkillFactory;
 use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Zenstruck\Foundry\Test\Factories;
 
@@ -336,15 +337,21 @@ class CurrentUserTest extends ApiTestCase
         $this->assertJsonContains(['locale' => 'en']);
     }
 
-    public function testUpdateCurrentUserAvatarUrl(): void
+    public function testUpdateCurrentUserAvatarUrlIsIgnoredInPatchMe(): void
     {
+        $before = $this->user->getAvatarUrl();
+
         $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['avatarUrl' => 'https://example.com/avatar.jpg'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
         $this->assertResponseIsSuccessful();
-        $this->assertJsonContains(['avatarUrl' => 'https://example.com/avatar.jpg']);
+
+        $response = $this->client->request('GET', '/me');
+        $data = $response->toArray(false);
+
+        $this->assertSame($before, $data['avatarUrl'] ?? null);
     }
 
     public function testUpdateMultipleFieldsAtOnce(): void
@@ -490,14 +497,21 @@ class CurrentUserTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(422);
     }
 
-    public function testUpdateCurrentUserAvatarUrlWithInvalidUrl(): void
+    public function testUpdateCurrentUserAvatarUrlWithInvalidUrlIsIgnored(): void
     {
+        $before = $this->user->getAvatarUrl();
+
         $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
             'json' => ['avatarUrl' => 'not-a-valid-url'],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
-        $this->assertResponseStatusCodeSame(422);
+        $this->assertResponseIsSuccessful();
+
+        $response = $this->client->request('GET', '/me');
+        $data = $response->toArray(false);
+
+        $this->assertSame($before, $data['avatarUrl'] ?? null);
     }
 
     public function testUpdateCurrentUserBioTooLong(): void
@@ -589,6 +603,113 @@ class CurrentUserTest extends ApiTestCase
         ]);
 
         $this->assertResponseStatusCodeSame(401);
+    }
+
+
+    // ==================== POST /me/avatar ====================
+
+    public function testUploadAvatarSuccessfully(): void
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'avatar_');
+        file_put_contents($tmpFile, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2ioAAAAASUVORK5CYII='));
+
+        try {
+            $response = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
+                'extra' => [
+                    'files' => [
+                        'file' => new UploadedFile($tmpFile, 'avatar.png', 'image/png', null, true),
+                    ],
+                ],
+            ]);
+
+            $this->assertResponseStatusCodeSame(200);
+            $data = $response->toArray(false);
+            $this->assertArrayHasKey('id', $data);
+            $this->assertArrayHasKey('email', $data);
+            $this->assertArrayHasKey('avatarUrl', $data);
+            $this->assertStringStartsWith('/upload/profile/', (string) $data['avatarUrl']);
+
+            $this->user = self::getContainer()->get('doctrine')->getRepository(User::class)->find($this->user->getId());
+            $this->assertNotNull($this->user->getAvatarFileName());
+        } finally {
+            @unlink($tmpFile);
+        }
+    }
+
+
+
+
+    public function testUploadAvatarWithPatchIsNotAllowed(): void
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'avatar_patch_');
+        file_put_contents($tmpFile, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2ioAAAAASUVORK5CYII='));
+
+        try {
+            $response = $this->requestUnsafe($this->client, 'PATCH', '/me/avatar', $this->csrfToken, [
+                'extra' => [
+                    'files' => [
+                        'file' => new UploadedFile($tmpFile, 'avatar-patch.png', 'image/png', null, true),
+                    ],
+                ],
+            ]);
+
+            $this->assertContains($response->getStatusCode(), [404, 405]);
+        } finally {
+            @unlink($tmpFile);
+        }
+    }
+
+    public function testUploadAvatarFailsWithoutFile(): void
+    {
+        $response = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken);
+
+        $this->assertResponseStatusCodeSame(400);
+        $this->assertJsonContains([
+            'detail' => 'The "file" field is required and must be a valid uploaded file.',
+        ]);
+    }
+
+    public function testUploadAvatarFailsWithoutAuthentication(): void
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'avatar_');
+        file_put_contents($tmpFile, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z2ioAAAAASUVORK5CYII='));
+
+        try {
+            static::createClient()->request('POST', '/me/avatar', [
+                'extra' => [
+                    'files' => [
+                        'file' => new UploadedFile($tmpFile, 'avatar-no-auth.png', 'image/png', null, true),
+                    ],
+                ],
+            ]);
+
+            $this->assertResponseStatusCodeSame(401);
+        } finally {
+            @unlink($tmpFile);
+        }
+    }
+
+    public function testUploadAvatarFailsForInvalidFileType(): void
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'avatar_txt_');
+        file_put_contents($tmpFile, 'not an image');
+
+        try {
+            $response = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
+                'extra' => [
+                    'files' => [
+                        'file' => new UploadedFile($tmpFile, 'avatar.txt', 'text/plain', null, true),
+                    ],
+                ],
+            ]);
+
+            $this->assertResponseStatusCodeSame(422);
+            $this->assertJsonContains([
+                '@type' => 'Error',
+            ]);
+        } finally {
+            @unlink($tmpFile);
+        }
     }
 
     // ==================== DELETE /me ====================
