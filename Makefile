@@ -118,7 +118,7 @@ db-test-drop: ## Supprime la base de données de test
 
 db-test-migrate: ## Applique les migrations sur la BD de test
 	@echo "$(YELLOW)🔄 Application des migrations sur la BD de test...$(NC)"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" bin/console doctrine:migrations:migrate --no-interaction'
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) sh -c 'DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" bin/console doctrine:migrations:migrate --no-interaction'
 	@echo "$(GREEN)✅ Migrations appliquées sur la BD de test$(NC)"
 
 db-test-reset: db-test-drop db-test-create db-test-migrate ## Recrée la base de test à zéro
@@ -181,24 +181,24 @@ jwt-keys-refresh-test: ## Régénère les clés JWT avec APP_ENV=test (corrige p
 test: jwt-keys-test db-test-reset ## Lance les tests (usage: make test ou make test FILE=tests/Api/Profile/CurrentUserTest.php)
 	@echo "$(YELLOW)🧪 Lancement des tests...$(NC)"
 ifdef FILE
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit $(FILE)
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) bin/phpunit $(FILE)
 else
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) bin/phpunit
 endif
 
 test-parallel: jwt-keys-test db-test-reset cache-clear ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
 	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
 ifdef FILE
 ifdef PROCESSES
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES) $(FILE)
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES) $(FILE)
 else
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest $(FILE)
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest $(FILE)
 endif
 else
 ifdef PROCESSES
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES)
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES)
 else
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest
 endif
 endif
 
