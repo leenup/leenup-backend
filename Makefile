@@ -172,7 +172,7 @@ jwt-keys-refresh: ## Régénère les clés JWT (profil dev)
 
 jwt-keys-test: ## Génère les clés JWT avec APP_ENV=test (recommandé pour les tests)
 	@echo "$(YELLOW)🔐 Vérification des clés JWT (APP_ENV=test)...$(NC)"
-	$(DOCKER_COMPOSE) exec -e APP_ENV=test $(PHP_CONTAINER) sh -c "mkdir -p config/jwt/test && php bin/console lexik:jwt:generate-keypair --skip-if-exists --no-interaction"
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test $(PHP_CONTAINER) sh -c "mkdir -p config/jwt/test && php bin/console lexik:jwt:generate-keypair --overwrite --no-interaction"
 
 jwt-keys-refresh-test: ## Régénère les clés JWT avec APP_ENV=test (corrige passphrase test)
 	@echo "$(YELLOW)♻️ Régénération des clés JWT (APP_ENV=test)...$(NC)"
