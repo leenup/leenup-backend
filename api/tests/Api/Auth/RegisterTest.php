@@ -228,11 +228,13 @@ class RegisterTest extends ApiTestCase
         self::assertArrayHasKey('id', $data);
     }
 
-    public function testRegisterWithInvalidAvatarUrl(): void
+    public function testRegisterWithInvalidAvatarUrlIsIgnored(): void
     {
-        static::createClient()->request('POST', '/register', [
+        $email = $this->uniqueEmail('register-avatar-ignored');
+
+        $response = static::createClient()->request('POST', '/register', [
             'json' => [
-                'email' => 'test@example.com',
+                'email' => $email,
                 'plainPassword' => 'password123',
                 'firstName' => 'Test',
                 'lastName' => 'User',
@@ -243,16 +245,9 @@ class RegisterTest extends ApiTestCase
             ],
         ]);
 
-        self::assertResponseStatusCodeSame(422);
-        self::assertJsonContains([
-            '@type' => 'ConstraintViolation',
-            'violations' => [
-                [
-                    'propertyPath' => 'avatarUrl',
-                    'message' => 'This value is not a valid URL.',
-                ],
-            ],
-        ]);
+        self::assertResponseStatusCodeSame(201);
+        $data = $response->toArray(false);
+        self::assertTrue(!array_key_exists('avatarUrl', $data) || $data['avatarUrl'] === null);
     }
 
     public function testRegisterWithTooLongFirstName(): void

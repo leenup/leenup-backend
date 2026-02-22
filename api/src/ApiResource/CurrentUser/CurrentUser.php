@@ -6,11 +6,14 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
 use App\State\Processor\Profile\CurrentUserProcessor;
 use App\State\Processor\Profile\CurrentUserRemoveProcessor;
 use App\State\Provider\Profile\CurrentUserProvider;
+use App\Controller\UploadProfileAvatarAction;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\HttpFoundation\Response;
 
 #[ApiResource(
     shortName: 'User',
@@ -35,6 +38,17 @@ use Symfony\Component\Validator\Constraints as Assert;
             securityMessage: 'You must be authenticated to delete your account.',
             provider: CurrentUserProvider::class,
             processor: CurrentUserRemoveProcessor::class,
+        ),
+        new Post(
+            uriTemplate: '/me/avatar',
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityMessage: 'You must be authenticated to upload an avatar.',
+            controller: UploadProfileAvatarAction::class,
+            deserialize: false,
+            validate: false,
+            status: Response::HTTP_OK,
+            inputFormats: ['multipart' => ['multipart/form-data']],
+            outputFormats: ['jsonld' => ['application/ld+json']],
         ),
     ],
     normalizationContext: ['groups' => ['user:read', 'my_skill:read']],
@@ -63,7 +77,14 @@ class CurrentUser
     #[Groups(['user:read', 'user:update'])]
     public ?string $lastName = null;
 
-    #[Assert\Url]
+    #[Assert\AtLeastOneOf(
+        constraints: [
+            new Assert\Url(),
+            new Assert\Regex(pattern: '#^/upload/#', message: 'Avatar URL must be a valid URL or an uploaded file path.')
+        ],
+        includeInternalMessages: false,
+        message: 'This value is not a valid URL.'
+    )]
     #[Groups(['user:read', 'user:update'])]
     public ?string $avatarUrl = null;
 

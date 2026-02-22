@@ -34,3 +34,9 @@
 /phpunit.xml
 .phpunit.result.cache
 ###< phpunit/phpunit ###
+
+# uploads runtime
+/public/upload/**
+!/public/upload/profile/
+!/public/upload/profile/.gitkeep
+

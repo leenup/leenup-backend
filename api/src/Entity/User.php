@@ -21,10 +21,13 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\HttpFoundation\File\File;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
+use Vich\UploaderBundle\Mapping\Annotation as Vich;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: '`user`')]
@@ -89,6 +92,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     denormalizationContext: ['groups' => ['user:create', 'user:update:admin']],
     security: "is_granted('ROLE_ADMIN')",
 )]
+#[Vich\Uploadable]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
@@ -139,9 +143,23 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?string $lastName = null;
 
     #[ORM\Column(length: 500, nullable: true)]
-    #[Assert\Url]
+    #[Assert\AtLeastOneOf(
+        constraints: [
+            new Assert\Url(),
+            new Assert\Regex(pattern: '#^/upload/#', message: 'Avatar URL must be a valid URL or an uploaded file path.')
+        ],
+        includeInternalMessages: false,
+        message: 'This value is not a valid URL.'
+    )]
     #[Groups(['user:read', 'user:create', 'user:update'])]
     private ?string $avatarUrl = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $avatarFileName = null;
+
+    #[Vich\UploadableField(mapping: 'profile_images', fileNameProperty: 'avatarFileName')]
+    #[Assert\Image(maxSize: '5M')]
+    private ?File $avatarFile = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Assert\Length(
@@ -418,6 +436,34 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setAvatarUrl(?string $avatarUrl): static
     {
         $this->avatarUrl = $avatarUrl;
+
+        return $this;
+    }
+
+    public function getAvatarFileName(): ?string
+    {
+        return $this->avatarFileName;
+    }
+
+    public function setAvatarFileName(?string $avatarFileName): static
+    {
+        $this->avatarFileName = $avatarFileName;
+
+        return $this;
+    }
+
+    public function getAvatarFile(): ?File
+    {
+        return $this->avatarFile;
+    }
+
+    public function setAvatarFile(?File $avatarFile): static
+    {
+        $this->avatarFile = $avatarFile;
+
+        if ($avatarFile instanceof UploadedFile) {
+            $this->updatedAt = new \DateTimeImmutable();
+        }
 
         return $this;
     }
