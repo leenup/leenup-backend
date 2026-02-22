@@ -118,7 +118,7 @@ db-test-drop: ## Supprime la base de données de test
 
 db-test-migrate: ## Applique les migrations sur la BD de test
 	@echo "$(YELLOW)🔄 Application des migrations sur la BD de test...$(NC)"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" bin/console doctrine:migrations:migrate --no-interaction'
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) sh -c 'DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app_test?serverVersion=16&charset=utf8" bin/console doctrine:migrations:migrate --no-interaction'
 	@echo "$(GREEN)✅ Migrations appliquées sur la BD de test$(NC)"
 
 db-test-reset: db-test-drop db-test-create db-test-migrate ## Recrée la base de test à zéro
@@ -172,33 +172,33 @@ jwt-keys-refresh: ## Régénère les clés JWT (profil dev)
 
 jwt-keys-test: ## Génère les clés JWT avec APP_ENV=test (recommandé pour les tests)
 	@echo "$(YELLOW)🔐 Vérification des clés JWT (APP_ENV=test)...$(NC)"
-	$(DOCKER_COMPOSE) exec -e APP_ENV=test $(PHP_CONTAINER) sh -c "php bin/console lexik:jwt:generate-keypair --skip-if-exists --no-interaction"
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test $(PHP_CONTAINER) sh -c "mkdir -p config/jwt/test && php bin/console lexik:jwt:generate-keypair --overwrite --no-interaction"
 
 jwt-keys-refresh-test: ## Régénère les clés JWT avec APP_ENV=test (corrige passphrase test)
 	@echo "$(YELLOW)♻️ Régénération des clés JWT (APP_ENV=test)...$(NC)"
-	$(DOCKER_COMPOSE) exec -e APP_ENV=test $(PHP_CONTAINER) sh -c "php bin/console lexik:jwt:generate-keypair --overwrite --no-interaction"
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test $(PHP_CONTAINER) sh -c "mkdir -p config/jwt/test && php bin/console lexik:jwt:generate-keypair --overwrite --no-interaction"
 
 test: jwt-keys-test db-test-reset ## Lance les tests (usage: make test ou make test FILE=tests/Api/Profile/CurrentUserTest.php)
 	@echo "$(YELLOW)🧪 Lancement des tests...$(NC)"
 ifdef FILE
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit $(FILE)
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) bin/phpunit $(FILE)
 else
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/phpunit
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) bin/phpunit
 endif
 
 test-parallel: jwt-keys-test db-test-reset cache-clear ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
 	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
 ifdef FILE
 ifdef PROCESSES
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES) $(FILE)
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES) $(FILE)
 else
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest $(FILE)
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest $(FILE)
 endif
 else
 ifdef PROCESSES
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES)
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES)
 else
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) vendor/bin/paratest
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest
 endif
 endif
 
@@ -292,9 +292,9 @@ diagnose-local: ## Diagnostic ciblé des erreurs localhost (ERR_CONNECTION_CLOSE
 diagnose-test-500: ## Diagnostic des 500 en test (auth, env effectif, logs)
 	@echo "$(YELLOW)🧪 Diagnostic ciblé des erreurs 500 en test...$(NC)"
 	@echo "$(GREEN)1) Vérification des clés JWT dans le conteneur$(NC)"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'ls -l config/jwt || true; test -s config/jwt/private.pem && echo "private.pem: OK" || echo "private.pem: MISSING"; test -s config/jwt/public.pem && echo "public.pem: OK" || echo "public.pem: MISSING"'
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'ls -l config/jwt || true; test -s config/jwt/test/private.pem && echo "test/private.pem: OK" || echo "test/private.pem: MISSING"; test -s config/jwt/test/public.pem && echo "test/public.pem: OK" || echo "test/public.pem: MISSING"'
 	@echo "$(GREEN)2) Vérification de la lecture de la clé privée avec la passphrase courante$(NC)"
-	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'openssl pkey -in config/jwt/private.pem -passin pass:"$${JWT_PASSPHRASE:-}" -noout >/dev/null 2>&1 && echo "private key load: OK" || echo "private key load: FAIL"'
+	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'openssl pkey -in config/jwt/test/private.pem -passin pass:"$${JWT_PASSPHRASE:-}" -noout >/dev/null 2>&1 && echo "private key load: OK" || echo "private key load: FAIL"'
 	@echo "$(GREEN)3) Variables résolues en APP_ENV=test$(NC)"
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) sh -c 'bin/console debug:container --env-vars --env=test | grep -E "APP_SECRET|JWT_SECRET_KEY|JWT_PUBLIC_KEY|JWT_PASSPHRASE|DATABASE_URL" || true'
 	@echo "$(GREEN)4) Exécution du 1er test d'auth + logs test$(NC)"
