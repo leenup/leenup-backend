@@ -31,3 +31,13 @@ services:
     App\State\Processor\UserSkill\UserSkillProcessor:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'
+
+
+    App\Serializer\MultipartDecoder:
+        tags: [ 'serializer.encoder' ]
+
+    App\Serializer\MediaObjectNormalizer:
+        arguments:
+            $normalizer: '@api_platform.jsonld.normalizer.item'
+        tags:
+            - { name: 'serializer.normalizer', priority: 64 }

@@ -63,7 +63,10 @@ class CurrentUser
     #[Groups(['user:read', 'user:update'])]
     public ?string $lastName = null;
 
-    #[Assert\Url]
+    #[Assert\Regex(
+        pattern: '#^(https?://.+|/upload/.+)$#',
+        message: 'This value is not a valid URL.'
+    )]
     #[Groups(['user:read', 'user:update'])]
     public ?string $avatarUrl = null;
 

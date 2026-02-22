@@ -336,6 +336,47 @@ class CurrentUserTest extends ApiTestCase
         $this->assertJsonContains(['locale' => 'en']);
     }
 
+
+    public function testUpdateCurrentUserAvatarUrlFromUploadedMedia(): void
+    {
+        $filePath = tempnam(sys_get_temp_dir(), 'avatar_profile_');
+        file_put_contents($filePath, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7ZxWQAAAAASUVORK5CYII='));
+
+        $uploadedFile = new \Symfony\Component\HttpFoundation\File\UploadedFile(
+            $filePath,
+            'profile.png',
+            'image/png',
+            null,
+            true
+        );
+
+        $uploadResponse = $this->requestUnsafe($this->client, 'POST', '/media_objects', $this->csrfToken, [
+            'headers' => ['Content-Type' => 'multipart/form-data'],
+            'extra' => [
+                'parameters' => [
+                    'directory' => 'profile',
+                ],
+                'files' => [
+                    'file' => $uploadedFile,
+                ],
+            ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(201);
+
+        $contentUrl = $uploadResponse->toArray(false)['contentUrl'];
+
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
+            'json' => ['avatarUrl' => $contentUrl],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains(['avatarUrl' => $contentUrl]);
+
+        @unlink($filePath);
+    }
+
     public function testUpdateCurrentUserAvatarUrl(): void
     {
         $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [

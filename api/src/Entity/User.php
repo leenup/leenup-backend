@@ -139,7 +139,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?string $lastName = null;
 
     #[ORM\Column(length: 500, nullable: true)]
-    #[Assert\Url]
+    #[Assert\Regex(
+        pattern: '#^(https?://.+|/upload/.+)$#',
+        message: 'This value is not a valid URL.'
+    )]
     #[Groups(['user:read', 'user:create', 'user:update'])]
     private ?string $avatarUrl = null;
 
