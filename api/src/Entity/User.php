@@ -139,7 +139,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?string $lastName = null;
 
     #[ORM\Column(length: 500, nullable: true)]
-    #[Assert\Url]
+    #[Assert\Regex(
+        pattern: '#^/upload/.+#',
+        message: 'Avatar path must start with /upload/'
+    )]
     #[Groups(['user:read', 'user:create', 'user:update'])]
     private ?string $avatarUrl = null;
 
