@@ -463,13 +463,15 @@ class UserTest extends ApiTestCase
 
     public function testUpdateUserAvatarUrlAsAdmin(): void
     {
+        $avatarPath = '/upload/profile/admin-avatar.jpg';
+
         $response = $this->requestUnsafe(
             $this->adminClient,
             'PATCH',
             '/users/' . $this->userTarget->getId(),
             $this->adminCsrfToken,
             [
-                'json' => ['avatarUrl' => 'https://example.com/avatar.jpg'],
+                'json' => ['avatarUrl' => $avatarPath],
                 'headers' => ['Content-Type' => 'application/merge-patch+json'],
             ],
         );
