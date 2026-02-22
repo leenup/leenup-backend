@@ -21,10 +21,12 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
+use Vich\UploaderBundle\Mapping\Annotation as Vich;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: '`user`')]
@@ -55,6 +57,7 @@ use Symfony\Component\Validator\Constraints as Assert;
     'updatedAt',
     'birthdate',
 ])]
+#[Vich\Uploadable]
 #[ApiResource(
     operations: [
         new GetCollection(
@@ -142,6 +145,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Assert\Url]
     #[Groups(['user:read', 'user:create', 'user:update'])]
     private ?string $avatarUrl = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $avatarName = null;
+
+    #[Vich\UploadableField(mapping: 'profile_avatar', fileNameProperty: 'avatarName')]
+    private ?File $avatarFile = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Assert\Length(
@@ -418,6 +427,34 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setAvatarUrl(?string $avatarUrl): static
     {
         $this->avatarUrl = $avatarUrl;
+
+        return $this;
+    }
+
+    public function setAvatarFile(?File $avatarFile = null): self
+    {
+        $this->avatarFile = $avatarFile;
+
+        if ($avatarFile !== null) {
+            $this->updatedAt = new \DateTimeImmutable();
+        }
+
+        return $this;
+    }
+
+    public function getAvatarFile(): ?File
+    {
+        return $this->avatarFile;
+    }
+
+    public function getAvatarName(): ?string
+    {
+        return $this->avatarName;
+    }
+
+    public function setAvatarName(?string $avatarName): self
+    {
+        $this->avatarName = $avatarName;
 
         return $this;
     }
