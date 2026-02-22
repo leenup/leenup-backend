@@ -18,6 +18,7 @@ services:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
+            - '../src/Serializer/'
     
     App\State\UserPasswordHasher:
         bind:
@@ -35,4 +36,3 @@ services:
     App\Controller\CurrentUserAvatarUploadController:
         bind:
             $projectDir: '%kernel.project_dir%'
-
