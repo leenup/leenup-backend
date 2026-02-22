@@ -8,6 +8,11 @@ api_platform:
                 type: header
     version: 1.0.0
 
+    formats:
+        jsonld: [ 'application/ld+json' ]
+        json: [ 'application/json' ]
+        multipart: [ 'multipart/form-data' ]
+
     # 👇 IMPORTANT : on dit à API Platform où chercher les ressources
     mapping:
         paths:
