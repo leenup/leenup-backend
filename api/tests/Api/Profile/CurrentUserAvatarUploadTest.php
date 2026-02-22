@@ -4,6 +4,7 @@ namespace App\Tests\Api\Profile;
 
 use ApiPlatform\Symfony\Bundle\Test\ApiTestCase;
 use App\Tests\Api\Trait\AuthenticatedApiTestTrait;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Zenstruck\Foundry\Test\Factories;
 
@@ -27,11 +28,15 @@ class CurrentUserAvatarUploadTest extends ApiTestCase
 
     public function testUploadAvatarForCurrentUser(): void
     {
-        $tmpPath = $this->createTestImagePath();
+        $uploadedFile = $this->createTestImageUpload();
 
         $response = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
-            'body' => [
-                'file' => fopen($tmpPath, 'rb'),
+            'headers' => ['Content-Type' => 'multipart/form-data'],
+            'extra' => [
+                'parameters' => [],
+                'files' => [
+                    'file' => $uploadedFile,
+                ],
             ],
         ]);
 
@@ -45,11 +50,15 @@ class CurrentUserAvatarUploadTest extends ApiTestCase
 
     public function testUploadAvatarRequiresAuthentication(): void
     {
-        $tmpPath = $this->createTestImagePath();
+        $uploadedFile = $this->createTestImageUpload();
 
         static::createClient()->request('POST', '/me/avatar', [
-            'body' => [
-                'file' => fopen($tmpPath, 'rb'),
+            'headers' => ['Content-Type' => 'multipart/form-data'],
+            'extra' => [
+                'parameters' => [],
+                'files' => [
+                    'file' => $uploadedFile,
+                ],
             ],
         ]);
 
@@ -61,16 +70,28 @@ class CurrentUserAvatarUploadTest extends ApiTestCase
         $tmpPath = tempnam(sys_get_temp_dir(), 'avatar-invalid-');
         file_put_contents($tmpPath, 'not-an-image');
 
+        $uploadedFile = new UploadedFile(
+            $tmpPath,
+            'avatar.txt',
+            'text/plain',
+            null,
+            true
+        );
+
         $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
-            'body' => [
-                'file' => fopen($tmpPath, 'rb'),
+            'headers' => ['Content-Type' => 'multipart/form-data'],
+            'extra' => [
+                'parameters' => [],
+                'files' => [
+                    'file' => $uploadedFile,
+                ],
             ],
         ]);
 
         $this->assertResponseStatusCodeSame(422);
     }
 
-    private function createTestImagePath(): string
+    private function createTestImageUpload(): UploadedFile
     {
         $tmpPath = tempnam(sys_get_temp_dir(), 'avatar-');
 
@@ -78,6 +99,12 @@ class CurrentUserAvatarUploadTest extends ApiTestCase
         $pngData = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wn2R3wAAAAASUVORK5CYII=');
         file_put_contents($tmpPath, $pngData);
 
-        return $tmpPath;
+        return new UploadedFile(
+            $tmpPath,
+            'avatar.png',
+            'image/png',
+            null,
+            true
+        );
     }
 }
