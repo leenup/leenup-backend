@@ -7,6 +7,9 @@ use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use ApiPlatform\OpenApi\Model\Operation as OpenApiOperation;
+use ApiPlatform\OpenApi\Model\RequestBody as OpenApiRequestBody;
+use ApiPlatform\OpenApi\Model\Response as OpenApiResponse;
 use App\Controller\CurrentUserAvatarUploadController;
 use App\State\Processor\Profile\CurrentUserProcessor;
 use App\State\Processor\Profile\CurrentUserRemoveProcessor;
@@ -47,11 +50,11 @@ use Symfony\Component\Validator\Constraints as Assert;
             deserialize: false,
             validate: false,
             output: false,
-            openapiContext: [
-                'summary' => 'Upload current user avatar',
-                'requestBody' => [
-                    'required' => true,
-                    'content' => [
+            openapi: new OpenApiOperation(
+                summary: 'Upload current user avatar',
+                requestBody: new OpenApiRequestBody(
+                    required: true,
+                    content: new \ArrayObject([
                         'multipart/form-data' => [
                             'schema' => [
                                 'type' => 'object',
@@ -61,24 +64,12 @@ use Symfony\Component\Validator\Constraints as Assert;
                                 ],
                             ],
                         ],
-                    ],
+                    ])
+                ),
+                responses: [
+                    '201' => new OpenApiResponse(description: 'Avatar uploaded'),
                 ],
-                'responses' => [
-                    '201' => [
-                        'description' => 'Avatar uploaded',
-                        'content' => [
-                            'application/json' => [
-                                'schema' => [
-                                    'type' => 'object',
-                                    'properties' => [
-                                        'avatarUrl' => ['type' => 'string'],
-                                    ],
-                                ],
-                            ],
-                        ],
-                    ],
-                ],
-            ],
+            ),
         ),
     ],
     normalizationContext: ['groups' => ['user:read', 'my_skill:read']],
