@@ -5,6 +5,7 @@ namespace App\Entity;
 use ApiPlatform\Metadata\ApiProperty;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use App\Enum\UploadDirectoryEnum;
 use App\Repository\MediaObjectRepository;
@@ -19,8 +20,10 @@ use Vich\UploaderBundle\Mapping\Annotation as Vich;
 #[Vich\Uploadable]
 #[ApiResource(
     operations: [
-        new Get(security: "is_granted('ROLE_USER')"),
+        new Get(uriTemplate: '/media_objects/{id}', security: "is_granted('ROLE_USER')"),
+        new GetCollection(uriTemplate: '/media_objects', security: "is_granted('ROLE_USER')"),
         new Post(
+            uriTemplate: '/media_objects',
             inputFormats: ['multipart' => ['multipart/form-data']],
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
             validationContext: ['groups' => ['Default', 'media_object:create']],
