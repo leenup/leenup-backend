@@ -31,3 +31,8 @@ services:
     App\State\Processor\UserSkill\UserSkillProcessor:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'
+
+    App\Controller\CurrentUserAvatarUploadController:
+        bind:
+            $projectDir: '%kernel.project_dir%'
+
