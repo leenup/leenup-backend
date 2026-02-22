@@ -350,12 +350,9 @@ class CurrentUserTest extends ApiTestCase
             true
         );
 
-        $uploadResponse = $this->requestUnsafe($this->client, 'POST', '/media_objects', $this->csrfToken, [
+        $uploadResponse = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
             'headers' => ['Content-Type' => 'multipart/form-data'],
             'extra' => [
-                'parameters' => [
-                    'directory' => 'profile',
-                ],
                 'files' => [
                     'file' => $uploadedFile,
                 ],
@@ -365,16 +362,45 @@ class CurrentUserTest extends ApiTestCase
         $this->assertResponseStatusCodeSame(201);
 
         $contentUrl = $uploadResponse->toArray(false)['contentUrl'];
-
-        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
-            'json' => ['avatarUrl' => $contentUrl],
-            'headers' => ['Content-Type' => 'application/merge-patch+json'],
-        ]);
-
-        $this->assertResponseIsSuccessful();
         $this->assertJsonContains(['avatarUrl' => $contentUrl]);
 
         @unlink($filePath);
+    }
+
+    public function testUploadCurrentUserAvatarTwiceReplacesPath(): void
+    {
+        $firstPath = tempnam(sys_get_temp_dir(), 'avatar_profile_first_');
+        file_put_contents($firstPath, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7ZxWQAAAAASUVORK5CYII='));
+
+        $firstFile = new \Symfony\Component\HttpFoundation\File\UploadedFile($firstPath, 'first.png', 'image/png', null, true);
+        $firstResponse = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
+            'headers' => ['Content-Type' => 'multipart/form-data'],
+            'extra' => ['files' => ['file' => $firstFile]],
+        ]);
+
+        $this->assertResponseStatusCodeSame(201);
+        $firstAvatarPath = $firstResponse->toArray(false)['avatarUrl'];
+
+        $secondPath = tempnam(sys_get_temp_dir(), 'avatar_profile_second_');
+        file_put_contents($secondPath, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAQAAADZc7J/AAAADElEQVR42mP8z/CfAQADmQGf3Jw4WQAAAABJRU5ErkJggg=='));
+
+        $secondFile = new \Symfony\Component\HttpFoundation\File\UploadedFile($secondPath, 'second.png', 'image/png', null, true);
+        $secondResponse = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
+            'headers' => ['Content-Type' => 'multipart/form-data'],
+            'extra' => ['files' => ['file' => $secondFile]],
+        ]);
+
+        $this->assertResponseStatusCodeSame(201);
+        $secondAvatarPath = $secondResponse->toArray(false)['avatarUrl'];
+
+        $this->assertNotSame($firstAvatarPath, $secondAvatarPath);
+
+        $profileResponse = $this->client->request('GET', '/me');
+        $this->assertResponseIsSuccessful();
+        $this->assertSame($secondAvatarPath, $profileResponse->toArray(false)['avatarUrl']);
+
+        @unlink($firstPath);
+        @unlink($secondPath);
     }
 
     public function testUpdateCurrentUserAvatarUrl(): void
