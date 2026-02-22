@@ -379,13 +379,15 @@ class CurrentUserTest extends ApiTestCase
 
     public function testUpdateCurrentUserAvatarUrl(): void
     {
+        $avatarPath = '/upload/profile/manual-avatar.jpg';
+
         $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
-            'json' => ['avatarUrl' => 'https://example.com/avatar.jpg'],
+            'json' => ['avatarUrl' => $avatarPath],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
         $this->assertResponseIsSuccessful();
-        $this->assertJsonContains(['avatarUrl' => 'https://example.com/avatar.jpg']);
+        $this->assertJsonContains(['avatarUrl' => $avatarPath]);
     }
 
     public function testUpdateMultipleFieldsAtOnce(): void

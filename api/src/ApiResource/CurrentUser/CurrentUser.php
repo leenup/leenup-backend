@@ -64,8 +64,8 @@ class CurrentUser
     public ?string $lastName = null;
 
     #[Assert\Regex(
-        pattern: '#^(https?://.+|/upload/.+)$#',
-        message: 'This value is not a valid URL.'
+        pattern: '#^/upload/.+#',
+        message: 'Avatar path must start with /upload/'
     )]
     #[Groups(['user:read', 'user:update'])]
     public ?string $avatarUrl = null;

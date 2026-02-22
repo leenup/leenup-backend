@@ -249,7 +249,7 @@ class RegisterTest extends ApiTestCase
             'violations' => [
                 [
                     'propertyPath' => 'avatarUrl',
-                    'message' => 'This value is not a valid URL.',
+                    'message' => 'Avatar path must start with /upload/',
                 ],
             ],
         ]);
