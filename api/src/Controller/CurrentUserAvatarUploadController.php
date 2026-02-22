@@ -13,8 +13,6 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Vich\UploaderBundle\Storage\StorageInterface;
 
@@ -30,8 +28,6 @@ final class CurrentUserAvatarUploadController extends AbstractController
     ) {
     }
 
-    #[Route('/me/avatar', name: 'me_avatar_upload', methods: ['POST'])]
-    #[IsGranted('IS_AUTHENTICATED_FULLY')]
     public function __invoke(Request $request): JsonResponse
     {
         $user = $this->security->getUser();
@@ -70,7 +66,6 @@ final class CurrentUserAvatarUploadController extends AbstractController
         return $this->json([
             '@type' => 'User',
             'avatarUrl' => $newAvatarPath,
-            'contentUrl' => $newAvatarPath,
         ], Response::HTTP_CREATED);
     }
 

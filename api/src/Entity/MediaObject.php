@@ -7,7 +7,6 @@ use App\Repository\MediaObjectRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\HttpFoundation\File\File;
-use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 use Vich\UploaderBundle\Mapping\Annotation as Vich;
 
@@ -18,11 +17,7 @@ class MediaObject
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['media_object:read'])]
     private ?int $id = null;
-
-    #[Groups(['media_object:read'])]
-    public ?string $contentUrl = null;
 
     #[Vich\UploadableField(mapping: 'media_object', fileNameProperty: 'filePath')]
     #[Assert\NotNull(groups: ['media_object:create'])]
@@ -34,7 +29,6 @@ class MediaObject
 
     #[ORM\Column(length: 30, enumType: UploadDirectoryEnum::class)]
     #[Assert\NotNull(groups: ['media_object:create'])]
-    #[Groups(['media_object:read'])]
     private UploadDirectoryEnum $directory = UploadDirectoryEnum::PROFILE;
 
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]

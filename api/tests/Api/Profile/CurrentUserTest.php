@@ -361,10 +361,56 @@ class CurrentUserTest extends ApiTestCase
 
         $this->assertResponseStatusCodeSame(201);
 
-        $contentUrl = $uploadResponse->toArray(false)['contentUrl'];
-        $this->assertJsonContains(['avatarUrl' => $contentUrl]);
+        $avatarUrl = $uploadResponse->toArray(false)['avatarUrl'];
+        $this->assertStringStartsWith('/upload/profile/', $avatarUrl);
+        $this->assertJsonContains(['avatarUrl' => $avatarUrl]);
 
         @unlink($filePath);
+    }
+
+    public function testUploadCurrentUserAvatarRequiresAuthentication(): void
+    {
+        $filePath = tempnam(sys_get_temp_dir(), 'avatar_profile_unauth_');
+        file_put_contents($filePath, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7ZxWQAAAAASUVORK5CYII='));
+
+        $uploadedFile = new \Symfony\Component\HttpFoundation\File\UploadedFile(
+            $filePath,
+            'profile.png',
+            'image/png',
+            null,
+            true
+        );
+
+        static::createClient()->request('POST', '/me/avatar', [
+            'headers' => ['Content-Type' => 'multipart/form-data'],
+            'extra' => [
+                'files' => [
+                    'file' => $uploadedFile,
+                ],
+            ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(401);
+
+        @unlink($filePath);
+    }
+
+    public function testUploadCurrentUserAvatarWithoutFileReturnsValidationError(): void
+    {
+        $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
+            'headers' => ['Content-Type' => 'multipart/form-data'],
+            'extra' => [
+                'files' => [],
+            ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertJsonContains([
+            '@type' => 'ConstraintViolationList',
+            'violations' => [
+                ['propertyPath' => 'file'],
+            ],
+        ]);
     }
 
     public function testUploadCurrentUserAvatarTwiceReplacesPath(): void
