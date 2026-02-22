@@ -3,6 +3,7 @@
 
 parameters:
     app.jwt_cookie_secure: '%env(bool:JWT_COOKIE_SECURE)%'
+    app.upload_base_directory: '%kernel.project_dir%/public/upload'
     
 services:
     # default configuration for services in *this* file
@@ -31,3 +32,7 @@ services:
     App\State\Processor\UserSkill\UserSkillProcessor:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'
+
+    App\Service\FileUploader:
+        arguments:
+            $uploadBaseDirectory: '%app.upload_base_directory%'
