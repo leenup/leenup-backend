@@ -41,14 +41,6 @@ final class UserFactory extends PersistentObjectFactory
             'structured',
         ];
 
-        $uglyAnimalAvatars = [
-            'https://loremflickr.com/320/320/ugly,animal',
-            'https://loremflickr.com/320/320/weird,animal',
-            'https://loremflickr.com/320/320/funny,animal',
-            'https://loremflickr.com/320/320/strange,animal',
-            'https://loremflickr.com/320/320/creepy,animal',
-        ];
-
         return [
             'email' => $faker->unique()->email(),
             'roles' => ['ROLE_USER'],
@@ -58,7 +50,7 @@ final class UserFactory extends PersistentObjectFactory
             'firstName' => $faker->firstName(),
             'lastName' => $faker->lastName(),
 
-            'avatarUrl' => $faker->optional(0.8)->randomElement($uglyAnimalAvatars),
+            'avatarUrl' => null,
 
             'bio' => $faker->optional(0.6)->paragraph(2),
             'location' => $faker->optional(0.8)->city() . ', ' . $faker->country(),
