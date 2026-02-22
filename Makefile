@@ -186,7 +186,7 @@ else
 	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) bin/phpunit
 endif
 
-test-parallel: jwt-keys-test db-test-reset cache-clear ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
+test-parallel: jwt-keys-test db-test-reset cache-clear-test ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
 	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
 ifdef FILE
 ifdef PROCESSES
@@ -248,6 +248,9 @@ shell-db-test: ## Ouvre un shell dans la base de données de test
 
 cache-clear: ## Vide le cache Symfony
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console cache:clear
+
+cache-clear-test: ## Vide le cache Symfony de test
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) bin/console cache:clear
 
 cache-warmup: ## Préchauffe le cache
 	$(DOCKER_COMPOSE) exec $(PHP_CONTAINER) bin/console cache:warmup

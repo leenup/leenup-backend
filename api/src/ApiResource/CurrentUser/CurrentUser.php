@@ -6,6 +6,8 @@ use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
+use App\Controller\CurrentUserAvatarUploadController;
 use App\State\Processor\Profile\CurrentUserProcessor;
 use App\State\Processor\Profile\CurrentUserRemoveProcessor;
 use App\State\Provider\Profile\CurrentUserProvider;
@@ -36,6 +38,48 @@ use Symfony\Component\Validator\Constraints as Assert;
             provider: CurrentUserProvider::class,
             processor: CurrentUserRemoveProcessor::class,
         ),
+        new Post(
+            uriTemplate: '/me/avatar',
+            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            securityMessage: 'You must be authenticated to upload your avatar.',
+            controller: CurrentUserAvatarUploadController::class,
+            read: false,
+            deserialize: false,
+            validate: false,
+            output: false,
+            openapiContext: [
+                'summary' => 'Upload current user avatar',
+                'requestBody' => [
+                    'required' => true,
+                    'content' => [
+                        'multipart/form-data' => [
+                            'schema' => [
+                                'type' => 'object',
+                                'required' => ['file'],
+                                'properties' => [
+                                    'file' => ['type' => 'string', 'format' => 'binary'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'responses' => [
+                    '201' => [
+                        'description' => 'Avatar uploaded',
+                        'content' => [
+                            'application/json' => [
+                                'schema' => [
+                                    'type' => 'object',
+                                    'properties' => [
+                                        'avatarUrl' => ['type' => 'string'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ),
     ],
     normalizationContext: ['groups' => ['user:read', 'my_skill:read']],
     denormalizationContext: ['groups' => ['user:update']],
@@ -63,7 +107,10 @@ class CurrentUser
     #[Groups(['user:read', 'user:update'])]
     public ?string $lastName = null;
 
-    #[Assert\Url]
+    #[Assert\Regex(
+        pattern: '#^/upload/.+#',
+        message: 'Avatar path must start with /upload/'
+    )]
     #[Groups(['user:read', 'user:update'])]
     public ?string $avatarUrl = null;
 
