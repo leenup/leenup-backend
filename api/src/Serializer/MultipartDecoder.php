@@ -21,10 +21,20 @@ final readonly class MultipartDecoder implements DecoderInterface
             return null;
         }
 
-        return array_map(
-            static fn (string $element) => json_decode($element, true, flags: \JSON_THROW_ON_ERROR),
-            $request->request->all()
-        ) + $request->files->all();
+        $data = [];
+
+        foreach ($request->request->all() as $key => $value) {
+            if (!is_string($value)) {
+                $data[$key] = $value;
+
+                continue;
+            }
+
+            $decoded = json_decode($value, true);
+            $data[$key] = JSON_ERROR_NONE === json_last_error() ? $decoded : $value;
+        }
+
+        return $data + $request->files->all();
     }
 
     public function supportsDecoding(string $format): bool
