@@ -63,7 +63,10 @@ class CurrentUser
     #[Groups(['user:read', 'user:update'])]
     public ?string $lastName = null;
 
-    #[Assert\Url]
+    #[Assert\AtLeastOneOf([
+        new Assert\Url(),
+        new Assert\Regex(pattern: '/^\/upload\/.+/', message: 'Avatar URL must be an absolute URL or a local upload path.')
+    ])]
     #[Groups(['user:read', 'user:update'])]
     public ?string $avatarUrl = null;
 
