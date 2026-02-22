@@ -34,3 +34,6 @@
 /phpunit.xml
 .phpunit.result.cache
 ###< phpunit/phpunit ###
+
+# user uploads (runtime)
+public/upload/
