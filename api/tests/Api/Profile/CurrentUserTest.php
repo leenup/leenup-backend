@@ -336,15 +336,58 @@ class CurrentUserTest extends ApiTestCase
         $this->assertJsonContains(['locale' => 'en']);
     }
 
-    public function testUpdateCurrentUserAvatarUrl(): void
+
+    public function testUpdateCurrentUserAvatarUrlFromUploadedMedia(): void
     {
+        $filePath = tempnam(sys_get_temp_dir(), 'avatar_profile_');
+        file_put_contents($filePath, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7ZxWQAAAAASUVORK5CYII='));
+
+        $uploadedFile = new \Symfony\Component\HttpFoundation\File\UploadedFile(
+            $filePath,
+            'profile.png',
+            'image/png',
+            null,
+            true
+        );
+
+        $uploadResponse = $this->requestUnsafe($this->client, 'POST', '/media_objects', $this->csrfToken, [
+            'headers' => ['Content-Type' => 'multipart/form-data'],
+            'extra' => [
+                'parameters' => [
+                    'directory' => 'profile',
+                ],
+                'files' => [
+                    'file' => $uploadedFile,
+                ],
+            ],
+        ]);
+
+        $this->assertResponseStatusCodeSame(201);
+
+        $contentUrl = $uploadResponse->toArray(false)['contentUrl'];
+
         $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
-            'json' => ['avatarUrl' => 'https://example.com/avatar.jpg'],
+            'json' => ['avatarUrl' => $contentUrl],
             'headers' => ['Content-Type' => 'application/merge-patch+json'],
         ]);
 
         $this->assertResponseIsSuccessful();
-        $this->assertJsonContains(['avatarUrl' => 'https://example.com/avatar.jpg']);
+        $this->assertJsonContains(['avatarUrl' => $contentUrl]);
+
+        @unlink($filePath);
+    }
+
+    public function testUpdateCurrentUserAvatarUrl(): void
+    {
+        $avatarPath = '/upload/profile/manual-avatar.jpg';
+
+        $this->requestUnsafe($this->client, 'PATCH', '/me', $this->csrfToken, [
+            'json' => ['avatarUrl' => $avatarPath],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertJsonContains(['avatarUrl' => $avatarPath]);
     }
 
     public function testUpdateMultipleFieldsAtOnce(): void
