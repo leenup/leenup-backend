@@ -63,10 +63,14 @@ class CurrentUser
     #[Groups(['user:read', 'user:update'])]
     public ?string $lastName = null;
 
-    #[Assert\AtLeastOneOf(constraints: [
-        new Assert\Url(),
-        new Assert\Regex(pattern: '/^\/upload\//', message: 'Avatar path must start with /upload/'),
-    ])]
+    #[Assert\AtLeastOneOf(
+        constraints: [
+            new Assert\Url(),
+            new Assert\Regex(pattern: '/^\/upload\//', message: 'Avatar path must start with /upload/'),
+        ],
+        includeInternalMessages: false,
+        message: 'This value is not a valid URL.',
+    )]
     #[Groups(['user:read', 'user:update'])]
     public ?string $avatarUrl = null;
 

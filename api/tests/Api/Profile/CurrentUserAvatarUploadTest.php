@@ -31,8 +31,7 @@ class CurrentUserAvatarUploadTest extends ApiTestCase
         $uploadedFile = $this->createTestImageUpload();
 
         $response = $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
-            'headers' => ['Content-Type' => 'multipart/form-data'],
-            'extra' => [
+                        'extra' => [
                 'files' => [
                     'file' => $uploadedFile,
                 ],
@@ -52,8 +51,7 @@ class CurrentUserAvatarUploadTest extends ApiTestCase
         $uploadedFile = $this->createTestImageUpload();
 
         static::createClient()->request('POST', '/me/avatar', [
-            'headers' => ['Content-Type' => 'multipart/form-data'],
-            'extra' => [
+                        'extra' => [
                 'files' => [
                     'file' => $uploadedFile,
                 ],
@@ -77,8 +75,7 @@ class CurrentUserAvatarUploadTest extends ApiTestCase
         );
 
         $this->requestUnsafe($this->client, 'POST', '/me/avatar', $this->csrfToken, [
-            'headers' => ['Content-Type' => 'multipart/form-data'],
-            'extra' => [
+                        'extra' => [
                 'files' => [
                     'file' => $uploadedFile,
                 ],
