@@ -16,63 +16,71 @@ final class DefaultUserSkillsStory extends Story
 
         // Admin 1
         $this->addSkillsToUser('admin@leenup.com', [
-            ['React', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
-            ['Docker', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
-            ['PostgreSQL', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
+            ['Organisation', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
+            ['Production', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
+            ['Notion', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
         ]);
 
-        // Sarah - Dev Web
+        // Sarah - plutôt "prod / organisation"
         $this->addSkillsToUser('sarah.dev@leenup.com', [
-            ['React', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
-            ['TypeScript', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
-            ['Node.js', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
-            ['Vue.js', UserSkill::TYPE_LEARN, UserSkill::LEVEL_BEGINNER],
+            ['Production', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
+            ['Notion', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
+            ['Organisation', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
+            ['UI/UX Design', UserSkill::TYPE_LEARN, UserSkill::LEVEL_BEGINNER],
         ]);
 
         // Marc - Design
         $this->addSkillsToUser('marc.design@leenup.com', [
             ['Figma', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
-            ['UI Design', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
-            ['Photoshop', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
+            ['UI/UX Design', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
+            ['Adobe', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
+            ['Branding', UserSkill::TYPE_LEARN, UserSkill::LEVEL_INTERMEDIATE],
         ]);
 
-        // Julie - Marketing
+        // Julie - Communication
         $this->addSkillsToUser('julie.marketing@leenup.com', [
-            ['SEO', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
-            ['Content Marketing', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
-            ['Google Analytics', UserSkill::TYPE_LEARN, UserSkill::LEVEL_INTERMEDIATE],
+            ['Storytelling', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
+            ['Rédaction', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
+            ['Prise de parole', UserSkill::TYPE_LEARN, UserSkill::LEVEL_INTERMEDIATE],
         ]);
 
-        // Thomas - Fullstack
+        // Thomas - "prod / org"
         $this->addSkillsToUser('thomas.fullstack@leenup.com', [
-            ['PHP', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
-            ['Symfony', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
-            ['Docker', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
-            ['Kubernetes', UserSkill::TYPE_LEARN, UserSkill::LEVEL_INTERMEDIATE],
+            ['Production', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
+            ['Organisation', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
+            ['Notion', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
+            ['IA Créative', UserSkill::TYPE_LEARN, UserSkill::LEVEL_BEGINNER],
         ]);
 
         // Lea - UX
         $this->addSkillsToUser('lea.ux@leenup.com', [
-            ['UX Design', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
-            ['Wireframing', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
+            ['UI/UX Design', UserSkill::TYPE_TEACH, UserSkill::LEVEL_EXPERT],
             ['Figma', UserSkill::TYPE_TEACH, UserSkill::LEVEL_ADVANCED],
+            ['Illustration', UserSkill::TYPE_LEARN, UserSkill::LEVEL_INTERMEDIATE],
         ]);
 
         // User test - Apprenant
         $this->addSkillsToUser('user@leenup.com', [
-            ['React', UserSkill::TYPE_LEARN, UserSkill::LEVEL_BEGINNER],
-            ['JavaScript', UserSkill::TYPE_LEARN, UserSkill::LEVEL_BEGINNER],
+            ['UI/UX Design', UserSkill::TYPE_LEARN, UserSkill::LEVEL_BEGINNER],
+            ['Notion', UserSkill::TYPE_LEARN, UserSkill::LEVEL_BEGINNER],
         ]);
 
-        // Pour les 15 utilisateurs aléatoires
+        // Pour les utilisateurs aléatoires
         $this->addRandomSkillsToRandomUsers();
 
         echo "✅ Compétences ajoutées avec succès !\n";
     }
 
+    /**
+     * @param array<int, array{0:string,1:string,2:string}> $skills
+     */
     private function addSkillsToUser(string $email, array $skills): void
     {
         $user = UserFactory::find(['email' => $email]);
+
+        if (!$user) {
+            return;
+        }
 
         foreach ($skills as [$skillTitle, $type, $level]) {
             $skill = SkillFactory::find(['title' => $skillTitle]);
@@ -82,7 +90,7 @@ final class DefaultUserSkillsStory extends Story
                     'owner' => $user,
                     'skill' => $skill,
                     'type' => $type,
-                    'level' => $level
+                    'level' => $level,
                 ]);
             }
         }
@@ -94,14 +102,14 @@ final class DefaultUserSkillsStory extends Story
             'admin@leenup.com', 'admin2@leenup.com',
             'sarah.dev@leenup.com', 'marc.design@leenup.com',
             'julie.marketing@leenup.com', 'thomas.fullstack@leenup.com',
-            'lea.ux@leenup.com', 'user@leenup.com'
+            'lea.ux@leenup.com', 'user@leenup.com',
         ];
 
         $allUsers = UserFactory::findBy([]);
         $allSkills = SkillFactory::all();
 
         foreach ($allUsers as $user) {
-            if (in_array($user->getEmail(), $excludedEmails)) {
+            if (in_array($user->getEmail(), $excludedEmails, true)) {
                 continue;
             }
 
@@ -128,8 +136,8 @@ final class DefaultUserSkillsStory extends Story
                         UserSkill::LEVEL_BEGINNER,
                         UserSkill::LEVEL_INTERMEDIATE,
                         UserSkill::LEVEL_ADVANCED,
-                        UserSkill::LEVEL_EXPERT
-                    ][rand(0, 3)]
+                        UserSkill::LEVEL_EXPERT,
+                    ][rand(0, 3)],
                 ]);
             }
         }

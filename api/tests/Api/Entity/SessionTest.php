@@ -7,6 +7,7 @@ use App\Entity\Session;
 use App\Entity\User;
 use App\Entity\UserSkill;
 use App\Factory\CategoryFactory;
+use App\Factory\MentorAvailabilityRuleFactory;
 use App\Factory\SessionFactory;
 use App\Factory\SkillFactory;
 use App\Factory\UserFactory;
@@ -62,6 +63,13 @@ class SessionTest extends ApiTestCase
             'skill' => $this->skill,
             'type' => UserSkill::TYPE_TEACH,
             'level' => UserSkill::LEVEL_EXPERT,
+        ]);
+
+        MentorAvailabilityRuleFactory::createOne([
+            'mentor' => $this->mentor,
+            'type' => 'one_shot',
+            'startsAt' => new \DateTimeImmutable('now'),
+            'endsAt' => new \DateTimeImmutable('+3 months'),
         ]);
     }
 
@@ -253,6 +261,97 @@ class SessionTest extends ApiTestCase
         self::assertNotEmpty($violations);
         self::assertSame('mentor', $violations[0]['propertyPath'] ?? null);
         self::assertSame('The mentor must have this skill with type "teach"', $violations[0]['message'] ?? null);
+    }
+
+    public function testCannotCreateSessionOutsideMentorAvailability(): void
+    {
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'POST',
+            '/sessions',
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'mentor' => '/users/'.$this->mentor->getId(),
+                    'skill' => '/skills/'.$this->skill->getId(),
+                    'scheduledAt' => (new \DateTimeImmutable('+6 months'))->format(\DateTimeInterface::ATOM),
+                    'duration' => 60,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
+
+        self::assertSame(422, $response->getStatusCode());
+        $data = $response->toArray(false);
+        self::assertSame('This date is not available for the selected mentor', $data['violations'][0]['message'] ?? null);
+    }
+
+    public function testCannotCreateSessionWhenOverlappingMentorActiveSession(): void
+    {
+        $existingStart = new \DateTimeImmutable('+10 days 10:00');
+
+        SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+            'scheduledAt' => $existingStart,
+            'duration' => 60,
+        ]);
+
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'POST',
+            '/sessions',
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'mentor' => '/users/'.$this->mentor->getId(),
+                    'skill' => '/skills/'.$this->skill->getId(),
+                    'scheduledAt' => $existingStart->modify('+30 minutes')->format(\DateTimeInterface::ATOM),
+                    'duration' => 60,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
+
+        self::assertSame(422, $response->getStatusCode());
+        $data = $response->toArray(false);
+        self::assertSame('This date is not available for the selected mentor', $data['violations'][0]['message'] ?? null);
+    }
+
+    public function testCanCreateSessionWhenMentorHasNoAvailabilityRules(): void
+    {
+        $anotherMentor = UserFactory::createOne([
+            'email' => $this->uniqueEmail('mentor-without-rules'),
+            'plainPassword' => 'password',
+            'isMentor' => true,
+        ]);
+
+        UserSkillFactory::createOne([
+            'owner' => $anotherMentor,
+            'skill' => $this->skill,
+            'type' => UserSkill::TYPE_TEACH,
+            'level' => UserSkill::LEVEL_ADVANCED,
+        ]);
+
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'POST',
+            '/sessions',
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'mentor' => '/users/'.$anotherMentor->getId(),
+                    'skill' => '/skills/'.$this->skill->getId(),
+                    'scheduledAt' => (new \DateTimeImmutable('+5 months'))->format(\DateTimeInterface::ATOM),
+                    'duration' => 60,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
+
+        self::assertSame(201, $response->getStatusCode());
     }
 
     // =====================================================

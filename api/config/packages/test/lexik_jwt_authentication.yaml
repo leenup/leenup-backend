@@ -1,0 +1,5 @@
+lexik_jwt_authentication:
+    # Isoler les clés JWT des tests pour éviter d'écraser les clés dev/prod.
+    secret_key: '%kernel.project_dir%/config/jwt/test/private.pem'
+    public_key: '%kernel.project_dir%/config/jwt/test/public.pem'
+    pass_phrase: ''
