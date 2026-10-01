@@ -178,30 +178,15 @@ jwt-keys-refresh-test: ## Régénère les clés JWT avec APP_ENV=test (corrige p
 	@echo "$(YELLOW)♻️ Régénération des clés JWT (APP_ENV=test)...$(NC)"
 	$(DOCKER_COMPOSE) exec -e APP_ENV=test $(PHP_CONTAINER) sh -c "mkdir -p config/jwt/test && php bin/console lexik:jwt:generate-keypair --overwrite --no-interaction"
 
-test: jwt-keys-test db-test-reset ## Lance les tests (usage: make test ou make test FILE=tests/Api/Profile/CurrentUserTest.php)
-	@echo "$(YELLOW)🧪 Lancement des tests...$(NC)"
-ifdef FILE
-	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) bin/phpunit $(FILE)
-else
-	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) bin/phpunit
-endif
-
-test-parallel: jwt-keys-test db-test-reset cache-clear-test ## Lance les tests en parallèle (usage: make test-parallel ou make test-parallel PROCESSES=8 ou make test-parallel FILE=tests/Api/)
+test: jwt-keys-test db-test-reset cache-clear-test ## Lance les tests en parallèle (usage: make test, make test FILE=tests/Api/Profile/CurrentUserTest.php, make test PROCESSES=8)
 	@echo "$(YELLOW)⚡ Lancement des tests en parallèle...$(NC)"
-ifdef FILE
-ifdef PROCESSES
-	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES) $(FILE)
-else
-	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest $(FILE)
-endif
-else
-ifdef PROCESSES
-	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest -p$(PROCESSES)
-else
-	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest
-endif
-endif
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) vendor/bin/paratest $(if $(PROCESSES),-p$(PROCESSES)) $(FILE)
 
+test-serial: jwt-keys-test db-test-reset cache-clear-test ## Lance les tests séquentiellement, pratique pour déboguer (usage: make test-serial FILE=... FILTER=testName)
+	@echo "$(YELLOW)🧪 Lancement des tests (séquentiel)...$(NC)"
+	$(DOCKER_COMPOSE) exec -e APP_ENV=test -e APP_DEBUG=0 $(PHP_CONTAINER) bin/phpunit $(if $(FILTER),--filter $(FILTER)) $(FILE)
+
+test-parallel: test ## Alias de make test
 
 test-coverage: ## Lance les tests avec couverture
 	@echo "$(YELLOW)🧪 Génération de la couverture de code...$(NC)"
