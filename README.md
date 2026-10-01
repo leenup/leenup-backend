@@ -154,20 +154,19 @@ Le projet utilise **PHPUnit** avec **DAMA DoctrineTestBundle** (transactions aut
 ### Lancer les tests
 
 ```bash
-# Tests classiques (séquentiel) - ~1m30s
+# Tous les tests, en parallèle (ParaTest) - ~10s ⚡
 make test
 
-# Tests en parallèle (recommandé) - ~40s ⚡
-make test-parallel
-
-# Tester un fichier spécifique
-make test FILE=api/tests/Api/Profile/ChangePasswordTest.php
-
-# Tester en parallèle avec un fichier spécifique
-make test-parallel FILE=api/tests/Api/Entity/
+# Tester un fichier ou un dossier spécifique
+make test FILE=tests/Api/Profile/ChangePasswordTest.php
+make test FILE=tests/Api/Entity/
 
 # Spécifier le nombre de processus parallèles
-make test-parallel PROCESSES=8
+make test PROCESSES=8
+
+# Tests séquentiels (PHPUnit), pratique pour déboguer un test précis - ~50s
+make test-serial
+make test-serial FILE=tests/Api/Entity/SessionTest.php FILTER=testCreateSessionAsStudent
 
 # Générer la couverture de code
 make test-coverage
@@ -219,7 +218,7 @@ class ProductsTest extends ApiTestCase
 - ✅ Utiliser `use Factories;` (pas de `ResetDatabase` nécessaire)
 - ✅ DAMA gère les transactions automatiquement
 - ✅ Créer une Factory pour chaque entité testée
-- ✅ Utiliser `make test-parallel` pour gagner du temps
+- ✅ Ne pas utiliser `sleep()` dans les tests : fixer les dates explicitement (ex : `createdAt`) dans la factory
 
 ---
 
@@ -507,7 +506,7 @@ docker compose exec php bin/console make:factory
 # Éditer api/tests/Api/Entity/NewEntityTest.php
 
 # 6. Lancer les tests en parallèle
-make test-parallel
+make test
 
 # 7. Vérifier le schéma
 make schema-validate
@@ -543,7 +542,7 @@ git push origin feature/new-entity
 **⚠️ Important :** Tous les tests doivent passer avant de merge :
 
 ```bash
-make test-parallel      # Vérifier que tous les tests passent
+make test               # Vérifier que tous les tests passent
 make schema-validate    # Vérifier le schéma Doctrine
 ```
 
@@ -560,9 +559,9 @@ make schema-validate    # Vérifier le schéma Doctrine
 
 ### Performance des tests
 
-- Utiliser `make test-parallel` plutôt que `make test` (2x plus rapide)
-- La CI utilise aussi ParaTest automatiquement
-- 4 processus par défaut, ajustable avec `PROCESSES=8`
+- `make test` utilise ParaTest (un processus par cœur par défaut, ajustable avec `PROCESSES=8`)
+- En environnement de test, le hachage des mots de passe utilise le coût minimal (`when@test` dans `config/packages/security.yaml`), comme le recommande la documentation Symfony. Sans ça, chaque utilisateur créé coûte ~0,4 s.
+- La CI lance PHPUnit en séquentiel (`bin/phpunit`)
 
 ### Makefile
 

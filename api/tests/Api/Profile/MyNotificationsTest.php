@@ -489,22 +489,21 @@ class MyNotificationsTest extends ApiTestCase
             'user' => $this->user1,
             'type' => Notification::TYPE_NEW_MESSAGE,
             'title' => 'First',
+            'createdAt' => new \DateTimeImmutable('-2 minutes'),
         ]);
-
-        sleep(1);
 
         NotificationFactory::createOne([
             'user' => $this->user1,
             'type' => Notification::TYPE_NEW_MESSAGE,
             'title' => 'Second',
+            'createdAt' => new \DateTimeImmutable('-1 minute'),
         ]);
-
-        sleep(1);
 
         NotificationFactory::createOne([
             'user' => $this->user1,
             'type' => Notification::TYPE_NEW_MESSAGE,
             'title' => 'Third',
+            'createdAt' => new \DateTimeImmutable(),
         ]);
 
         $response = $this->user1Client->request('GET', '/me/notifications');
