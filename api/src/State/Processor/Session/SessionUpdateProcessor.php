@@ -8,7 +8,9 @@ use ApiPlatform\Validator\Exception\ValidationException;
 use App\Entity\Session;
 use App\Entity\User;
 use App\Security\Voter\SessionVoter;
+use App\Service\AvailabilityGuard;
 use App\Service\SessionCompletionHandler;
+use App\Service\SessionTokenRefunder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -26,6 +28,8 @@ final class SessionUpdateProcessor implements ProcessorInterface
         private Security $security,
         private AuthorizationCheckerInterface $authChecker,
         private SessionCompletionHandler $completionHandler,
+        private SessionTokenRefunder $tokenRefunder,
+        private AvailabilityGuard $availabilityGuard,
     ) {
     }
 
@@ -61,10 +65,13 @@ final class SessionUpdateProcessor implements ProcessorInterface
 
         $this->entityManager->flush();
 
-        if ($originalData instanceof Session
-            && $originalData->getStatus() !== Session::STATUS_COMPLETED
-            && $data->getStatus() === Session::STATUS_COMPLETED) {
-            $this->completionHandler->handle($data);
+        if ($originalData instanceof Session && $originalData->getStatus() !== $data->getStatus()) {
+            if ($data->getStatus() === Session::STATUS_COMPLETED) {
+                $this->completionHandler->handle($data);
+            }
+            if ($data->getStatus() === Session::STATUS_CANCELLED) {
+                $this->tokenRefunder->refund($data);
+            }
             $this->entityManager->flush();
         }
 
@@ -166,6 +173,19 @@ final class SessionUpdateProcessor implements ProcessorInterface
         if ($scheduleChanged) {
             if (!$this->authChecker->isGranted(SessionVoter::UPDATE_SCHEDULE, $new)) {
                 throw new AccessDeniedHttpException('Only the mentor can modify the schedule');
+            }
+
+            if (!$this->availabilityGuard->isDateAvailable($new->getMentor(), $new->getScheduledAt(), (int) $new->getDuration(), $new)) {
+                throw new ValidationException(new ConstraintViolationList([
+                    new ConstraintViolation(
+                        'This date is not available for the selected mentor',
+                        null,
+                        [],
+                        $new,
+                        'scheduledAt',
+                        $new->getScheduledAt()
+                    ),
+                ]));
             }
         }
     }

@@ -115,6 +115,7 @@ final class SessionCreateProcessor implements ProcessorInterface
 
         if (!$isPerfectMatch) {
             $currentUser->removeTokenBalance(1);
+            $data->setTokenSpent(true);
         }
         $this->entityManager->persist($data);
         $this->entityManager->flush();
