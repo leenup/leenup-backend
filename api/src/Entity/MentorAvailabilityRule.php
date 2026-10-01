@@ -93,6 +93,8 @@ class MentorAvailabilityRule
     private ?\DateTimeImmutable $endsAt = null;
 
     #[ORM\Column(length: 64)]
+    #[Assert\NotBlank]
+    #[Assert\Timezone]
     #[Groups(['availability:read', 'availability:write'])]
     private string $timezone = 'Europe/Paris';
 
