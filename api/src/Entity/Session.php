@@ -35,7 +35,7 @@ use Symfony\Component\Validator\Constraints as Assert;
             processor: SessionCreateProcessor::class,
         ),
         new Get(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            security: "is_granted('SESSION_VIEW', object)",
         ),
         new Patch(
             security: "is_granted('IS_AUTHENTICATED_FULLY')",
@@ -63,7 +63,7 @@ use Symfony\Component\Validator\Constraints as Assert;
             extraProperties: ['target_status' => Session::STATUS_CANCELLED],
         ),
         new Delete(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            security: "is_granted('SESSION_DELETE', object)",
         ),
     ],
     normalizationContext: ['groups' => ['session:read']],

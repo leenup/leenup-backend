@@ -72,7 +72,8 @@ class SessionVoter extends Voter
     private function canView(Session $session, User $user): bool
     {
         return $session->getMentor() === $user
-            || $session->getStudent() === $user;
+            || $session->getStudent() === $user
+            || in_array('ROLE_ADMIN', $user->getRoles(), true);
     }
 
     /**

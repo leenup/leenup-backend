@@ -823,4 +823,141 @@ class SessionTest extends ApiTestCase
         self::assertArrayHasKey('totalItems', $data);
         self::assertGreaterThanOrEqual(1, $data['totalItems']);
     }
+
+    // =====================================================
+    // CONTRÔLE D'ACCÈS (utilisateur tiers)
+    // =====================================================
+
+    public function testGetSessionsCollectionOnlyContainsOwnSessions(): void
+    {
+        $ownSession = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+        ]);
+
+        $otherSession = SessionFactory::createOne([
+            'mentor' => UserFactory::createOne(),
+            'student' => UserFactory::createOne(),
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+        ]);
+
+        $response = $this->studentClient->request('GET', '/sessions');
+
+        self::assertSame(200, $response->getStatusCode());
+
+        $ids = array_map(static fn (array $item): int => $item['id'], $response->toArray(false)['member'] ?? []);
+        self::assertContains($ownSession->getId(), $ids);
+        self::assertNotContains($otherSession->getId(), $ids);
+    }
+
+    public function testOtherUserCannotViewSession(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+        ]);
+
+        [$otherClient] = $this->createAuthenticatedUser($this->uniqueEmail('other-session'), 'password');
+
+        $response = $otherClient->request('GET', '/sessions/'.$session->getId());
+
+        self::assertSame(403, $response->getStatusCode());
+    }
+
+    public function testAdminCanViewAnySession(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+        ]);
+
+        [$adminClient] = $this->createAuthenticatedAdmin($this->uniqueEmail('admin-session'), 'password');
+
+        $response = $adminClient->request('GET', '/sessions/'.$session->getId());
+
+        self::assertSame(200, $response->getStatusCode());
+    }
+
+    public function testOtherUserCannotDeleteSession(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+        ]);
+
+        [$otherClient, $otherCsrfToken] = $this->createAuthenticatedUser($this->uniqueEmail('other-session'), 'password');
+
+        $response = $this->requestUnsafe($otherClient, 'DELETE', '/sessions/'.$session->getId(), $otherCsrfToken);
+
+        self::assertSame(403, $response->getStatusCode());
+    }
+
+    public function testParticipantCanDeletePendingSession(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+        ]);
+
+        $response = $this->requestUnsafe($this->studentClient, 'DELETE', '/sessions/'.$session->getId(), $this->studentCsrfToken);
+
+        self::assertSame(204, $response->getStatusCode());
+    }
+
+    public function testParticipantCannotDeleteConfirmedSession(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_CONFIRMED,
+        ]);
+
+        $response = $this->requestUnsafe($this->studentClient, 'DELETE', '/sessions/'.$session->getId(), $this->studentCsrfToken);
+
+        self::assertSame(403, $response->getStatusCode());
+    }
+
+    public function testCompletingViaGenericPatchCreditsMentor(): void
+    {
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $mentor = $em->getRepository(User::class)->find($this->mentor->getId());
+        $mentor->setTokenBalance(0);
+        $em->flush();
+
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_CONFIRMED,
+        ]);
+
+        $response = $this->requestUnsafe(
+            $this->mentorClient,
+            'PATCH',
+            '/sessions/'.$session->getId(),
+            $this->mentorCsrfToken,
+            [
+                'json' => ['status' => Session::STATUS_COMPLETED],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
+
+        self::assertSame(200, $response->getStatusCode());
+
+        $em->clear();
+        $refreshedMentor = $em->getRepository(User::class)->find($this->mentor->getId());
+        self::assertSame(1, $refreshedMentor->getTokenBalance());
+    }
 }
