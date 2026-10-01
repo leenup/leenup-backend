@@ -8,6 +8,7 @@ use ApiPlatform\Validator\Exception\ValidationException;
 use App\Entity\Session;
 use App\Entity\User;
 use App\Security\Voter\SessionVoter;
+use App\Service\SessionCompletionHandler;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -24,6 +25,7 @@ final class SessionUpdateProcessor implements ProcessorInterface
         private EntityManagerInterface $entityManager,
         private Security $security,
         private AuthorizationCheckerInterface $authChecker,
+        private SessionCompletionHandler $completionHandler,
     ) {
     }
 
@@ -58,6 +60,13 @@ final class SessionUpdateProcessor implements ProcessorInterface
         }
 
         $this->entityManager->flush();
+
+        if ($originalData instanceof Session
+            && $originalData->getStatus() !== Session::STATUS_COMPLETED
+            && $data->getStatus() === Session::STATUS_COMPLETED) {
+            $this->completionHandler->handle($data);
+            $this->entityManager->flush();
+        }
 
         return $data;
     }

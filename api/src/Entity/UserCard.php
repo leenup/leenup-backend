@@ -16,7 +16,10 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(name: 'idx_user_card_user', columns: ['user_id'])]
 #[ORM\Index(name: 'idx_user_card_card', columns: ['card_id'])]
 #[ORM\HasLifecycleCallbacks]
-#[ApiResource]
+#[ApiResource(
+    security: "is_granted('ROLE_ADMIN')",
+    securityMessage: 'Only admins can access this resource.',
+)]
 class UserCard
 {
     #[ORM\Id]
