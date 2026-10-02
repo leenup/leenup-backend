@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\Session;
+use App\Entity\TokenTransaction;
 
 /**
  * Effets de bord d'une session passée en "completed" :
@@ -13,12 +14,16 @@ final class SessionCompletionHandler
 {
     public function __construct(
         private CardUnlocker $cardUnlocker,
+        private TokenLedger $tokenLedger,
     ) {
     }
 
     public function handle(Session $session): void
     {
-        $session->getMentor()?->addTokenBalance(1);
+        $mentor = $session->getMentor();
+        if ($mentor !== null) {
+            $this->tokenLedger->credit($mentor, 1, TokenTransaction::TYPE_SESSION_GIVEN, $session);
+        }
         $this->cardUnlocker->unlockForUser($session->getMentor(), 'session_completed', [
             'sessionId' => $session->getId(),
             'role' => 'mentor',

@@ -6,10 +6,12 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use ApiPlatform\Validator\Exception\ValidationException;
 use App\Entity\Session;
+use App\Entity\TokenTransaction;
 use App\Entity\User;
 use App\Entity\UserSkill;
 use App\Repository\UserSkillRepository;
 use App\Service\AvailabilityGuard;
+use App\Service\TokenLedger;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Validator\ConstraintViolation;
@@ -25,6 +27,7 @@ final class SessionCreateProcessor implements ProcessorInterface
         private UserSkillRepository $userSkillRepository,
         private Security $security,
         private AvailabilityGuard $availabilityGuard,
+        private TokenLedger $tokenLedger,
     ) {
     }
 
@@ -114,7 +117,7 @@ final class SessionCreateProcessor implements ProcessorInterface
         }
 
         if (!$isPerfectMatch) {
-            $currentUser->removeTokenBalance(1);
+            $this->tokenLedger->debit($currentUser, 1, TokenTransaction::TYPE_SESSION_BOOKED, $data);
             $data->setTokenSpent(true);
         }
         $this->entityManager->persist($data);
