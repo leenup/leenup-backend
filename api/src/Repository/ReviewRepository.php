@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\Review;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -16,28 +17,42 @@ class ReviewRepository extends ServiceEntityRepository
         parent::__construct($registry, Review::class);
     }
 
-    //    /**
-    //     * @return Review[] Returns an array of Review objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('r')
-    //            ->andWhere('r.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('r.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
+    /**
+     * @return array{average: float, count: int}
+     */
+    public function getRatingStatsForMentor(User $mentor): array
+    {
+        $row = $this->createQueryBuilder('r')
+            ->select('AVG(r.rating) AS average, COUNT(r.id) AS count')
+            ->join('r.session', 's')
+            ->where('s.mentor = :mentor')
+            ->setParameter('mentor', $mentor)
+            ->getQuery()
+            ->getSingleResult();
 
-    //    public function findOneBySomeField($value): ?Review
-    //    {
-    //        return $this->createQueryBuilder('r')
-    //            ->andWhere('r.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+        return [
+            'average' => (float) ($row['average'] ?? 0),
+            'count' => (int) $row['count'],
+        ];
+    }
+
+    /**
+     * Dernières reviews reçues par un mentor, avec le reviewer pré-chargé.
+     *
+     * @return Review[]
+     */
+    public function findRecentForMentor(User $mentor, int $limit): array
+    {
+        return $this->createQueryBuilder('r')
+            ->addSelect('reviewer')
+            ->join('r.session', 's')
+            ->join('r.reviewer', 'reviewer')
+            ->where('s.mentor = :mentor')
+            ->setParameter('mentor', $mentor)
+            ->orderBy('r.createdAt', 'DESC')
+            ->addOrderBy('r.id', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
 }

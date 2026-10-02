@@ -9,9 +9,9 @@ use App\Service\MentorRatingUpdater;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * @implements ProcessorInterface<Review, Review>
+ * @implements ProcessorInterface<Review, null>
  */
-final class ReviewUpdateProcessor implements ProcessorInterface
+final class ReviewDeleteProcessor implements ProcessorInterface
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -19,21 +19,22 @@ final class ReviewUpdateProcessor implements ProcessorInterface
     ) {
     }
 
-    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): Review
+    public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): null
     {
         if (!$data instanceof Review) {
             throw new \LogicException('Expected Review entity');
         }
 
+        $mentor = $data->getSession()?->getMentor();
+
+        $this->entityManager->remove($data);
         $this->entityManager->flush();
 
-        // La note a pu changer : on recalcule la moyenne du mentor.
-        $mentor = $data->getSession()?->getMentor();
         if ($mentor !== null) {
             $this->mentorRatingUpdater->update($mentor);
+            $this->entityManager->flush();
         }
-        $this->entityManager->flush();
 
-        return $data;
+        return null;
     }
 }

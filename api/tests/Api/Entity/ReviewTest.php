@@ -382,6 +382,47 @@ class ReviewTest extends ApiTestCase
         self::assertSame('Excellent mentor!', $data['comment'] ?? null);
     }
 
+    public function testStudentCannotMoveReviewToAnotherSession(): void
+    {
+        $otherSession = SessionFactory::createOne([
+            'mentor' => $this->otherUser,
+            'student' => $this->student,
+            'skill' => $this->completedSession->getSkill(),
+            'status' => Session::STATUS_COMPLETED,
+        ]);
+
+        $review = ReviewFactory::createOne([
+            'session' => $this->completedSession,
+            'reviewer' => $this->student,
+            'rating' => 4,
+        ]);
+
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'PATCH',
+            '/reviews/'.$review->getId(),
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'session' => '/sessions/'.$otherSession->getId(),
+                    'rating' => 5,
+                ],
+                'headers' => [
+                    'Content-Type' => 'application/merge-patch+json',
+                ],
+            ]
+        );
+
+        self::assertSame(200, $response->getStatusCode());
+
+        $data = $response->toArray();
+        self::assertSame('/sessions/'.$this->completedSession->getId(), $data['session'] ?? null);
+        self::assertSame(5, $data['rating'] ?? null);
+
+        $reviewFromDb = ReviewFactory::find(['id' => $review->getId()]);
+        self::assertSame($this->completedSession->getId(), $reviewFromDb->getSession()->getId());
+    }
+
     public function testStudentCannotModifyReviewAfter7Days(): void
     {
         $review = $this->createOldReview(8);
@@ -518,6 +559,55 @@ class ReviewTest extends ApiTestCase
         $mentorFromDb = UserFactory::find(['id' => $this->mentor->getId()]);
 
         self::assertSame('5.00', $mentorFromDb->getAverageRating());
+        self::assertSame(1, $mentorFromDb->getReviewCount());
+    }
+
+    public function testMentorAverageRatingIsUpdatedWhenReviewIsModified(): void
+    {
+        $this->requestUnsafe($this->studentClient, 'POST', '/reviews', $this->studentCsrfToken, [
+            'json' => [
+                'session' => '/sessions/'.$this->completedSession->getId(),
+                'rating' => 5,
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ])->toArray();
+        $reviewId = ReviewFactory::find(['session' => $this->completedSession])->getId();
+
+        $response = $this->requestUnsafe($this->studentClient, 'PATCH', '/reviews/'.$reviewId, $this->studentCsrfToken, [
+            'json' => ['rating' => 2],
+            'headers' => ['Content-Type' => 'application/merge-patch+json'],
+        ]);
+
+        self::assertSame(200, $response->getStatusCode());
+
+        $mentorFromDb = UserFactory::find(['id' => $this->mentor->getId()]);
+        self::assertSame('2.00', $mentorFromDb->getAverageRating());
+        self::assertSame(1, $mentorFromDb->getReviewCount());
+    }
+
+    public function testMentorAverageRatingIsUpdatedWhenAdminDeletesReview(): void
+    {
+        [$adminClient, $adminCsrfToken] = $this->createAuthenticatedAdmin(
+            email: $this->uniqueEmail('admin-review'),
+            password: 'password',
+        );
+
+        $this->requestUnsafe($this->studentClient, 'POST', '/reviews', $this->studentCsrfToken, [
+            'json' => [
+                'session' => '/sessions/'.$this->completedSession->getId(),
+                'rating' => 4,
+            ],
+            'headers' => ['Content-Type' => 'application/ld+json'],
+        ])->toArray();
+        $reviewId = ReviewFactory::find(['session' => $this->completedSession])->getId();
+
+        $response = $this->requestUnsafe($adminClient, 'DELETE', '/reviews/'.$reviewId, $adminCsrfToken);
+
+        self::assertSame(204, $response->getStatusCode());
+
+        $mentorFromDb = UserFactory::find(['id' => $this->mentor->getId()]);
+        self::assertNull($mentorFromDb->getAverageRating());
+        self::assertSame(0, $mentorFromDb->getReviewCount());
     }
 
     // ========================================
