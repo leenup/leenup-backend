@@ -14,6 +14,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\SessionRepository;
 use App\State\Processor\Session\SessionCreateProcessor;
+use App\State\Processor\Session\SessionDeleteProcessor;
 use App\State\Processor\Session\SessionStatusProcessor;
 use App\State\Processor\Session\SessionUpdateProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -64,6 +65,7 @@ use Symfony\Component\Validator\Constraints as Assert;
         ),
         new Delete(
             security: "is_granted('SESSION_DELETE', object)",
+            processor: SessionDeleteProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['session:read']],
@@ -83,6 +85,9 @@ class Session
     public const STATUS_CONFIRMED = 'confirmed';
     public const STATUS_CANCELLED = 'cancelled';
     public const STATUS_COMPLETED = 'completed';
+
+    // Durée maximale d'une session en minutes (une journée).
+    public const MAX_DURATION = 1440;
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -129,6 +134,7 @@ class Session
     #[ORM\Column]
     #[Assert\NotNull(message: 'The duration cannot be null')]
     #[Assert\Positive(message: 'The duration must be a positive number')]
+    #[Assert\LessThanOrEqual(value: self::MAX_DURATION, message: 'The duration cannot exceed {{ compared_value }} minutes')]
     #[Groups(['session:read', 'session:write'])]
     private ?int $duration = null;
 
@@ -147,6 +153,10 @@ class Session
     )]
     #[Groups(['session:read', 'session:write'])]
     private ?string $notes = null;
+
+    // L'étudiant a-t-il payé un token à la réservation ? (faux en cas de match parfait)
+    #[ORM\Column(options: ['default' => false])]
+    private bool $tokenSpent = false;
 
     #[ORM\Column]
     #[Groups(['session:read'])]
@@ -288,6 +298,18 @@ class Session
     public function getUpdatedAt(): ?\DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    public function isTokenSpent(): bool
+    {
+        return $this->tokenSpent;
+    }
+
+    public function setTokenSpent(bool $tokenSpent): static
+    {
+        $this->tokenSpent = $tokenSpent;
+
+        return $this;
     }
 
     /**

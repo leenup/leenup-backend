@@ -960,4 +960,185 @@ class SessionTest extends ApiTestCase
         $refreshedMentor = $em->getRepository(User::class)->find($this->mentor->getId());
         self::assertSame(1, $refreshedMentor->getTokenBalance());
     }
+
+    // =====================================================
+    // REMBOURSEMENT DES TOKENS / REPLANIFICATION
+    // =====================================================
+
+    public function testCancellingPaidSessionRefundsStudent(): void
+    {
+        $sessionIri = $this->createSessionAsStudent('+1 week');
+        self::assertSame(0, $this->refreshedTokenBalance($this->student));
+
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'PATCH',
+            $sessionIri.'/cancel',
+            $this->studentCsrfToken,
+            ['headers' => ['Content-Type' => 'application/merge-patch+json']]
+        );
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(1, $this->refreshedTokenBalance($this->student));
+    }
+
+    public function testCancellingViaGenericPatchRefundsStudentOnce(): void
+    {
+        $sessionIri = $this->createSessionAsStudent('+1 week');
+
+        foreach ([1, 2] as $attempt) {
+            $response = $this->requestUnsafe(
+                $this->mentorClient,
+                'PATCH',
+                $sessionIri,
+                $this->mentorCsrfToken,
+                [
+                    'json' => ['status' => Session::STATUS_CANCELLED],
+                    'headers' => ['Content-Type' => 'application/merge-patch+json'],
+                ]
+            );
+            self::assertSame(200, $response->getStatusCode());
+        }
+
+        self::assertSame(1, $this->refreshedTokenBalance($this->student));
+    }
+
+    public function testCancellingUnpaidSessionDoesNotCreditStudent(): void
+    {
+        // Session sans paiement (ex : match parfait)
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+        ]);
+        $before = $this->refreshedTokenBalance($this->student);
+
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'PATCH',
+            '/sessions/'.$session->getId().'/cancel',
+            $this->studentCsrfToken,
+            ['headers' => ['Content-Type' => 'application/merge-patch+json']]
+        );
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame($before, $this->refreshedTokenBalance($this->student));
+    }
+
+    public function testDeletingPaidPendingSessionRefundsStudent(): void
+    {
+        $sessionIri = $this->createSessionAsStudent('+1 week');
+
+        $response = $this->requestUnsafe($this->studentClient, 'DELETE', $sessionIri, $this->studentCsrfToken);
+
+        self::assertSame(204, $response->getStatusCode());
+        self::assertSame(1, $this->refreshedTokenBalance($this->student));
+    }
+
+    public function testMentorCannotRescheduleOutsideAvailability(): void
+    {
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+            'scheduledAt' => new \DateTimeImmutable('+1 week'),
+            'duration' => 60,
+        ]);
+
+        // La règle one_shot du setUp couvre seulement les 3 prochains mois.
+        $response = $this->rescheduleAsMentor($session->getId(), new \DateTimeImmutable('+4 months'));
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame('This date is not available for the selected mentor', $response->toArray(false)['violations'][0]['message'] ?? null);
+    }
+
+    public function testMentorCannotRescheduleOntoAnotherSession(): void
+    {
+        $otherStart = new \DateTimeImmutable('+2 weeks');
+        SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => UserFactory::createOne(),
+            'skill' => $this->skill,
+            'status' => Session::STATUS_CONFIRMED,
+            'scheduledAt' => $otherStart,
+            'duration' => 60,
+        ]);
+
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+            'scheduledAt' => new \DateTimeImmutable('+1 week'),
+            'duration' => 60,
+        ]);
+
+        $response = $this->rescheduleAsMentor($session->getId(), $otherStart->modify('+30 minutes'));
+
+        self::assertSame(422, $response->getStatusCode());
+    }
+
+    public function testMentorCanShiftSessionOverlappingItsOwnSlot(): void
+    {
+        $start = new \DateTimeImmutable('+1 week');
+        $session = SessionFactory::createOne([
+            'mentor' => $this->mentor,
+            'student' => $this->student,
+            'skill' => $this->skill,
+            'status' => Session::STATUS_PENDING,
+            'scheduledAt' => $start,
+            'duration' => 60,
+        ]);
+
+        $response = $this->rescheduleAsMentor($session->getId(), $start->modify('+30 minutes'));
+
+        self::assertSame(200, $response->getStatusCode());
+    }
+
+    private function createSessionAsStudent(string $when): string
+    {
+        $response = $this->requestUnsafe(
+            $this->studentClient,
+            'POST',
+            '/sessions',
+            $this->studentCsrfToken,
+            [
+                'json' => [
+                    'mentor' => '/users/'.$this->mentor->getId(),
+                    'skill' => '/skills/'.$this->skill->getId(),
+                    'scheduledAt' => (new \DateTimeImmutable($when))->format(\DateTimeInterface::ATOM),
+                    'duration' => 60,
+                ],
+                'headers' => ['Content-Type' => 'application/ld+json'],
+            ]
+        );
+
+        self::assertSame(201, $response->getStatusCode());
+
+        return $response->toArray(false)['@id'];
+    }
+
+    private function rescheduleAsMentor(int $sessionId, \DateTimeImmutable $scheduledAt)
+    {
+        return $this->requestUnsafe(
+            $this->mentorClient,
+            'PATCH',
+            '/sessions/'.$sessionId,
+            $this->mentorCsrfToken,
+            [
+                'json' => ['scheduledAt' => $scheduledAt->format(\DateTimeInterface::ATOM)],
+                'headers' => ['Content-Type' => 'application/merge-patch+json'],
+            ]
+        );
+    }
+
+    private function refreshedTokenBalance(User $user): int
+    {
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
+
+        return $em->getRepository(User::class)->find($user->getId())->getTokenBalance();
+    }
 }
