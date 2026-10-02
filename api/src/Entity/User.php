@@ -267,6 +267,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['user:read'])]
     private ?string $averageRating = null;
 
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    #[Groups(['user:read'])]
+    private int $reviewCount = 0;
+
     #[ORM\Column]
     #[Groups(['user:read', 'user:create', 'user:update:admin'])]
     #[Assert\Type('array')]
@@ -769,6 +773,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setAverageRating(?string $averageRating): static
     {
         $this->averageRating = $averageRating;
+
+        return $this;
+    }
+
+    public function getReviewCount(): int
+    {
+        return $this->reviewCount;
+    }
+
+    public function setReviewCount(int $reviewCount): static
+    {
+        $this->reviewCount = $reviewCount;
 
         return $this;
     }

@@ -10,6 +10,7 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Repository\ReviewRepository;
 use App\State\Processor\Review\ReviewCreateProcessor;
+use App\State\Processor\Review\ReviewDeleteProcessor;
 use App\State\Processor\Review\ReviewUpdateProcessor;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
@@ -39,9 +40,12 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "is_granted('REVIEW_UPDATE', object)",
             securityMessage: "You can only modify your own reviews within 7 days of creation",
             processor: ReviewUpdateProcessor::class,
+            // La session n'est modifiable qu'à la création : on ne peut pas déplacer une review vers un autre mentor.
+            denormalizationContext: ['groups' => ['review:update']],
         ),
         new Delete(
-            security: "is_granted('ROLE_ADMIN')"
+            security: "is_granted('ROLE_ADMIN')",
+            processor: ReviewDeleteProcessor::class,
         ),
     ],
     normalizationContext: ['groups' => ['review:read']],
@@ -69,12 +73,12 @@ class Review
     #[ORM\Column]
     #[Assert\NotNull(message: 'The rating cannot be null')]
     #[Assert\Range(min: 1, max: 5, notInRangeMessage: 'Rating must be between {{ min }} and {{ max }}')]
-    #[Groups(['review:read', 'review:write'])]
+    #[Groups(['review:read', 'review:write', 'review:update'])]
     private ?int $rating = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Assert\Length(max: 1000, maxMessage: 'Comment cannot be longer than {{ limit }} characters')]
-    #[Groups(['review:read', 'review:write'])]
+    #[Groups(['review:read', 'review:write', 'review:update'])]
     private ?string $comment = null;
 
     #[ORM\Column]
